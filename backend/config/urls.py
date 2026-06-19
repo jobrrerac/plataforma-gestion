@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from apps.dashboard.views import OcupacionAPIView, OcupacionDashboardView
+from apps.dashboard.views import OcupacionAPIView, OcupacionDashboardView, SolicitudView, SolicitudCrearView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -11,7 +11,9 @@ urlpatterns = [
     path("api/dashboard/ocupacion/", OcupacionAPIView.as_view(), name="dashboard-api"),
     # Auth session (login/logout para DRF browsable API)
     path("api-auth/", include("rest_framework.urls")),
-    # Dashboard visual
+    # Vistas UI
+    path("solicitud/", SolicitudView.as_view(), name="solicitud"),
+    path("solicitud/crear/", SolicitudCrearView.as_view(), name="solicitud-crear"),
     path("dashboard/", OcupacionDashboardView.as_view(), name="dashboard"),
     path("", OcupacionDashboardView.as_view(), name="home"),
 ]

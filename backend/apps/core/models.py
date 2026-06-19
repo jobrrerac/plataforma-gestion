@@ -24,6 +24,19 @@ class SoftDeleteModel(models.Model):
         abstract = True
 
 
+class Skill(models.Model):
+    """Skills técnicos. En producción se sincronizarán desde el sistema de Skills vía adaptador."""
+    nombre = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["nombre"]
+        verbose_name = "Skill"
+        verbose_name_plural = "Skills"
+
+    def __str__(self):
+        return self.nombre
+
+
 class Recurso(SoftDeleteModel):
     BANDA_CHOICES = [
         ("JR", "Junior"),
@@ -35,6 +48,7 @@ class Recurso(SoftDeleteModel):
     email = models.EmailField(unique=True)
     banda = models.CharField(max_length=10, choices=BANDA_CHOICES)
     activo = models.BooleanField(default=True)
+    skills = models.ManyToManyField(Skill, blank=True, related_name="recursos")
     usuario = models.OneToOneField(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="recurso"
     )

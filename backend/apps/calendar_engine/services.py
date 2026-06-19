@@ -49,6 +49,17 @@ def calcular_fecha_fin(fecha_inicio: date, dias_necesarios: int, recurso=None) -
     return fecha
 
 
+def contar_dias_habiles(fecha_inicio: date, fecha_fin: date, recurso=None) -> int:
+    """Cuenta los días hábiles entre dos fechas (ambas inclusive)."""
+    count = 0
+    fecha = fecha_inicio
+    while fecha <= fecha_fin:
+        if es_habil(fecha, recurso):
+            count += 1
+        fecha += timedelta(days=1)
+    return count
+
+
 def feriados_en_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
     """Lista de feriados colombianos entre dos fechas, ordenados."""
     years = range(fecha_inicio.year, fecha_fin.year + 1)

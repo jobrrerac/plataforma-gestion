@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitud de Recursos — Plataforma de Gestión</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    .navbar-brand { font-weight: 700; letter-spacing: .03em; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+    .card-header { border-radius: 12px 12px 0 0 !important; }
+    .badge-banda { font-size: .75rem; padding: 3px 8px; border-radius: 6px; }
+    .skill-tag {
+      display: inline-block; background: #e8f4fd; color: #1a6ea8;
+      border-radius: 5px; padding: 1px 7px; font-size: .75rem; margin: 1px;
+    }
+    .avail-bar-wrap { min-width: 140px; }
+    .avail-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; }
+    .avail-bar .fill { height: 100%; border-radius: 4px; transition: width .3s; }
+    .libre-100  { background: #198754; }
+    .libre-75   { background: #20c997; }
+    .libre-50   { background: #ffc107; }
+    .libre-25   { background: #fd7e14; }
+    .libre-0    { background: #dc3545; }
+    .badge-libre-100 { background: #d1f5e3; color: #0a5c36; }
+    .badge-libre-75  { background: #d0f4ec; color: #0a5442; }
+    .badge-libre-50  { background: #fff3cd; color: #664d03; }
+    .badge-libre-25  { background: #ffe5cc; color: #7c3300; }
+    .badge-libre-0   { background: #f8d7da; color: #58151c; }
+    tr.sin-cupo { opacity: .55; }
+    .btn-solicitar { font-size: .8rem; padding: 3px 12px; }
+    .popover-dias { max-width: 320px; }
+    .avail-bar.pop-trigger { cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-4 py-2 mb-4">
+  <span class="navbar-brand"><i class="bi bi-people-fill me-2"></i>Solicitud de Recursos</span>
+  <div class="d-flex gap-3">
+    <a href="/dashboard/" class="text-white text-decoration-none small"><i class="bi bi-grid-3x3-gap me-1"></i>Dashboard</a>
+    <a href="/admin/" class="text-white text-decoration-none small"><i class="bi bi-gear me-1"></i>Admin</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+
+  <!-- ── FILTROS ─────────────────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white py-2 px-3">
+      <i class="bi bi-funnel me-1"></i> Buscar disponibilidad
+    </div>
+    <div class="card-body py-3">
+      <form method="get" action="/solicitud/">
+        <div class="row g-3 align-items-end">
+
+          <div class="col-auto">
+            <label class="form-label fw-semibold mb-1">Fecha inicio</label>
+            <input type="date" name="fecha_inicio" class="form-control form-control-sm"
+                   value="{{ fecha_inicio }}" required style="width:155px">
+          </div>
+
+          <div class="col-auto">
+            <label class="form-label fw-semibold mb-1">Fecha fin</label>
+            <input type="date" name="fecha_fin" class="form-control form-control-sm"
+                   value="{{ fecha_fin }}" required style="width:155px">
+          </div>
+
+          <div class="col" style="min-width:260px; max-width:480px">
+            <label class="form-label fw-semibold mb-1">Skills <span class="text-muted fw-normal">(opcional)</span></label>
+            <select id="skills-select" name="skills" multiple placeholder="Buscar y agregar skills…">
+              {% for sk in skills_disponibles %}
+              <option value="{{ sk.nombre }}"
+                {% if sk.nombre in skills_seleccionados %}selected{% endif %}>
+                {{ sk.nombre }}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Sin selección = todos los recursos.</div>
+          </div>
+
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm px-4">
+              <i class="bi bi-search me-1"></i>Buscar
+            </button>
+          </div>
+
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── ERROR ──────────────────────────────────────────────────── -->
+  {% if error %}
+  <div class="alert alert-danger d-flex align-items-center gap-2 py-2">
+    <i class="bi bi-exclamation-triangle-fill"></i> {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- ── RESULTADOS ─────────────────────────────────────────────── -->
+  {% if resultados is not None %}
+
+    {% if not resultados %}
+    <div class="alert alert-warning">
+      <i class="bi bi-info-circle me-1"></i>
+      No se encontraron recursos{% if skills_seleccionados %} con los skills seleccionados{% endif %}.
+    </div>
+
+    {% else %}
+
+    <!-- Resumen rápido -->
+    {% with total=resultados|length %}
+    {% with disponibles=resultados|length %}
+    <div class="row g-3 mb-3">
+      <div class="col-auto">
+        <div class="card px-3 py-2 text-center" style="min-width:110px">
+          <div class="fs-4 fw-bold text-primary">{{ resultados|length }}</div>
+          <div class="small text-muted">Recursos</div>
+        </div>
+      </div>
+      <div class="col-auto">
+        <div class="card px-3 py-2 text-center" style="min-width:110px">
+          <div class="fs-4 fw-bold text-success" id="cnt-disponibles">—</div>
+          <div class="small text-muted">Con cupo</div>
+        </div>
+      </div>
+      <div class="col-auto">
+        <div class="card px-3 py-2 text-center" style="min-width:110px">
+          <div class="fs-4 fw-bold text-danger" id="cnt-sin-cupo">—</div>
+          <div class="small text-muted">Sin cupo</div>
+        </div>
+      </div>
+    </div>
+    {% endwith %}
+    {% endwith %}
+
+    <!-- Tabla -->
+    <div class="card">
+      <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">
+          Disponibilidad del
+          <span class="text-primary">{{ fecha_inicio }}</span> al
+          <span class="text-primary">{{ fecha_fin }}</span>
+        </span>
+        <span class="text-muted small">Ordenado de más a menos disponible</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="tbl-recursos">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Recurso</th>
+              <th>Banda</th>
+              <th>Skills</th>
+              <th>Días hábiles</th>
+              <th style="min-width:180px">Disponibilidad</th>
+              <th>H. libres</th>
+              <th>H. totales</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in resultados %}
+            {% with pct=r.porcentaje_libre %}
+            <tr class="{% if pct == 0 %}sin-cupo{% endif %}" data-cupo="{{ pct }}">
+              <td class="ps-3 fw-semibold">{{ r.recurso.nombre }}</td>
+
+              <td>
+                {% with b=r.recurso.banda %}
+                <span class="badge badge-banda
+                  {% if b == 'LEAD' %}bg-dark
+                  {% elif b == 'SR' %}bg-primary
+                  {% elif b == 'SSR' %}bg-info text-dark
+                  {% else %}bg-secondary{% endif %}">
+                  {{ r.recurso.get_banda_display }}
+                </span>
+                {% endwith %}
+              </td>
+
+              <td>
+                {% for sk in r.skills %}
+                <span class="skill-tag">{{ sk }}</span>
+                {% empty %}
+                <span class="text-muted">—</span>
+                {% endfor %}
+              </td>
+
+              <td class="text-center">{{ r.dias_habiles }}</td>
+
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="avail-bar flex-grow-1
+                    {% if r.dias_con_carga %}pop-trigger{% endif %}"
+                    {% if r.dias_con_carga %}
+                    data-popover-id="pop-{{ r.recurso.pk }}"
+                    style="cursor:pointer"
+                    {% endif %}>
+                    <div class="fill
+                      {% if pct >= 75 %}libre-100
+                      {% elif pct >= 50 %}libre-75
+                      {% elif pct >= 25 %}libre-50
+                      {% elif pct > 0 %}libre-25
+                      {% else %}libre-0{% endif %}"
+                      style="width:{{ pct }}%"></div>
+                  </div>
+                  <span class="badge rounded-pill small
+                    {% if pct >= 75 %}badge-libre-100
+                    {% elif pct >= 50 %}badge-libre-75
+                    {% elif pct >= 25 %}badge-libre-50
+                    {% elif pct > 0 %}badge-libre-25
+                    {% else %}badge-libre-0{% endif %}"
+                    style="min-width:52px; text-align:right">
+                    {{ pct }}% libre
+                  </span>
+                  {% if r.dias_con_carga %}
+                  <i class="bi bi-info-circle text-muted pop-trigger"
+                     data-popover-id="pop-{{ r.recurso.pk }}"
+                     style="cursor:pointer;font-size:.85rem"></i>
+                  {% endif %}
+                </div>
+              </td>
+
+              <td class="text-end pe-2">
+                <strong>{{ r.horas_libres }}</strong><span class="text-muted">h</span>
+              </td>
+              <td class="text-end pe-2">
+                {{ r.horas_capacidad }}<span class="text-muted">h</span>
+              </td>
+
+              <td class="pe-3">
+                {% if pct > 0 %}
+                <a href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+                   class="btn btn-primary btn-sm btn-solicitar">
+                  <i class="bi bi-plus-circle me-1"></i>Solicitar
+                </a>
+                {% else %}
+                <span class="text-muted small">Sin cupo</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% endif %}
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-calendar-search" style="font-size:3rem;opacity:.3"></i>
+      <p class="mt-3">Ingresá un rango de fechas para ver la disponibilidad de recursos.</p>
+    </div>
+  {% endif %}
+
+</div><!-- /container -->
+
+<!-- ── Contenidos de popovers (ocultos) ─────────────────────────── -->
+{% if resultados %}
+{% for r in resultados %}
+{% if r.dias_con_carga %}
+<div id="pop-{{ r.recurso.pk }}" class="d-none">
+  <div style="min-width:240px;font-size:.8rem">
+    <div class="fw-bold mb-2 pb-1 border-bottom">Días con ocupación de {{ r.recurso.nombre }}</div>
+    {% for d in r.dias_con_carga %}
+    <div class="d-flex justify-content-between align-items-center gap-3 py-1
+                {% if not forloop.last %}border-bottom{% endif %}">
+      <span class="text-muted">{{ d.fecha|date:"D d/m" }}</span>
+      <span class="fw-semibold {% if d.lleno %}text-danger{% else %}text-warning{% endif %}">
+        {{ d.horas_ocupadas }}h / {{ d.horas_cap }}h
+      </span>
+      <span class="badge rounded-pill
+                   {% if d.lleno %}bg-danger{% elif d.pct_ocupado >= 75 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+        {{ d.pct_ocupado }}%
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+  // Skills buscable
+  new TomSelect('#skills-select', {
+    plugins: ['remove_button'],
+    create: false,
+    maxOptions: null,
+    placeholder: 'Buscar y agregar skills…',
+  });
+
+  // Contadores de resumen
+  document.addEventListener('DOMContentLoaded', function () {
+    var rows = document.querySelectorAll('#tbl-recursos tbody tr');
+    if (!rows.length) return;
+    var conCupo = 0, sinCupo = 0;
+    rows.forEach(function(r) {
+      parseFloat(r.dataset.cupo) > 0 ? conCupo++ : sinCupo++;
+    });
+    var ec = document.getElementById('cnt-disponibles');
+    var es = document.getElementById('cnt-sin-cupo');
+    if (ec) ec.textContent = conCupo;
+    if (es) es.textContent = sinCupo;
+  });
+
+  // Popovers de días ocupados
+  document.querySelectorAll('.pop-trigger[data-popover-id]').forEach(function(el) {
+    var contentEl = document.getElementById(el.dataset.popoverId);
+    if (contentEl) {
+      new bootstrap.Popover(el, {
+        html: true,
+        trigger: 'hover focus',
+        placement: 'left',
+        content: contentEl.innerHTML,
+        customClass: 'popover-dias',
+      });
+    }
+  });
+
+  // Atajos de rango rápido
+  function setRango(dias) {
+    var hoy = new Date();
+    var fin = new Date(hoy);
+    fin.setDate(fin.getDate() + dias - 1);
+    var fmt = d => d.toISOString().split('T')[0];
+    document.querySelector('[name=fecha_inicio]').value = fmt(hoy);
+    document.querySelector('[name=fecha_fin]').value = fmt(fin);
+  }
+</script>
+
+<!-- Botones de rango rápido bajo el formulario (UX extra) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.querySelector('form[action="/solicitud/"]');
+  if (!form) return;
+  var wrap = document.createElement('div');
+  wrap.className = 'mt-2 d-flex gap-1 flex-wrap';
+  wrap.innerHTML = '<span class="text-muted small me-1 align-self-center">Rango rápido:</span>'
+    + '<button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="setRango(5)">1 semana</button>'
+    + '<button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="setRango(10)">2 semanas</button>'
+    + '<button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="setRango(22)">1 mes</button>'
+    + '<button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="setRango(66)">3 meses</button>';
+  form.appendChild(wrap);
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirmar Solicitud — Plataforma de Gestión</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+    .skill-tag { display:inline-block; background:#e8f4fd; color:#1a6ea8; border-radius:5px; padding:1px 7px; font-size:.78rem; margin:1px; }
+    .avail-pill { font-size: .85rem; font-weight: 600; }
+    .form-control:focus, .form-select:focus { border-color: #0d6efd; box-shadow: 0 0 0 .2rem rgba(13,110,253,.15); }
+    .btn-crear { font-size: 1rem; padding: .55rem 2.5rem; }
+    .resumen-item { display:flex; justify-content:space-between; border-bottom:1px solid #f0f0f0; padding:6px 0; }
+    .resumen-item:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-4 py-2 mb-4">
+  <span class="navbar-brand"><i class="bi bi-clipboard-plus me-2"></i>Nueva Solicitud</span>
+  <div class="d-flex gap-3">
+    <a href="/solicitud/" class="text-white text-decoration-none small"><i class="bi bi-arrow-left me-1"></i>Volver a buscar</a>
+    <a href="/admin/" class="text-white text-decoration-none small"><i class="bi bi-gear me-1"></i>Admin</a>
+  </div>
+</nav>
+
+<div class="container" style="max-width:720px">
+
+  {% if error_parametros %}
+  <div class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    Parámetros inválidos. <a href="/solicitud/">Volver a la búsqueda.</a>
+  </div>
+
+  {% elif asignacion_creada %}
+  <!-- ── ÉXITO ──────────────────────────────────────────── -->
+  <div class="card p-4 text-center mb-3">
+    <div class="mb-3" style="font-size:3rem">✅</div>
+    <h4 class="fw-bold text-success mb-1">Solicitud creada</h4>
+    <p class="text-muted mb-3">
+      La solicitud #{{ asignacion_creada.pk }} está pendiente de aprobación.
+      {% if fue_recomputada %}
+      <br><span class="badge bg-warning text-dark mt-1">
+        <i class="bi bi-calendar-check me-1"></i>
+        Fecha fin ajustada por {{ conflict_dates_orig|length }} día{{ conflict_dates_orig|length|pluralize:"s" }} bloqueado{{ conflict_dates_orig|length|pluralize:"s" }}
+      </span>
+      {% endif %}
+    </p>
+    <div class="bg-light rounded p-3 text-start mb-3" style="font-size:.9rem">
+      <div class="resumen-item"><span class="text-muted">Recurso</span><strong>{{ asignacion_creada.recurso.nombre }}</strong></div>
+      <div class="resumen-item"><span class="text-muted">Proyecto</span><strong>{{ asignacion_creada.proyecto }}</strong></div>
+      <div class="resumen-item"><span class="text-muted">Período</span><strong>{{ asignacion_creada.fecha_inicio }} → {{ asignacion_creada.fecha_fin }}</strong></div>
+      <div class="resumen-item"><span class="text-muted">Días hábiles</span><strong>{{ asignacion_creada.dias_habiles }}</strong></div>
+      <div class="resumen-item"><span class="text-muted">Horas totales</span><strong>{{ asignacion_creada.horas_totales }} h</strong></div>
+      {% if asignacion_creada.jornada_completa %}
+      <div class="resumen-item"><span class="text-muted">Intensidad</span><strong>Jornada completa</strong></div>
+      {% else %}
+      <div class="resumen-item"><span class="text-muted">Intensidad diaria</span><strong>{{ asignacion_creada.intensidad_diaria }} h/día</strong></div>
+      {% endif %}
+      <div class="resumen-item"><span class="text-muted">Estado</span>
+        <span class="badge" style="background:#6366f1">Solicitada — pendiente aprobación</span>
+      </div>
+    </div>
+    <div class="d-flex gap-2 justify-content-center">
+      <a href="/solicitud/?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}" class="btn btn-outline-primary">
+        <i class="bi bi-search me-1"></i>Buscar más recursos
+      </a>
+      <a href="/admin/assignments/asignacion/{{ asignacion_creada.pk }}/change/" class="btn btn-outline-secondary">
+        <i class="bi bi-pencil me-1"></i>Ver en admin
+      </a>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ── FORMULARIO ─────────────────────────────────────── -->
+
+  {% if errores %}
+  <div class="alert alert-danger py-2">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    {% for e in errores %}{{ e }}{% if not forloop.last %} · {% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Tarjeta del recurso -->
+  <div class="card mb-3 p-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold"
+           style="width:48px;height:48px;font-size:1.2rem;flex-shrink:0">
+        {{ recurso.nombre|first|upper }}
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-bold fs-5">{{ recurso.nombre }}</div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge
+            {% if recurso.banda == 'LEAD' %}bg-dark
+            {% elif recurso.banda == 'SR' %}bg-primary
+            {% elif recurso.banda == 'SSR' %}bg-info text-dark
+            {% else %}bg-secondary{% endif %}">
+            {{ recurso.get_banda_display }}
+          </span>
+          {% for sk in recurso.skills.all %}
+          <span class="skill-tag">{{ sk.nombre }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% if info %}
+      <div class="text-end" style="min-width:90px">
+        <div class="fw-bold
+          {% if info.porcentaje_libre >= 75 %}text-success
+          {% elif info.porcentaje_libre >= 50 %}text-info
+          {% elif info.porcentaje_libre >= 25 %}text-warning
+          {% else %}text-danger{% endif %}">
+          {{ info.porcentaje_libre }}% libre
+        </div>
+        <div class="text-muted small">{{ info.horas_libres }}h disponibles</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Tarjeta del período -->
+  <div class="card mb-4 p-3">
+    <div class="row g-0 text-center">
+      <div class="col border-end">
+        <div class="text-muted small">Fecha inicio</div>
+        <div class="fw-bold">{{ fi|date:"d/m/Y" }}</div>
+      </div>
+      <div class="col border-end">
+        <div class="text-muted small">Fecha fin</div>
+        <div class="fw-bold">{{ ff|date:"d/m/Y" }}</div>
+      </div>
+      {% if info %}
+      <div class="col border-end">
+        <div class="text-muted small">Días hábiles</div>
+        <div class="fw-bold">{{ info.dias_habiles }}</div>
+      </div>
+      <div class="col">
+        <div class="text-muted small">Horas disponibles</div>
+        <div class="fw-bold text-success">{{ info.horas_libres }}h</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── DETALLE DE OCUPACIÓN POR DÍA ─────────────────────────────── -->
+  {% if detalle_dias %}
+  <div class="card mb-4 p-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h6 class="fw-bold mb-0"><i class="bi bi-calendar3 me-2 text-secondary"></i>Ocupación por día hábil</h6>
+      <span class="text-muted small">{{ detalle_dias|length }} días hábiles</span>
+    </div>
+    <div class="d-flex flex-wrap gap-1" id="dias-grid">
+      {% for dia in detalle_dias %}
+      <div class="dia-cell position-relative"
+           data-bs-toggle="tooltip" data-bs-placement="top"
+           title="{{ dia.fecha|date:'D d/m/Y' }} · {{ dia.horas_ocupadas }}h ocupadas / {{ dia.horas_cap }}h cap · {{ dia.pct_ocupado }}% ocupado"
+           style="width:34px;height:34px;border-radius:6px;cursor:default;
+                  background:{% if dia.lleno %}#dc3545{% elif dia.parcial %}#fd7e14{% else %}#198754{% endif %};
+                  opacity:{% if dia.lleno %}1{% elif dia.parcial %}0.75{% else %}0.55{% endif %};">
+        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                     color:#fff;font-size:.65rem;font-weight:700;line-height:1">
+          {{ dia.fecha|date:"d" }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <!-- Leyenda -->
+    <div class="d-flex gap-3 mt-3" style="font-size:.78rem">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#198754;border-radius:3px;opacity:.55"></span> Libre</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#fd7e14;border-radius:3px;opacity:.75"></span> Parcial</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#dc3545;border-radius:3px"></span> Lleno</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Formulario -->
+  <div class="card p-4">
+    <h5 class="fw-bold mb-4"><i class="bi bi-clipboard-check me-2 text-primary"></i>Completar solicitud</h5>
+
+    <form method="post" action="/solicitud/crear/">
+      {% csrf_token %}
+      <input type="hidden" name="recurso" value="{{ recurso.pk }}">
+      <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
+      <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
+
+      <!-- Proyecto -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Proyecto <span class="text-danger">*</span></label>
+        <select name="proyecto" class="form-select" required>
+          <option value="">— Seleccioná un proyecto —</option>
+          {% for p in proyectos %}
+          <option value="{{ p.pk }}"
+            {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
+            {{ p.codigo }} — {{ p.nombre }} ({{ p.cliente }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Intensidad -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Dedicación diaria</label>
+
+        <!-- Jornada completa toggle -->
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" name="jornada_completa"
+                 id="id_jornada_completa" role="switch"
+                 {% if post.jornada_completa == "on" %}checked{% endif %}>
+          <label class="form-check-label" for="id_jornada_completa">
+            <strong>Jornada completa</strong>
+            <span class="text-muted ms-1 small">(lun–jue 8.5 h · vie 8 h)</span>
+          </label>
+        </div>
+
+        <!-- Horas por día (visible cuando NO es jornada completa) -->
+        <div id="wrap-intensidad">
+          <div class="d-flex align-items-center gap-2">
+            <input type="number" name="intensidad_diaria" id="id_intensidad"
+                   class="form-control" style="width:110px"
+                   step="0.5" min="0.5" max="8.5" placeholder="ej: 4"
+                   value="{{ post.intensidad_diaria }}">
+            <span class="text-muted">horas/día</span>
+          </div>
+          <div class="form-text">Entre 0.5 y 8.5 h/día.</div>
+        </div>
+      </div>
+
+      <!-- Resumen calculado en tiempo real -->
+      <div class="alert alert-light border py-2 px-3 mb-4 small" id="resumen-live" style="display:none">
+        <i class="bi bi-calculator me-1 text-primary"></i>
+        Estimado: <strong id="res-dias">—</strong> días hábiles ·
+        <strong id="res-horas">—</strong> horas totales
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-crear">
+          <i class="bi bi-send me-2"></i>Crear solicitud
+        </button>
+        <a href="/solicitud/?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── ALERTA DE CONFLICTOS (paso intermedio) ──────────────── -->
+  {% if conflict_dates %}
+  <div class="card border-warning mb-3" style="border-width:2px!important">
+    <div class="card-header bg-warning text-dark py-2 px-3 fw-bold">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      El recurso está bloqueado en {{ conflict_dates|length }} día{{ conflict_dates|length|pluralize:"s" }}
+    </div>
+    <div class="card-body">
+      <p class="mb-2 text-muted small">En esas fechas la capacidad ya está al tope por otras asignaciones:</p>
+      <div class="mb-3">
+        {% for d in conflict_dates %}
+        <span class="badge bg-danger me-1 mb-1 px-2 py-1" style="font-size:.82rem">
+          {{ d|date:"D d/m/Y" }}
+        </span>
+        {% endfor %}
+      </div>
+
+      {% if nueva_fecha_fin %}
+      <div class="alert alert-success py-2 mb-3">
+        <i class="bi bi-arrow-right-circle me-1"></i>
+        Si continuás, la asignación se recomputará saltando esos días.<br>
+        <strong>Nueva fecha fin: {{ nueva_fecha_fin|date:"d/m/Y" }}</strong>
+        {% if nuevas_horas %} · {{ nuevas_horas }} horas totales{% endif %}
+        — las horas comprometidas quedan preservadas.
+      </div>
+      {% endif %}
+
+      <div class="d-flex gap-2 flex-wrap">
+        <!-- Confirmar recomputo -->
+        <form method="post" action="/solicitud/crear/" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="recurso" value="{{ recurso.pk }}">
+          <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
+          <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
+          <input type="hidden" name="proyecto" value="{{ post.proyecto }}">
+          <input type="hidden" name="intensidad_diaria" value="{{ post.intensidad_diaria }}">
+          {% if post.jornada_completa %}<input type="hidden" name="jornada_completa" value="on">{% endif %}
+          <input type="hidden" name="confirmado" value="1">
+          <button type="submit" class="btn btn-warning fw-semibold">
+            <i class="bi bi-check2-circle me-1"></i>
+            Confirmar y crear recomputando
+          </button>
+        </form>
+
+        <!-- Volver a ajustar -->
+        <a href="/solicitud/?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+           class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Elegir otro recurso o fechas
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  var chk = document.getElementById('id_jornada_completa');
+  var wrap = document.getElementById('wrap-intensidad');
+  var inp = document.getElementById('id_intensidad');
+  var resumen = document.getElementById('resumen-live');
+  var resDias = document.getElementById('res-dias');
+  var resHoras = document.getElementById('res-horas');
+
+  var diasHabiles = {{ info.dias_habiles|default:0 }};
+  var horasLibres = {{ info.horas_libres|default:0 }};
+
+  function actualizar() {
+    var completa = chk && chk.checked;
+
+    // Mostrar/ocultar campo de horas
+    if (wrap) wrap.style.display = completa ? 'none' : '';
+
+    // Resumen calculado
+    if (!resumen) return;
+    if (completa) {
+      // Jornada completa: estimamos 8h promedio (simplificación visual)
+      var hEst = Math.round(diasHabiles * 8.2 * 10) / 10;
+      resDias.textContent = diasHabiles;
+      resHoras.textContent = '≈' + hEst;
+      resumen.style.display = '';
+    } else {
+      var h = parseFloat(inp ? inp.value : 0);
+      if (h > 0 && diasHabiles > 0) {
+        resDias.textContent = diasHabiles;
+        resHoras.textContent = Math.ceil(diasHabiles * h);
+        resumen.style.display = '';
+      } else {
+        resumen.style.display = 'none';
+      }
+    }
+  }
+
+  if (chk) chk.addEventListener('change', actualizar);
+  if (inp) inp.addEventListener('input', actualizar);
+  actualizar();
+})();
+
+// Activar tooltips de Bootstrap en los días
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+  new bootstrap.Tooltip(el, { html: false });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Confirmar aprobación — Asignación #{{ asignacion.pk }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a> ›
+  <a href="{% url 'admin:assignments_asignacion_changelist' %}">Asignaciones</a> ›
+  Confirmar aprobación #{{ asignacion.pk }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .conflict-card { background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:16px 20px; margin-bottom:20px; }
+  .conflict-card h3 { color:#856404; margin:0 0 8px; font-size:1rem; }
+  .day-chip { display:inline-block; background:#dc3545; color:#fff; border-radius:5px; padding:3px 10px; font-size:.85rem; margin:2px; font-weight:600; }
+  .new-date { font-size:1.1rem; font-weight:700; color:#0a5c36; }
+  .summary-box { background:#d1f5e3; border:1px solid #a3d9b8; border-radius:8px; padding:14px 20px; margin-bottom:20px; }
+  .btn-confirm { background:#198754; color:#fff; border:none; padding:8px 24px; border-radius:6px; font-size:.95rem; cursor:pointer; font-weight:600; }
+  .btn-confirm:hover { background:#146c43; }
+  .btn-cancel { background:#6c757d; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:.95rem; cursor:pointer; }
+  .btn-cancel:hover { background:#565e64; }
+  .info-row { display:flex; gap:40px; margin-bottom:8px; flex-wrap:wrap; }
+  .info-item label { display:block; font-size:.78rem; color:#6c757d; margin-bottom:2px; }
+  .info-item span { font-weight:600; }
+</style>
+
+<h1>Confirmar aprobación con recomputo</h1>
+
+<!-- Datos de la asignación -->
+<div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+  <div class="info-row">
+    <div class="info-item"><label>Recurso</label><span>{{ asignacion.recurso.nombre }}</span></div>
+    <div class="info-item"><label>Proyecto</label><span>{{ asignacion.proyecto }}</span></div>
+    <div class="info-item"><label>Período solicitado</label><span>{{ asignacion.fecha_inicio|date:"d/m/Y" }} → {{ asignacion.fecha_fin|date:"d/m/Y" }}</span></div>
+    <div class="info-item"><label>Días hábiles</label><span>{{ asignacion.dias_habiles }}</span></div>
+    <div class="info-item"><label>Horas totales</label><span>{{ asignacion.horas_totales }} h</span></div>
+  </div>
+</div>
+
+<!-- Alerta de conflictos -->
+<div class="conflict-card">
+  <h3>⚠️ El recurso está bloqueado en {{ conflict_dates|length }} día{{ conflict_dates|length|pluralize:"s" }}</h3>
+  <div style="margin-bottom:10px">
+    {% for d in conflict_dates %}
+    <span class="day-chip">{{ d|date:"D d/m/Y" }}</span>
+    {% endfor %}
+  </div>
+  <p style="margin:0;font-size:.88rem;color:#856404">
+    En esas fechas la capacidad ya está al tope por otras asignaciones aprobadas.
+    Si confirmás el recomputo, esos días se saltearán y la fecha fin se extenderá.
+  </p>
+</div>
+
+<!-- Propuesta recomputada -->
+{% if nueva_fecha_fin %}
+<div class="summary-box">
+  <div class="info-row">
+    <div class="info-item">
+      <label>Nueva fecha fin propuesta</label>
+      <span class="new-date">{{ nueva_fecha_fin|date:"D d/m/Y" }}</span>
+    </div>
+    {% if nuevas_horas %}
+    <div class="info-item">
+      <label>Horas totales</label>
+      <span class="new-date">{{ nuevas_horas }} h</span>
+    </div>
+    {% endif %}
+    <div class="info-item">
+      <label>Días saltados</label>
+      <span style="color:#dc3545;font-weight:600">{{ conflict_dates|length }} día{{ conflict_dates|length|pluralize:"s" }}</span>
+    </div>
+  </div>
+  <p style="margin:8px 0 0;font-size:.85rem;color:#0a5c36">
+    ✓ Las horas comprometidas se preservan — solo se extiende la ventana para saltear los días bloqueados.
+  </p>
+</div>
+{% endif %}
+
+<!-- Acciones -->
+<form method="post">
+  {% csrf_token %}
+  <div style="display:flex;gap:12px;align-items:center">
+    <button type="submit" class="btn-confirm">
+      ✓ Aprobar recomputando fecha fin
+    </button>
+    <a href="{% url 'admin:assignments_asignacion_changelist' %}">
+      <button type="button" class="btn-cancel">✗ Cancelar</button>
+    </a>
+  </div>
+</form>
+{% endblock %}
