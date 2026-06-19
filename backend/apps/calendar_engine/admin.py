@@ -13,3 +13,4 @@ class IndisponibilidadAdmin(admin.ModelAdmin):
     list_display = ["recurso", "tipo", "fecha_inicio", "fecha_fin", "origen"]
     list_filter = ["tipo", "origen"]
     search_fields = ["recurso__nombre"]
+    exclude = ["deleted_at", "created_at", "updated_at"]

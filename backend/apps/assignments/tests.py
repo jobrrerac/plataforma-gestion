@@ -52,8 +52,9 @@ class CapacidadTests(TestCase):
         )
         return a
 
-    def test_sobreasignacion_bloqueada(self):
-        self._crear_aprobada(horas=40, intensidad=8)
+    def test_sobreasignacion_bloqueada_lunes(self):
+        # Lunes: tope 8.5 h. Primera asignación ocupa 8.5 h → segunda de 1 h debe bloquearse
+        self._crear_aprobada(horas=43, intensidad=8.5)  # 43/8.5 = 5 días lun-vie
         fecha_fin = calcular_fecha_fin(self.recurso, date(2025, 1, 13), 8, 1)
         candidata = Asignacion.objects.create(
             recurso=self.recurso, proyecto=self.proyecto,
@@ -64,7 +65,8 @@ class CapacidadTests(TestCase):
         ok, _ = puede_asignar(candidata)
         self.assertFalse(ok)
 
-    def test_50_porciento_mas_50_porciento_valido(self):
+    def test_combinacion_4h_mas_4h_valido_lunes(self):
+        # Lunes: tope 8.5 h. 4 + 4 = 8 h → cabe
         self._crear_aprobada(horas=20, intensidad=4)
         fecha_fin = calcular_fecha_fin(self.recurso, date(2025, 1, 13), 20, 4)
         candidata = Asignacion.objects.create(
@@ -75,6 +77,19 @@ class CapacidadTests(TestCase):
         )
         ok, _ = puede_asignar(candidata)
         self.assertTrue(ok)
+
+    def test_sobreasignacion_viernes_tope_8h(self):
+        # Viernes 17 ene 2025: tope 8 h. 8 + 1 debe bloquearse
+        self._crear_aprobada(horas=8, intensidad=8, inicio=date(2025, 1, 17))
+        fecha_fin = calcular_fecha_fin(self.recurso, date(2025, 1, 17), 8, 1)
+        candidata = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            horas_totales=8, intensidad_diaria=1,
+            fecha_inicio=date(2025, 1, 17), fecha_fin=fecha_fin,
+            estado="SOLICITADA", solicitada_por=self.pm,
+        )
+        ok, _ = puede_asignar(candidata)
+        self.assertFalse(ok)
 
     def test_log_auditoria_se_crea_al_aprobar(self):
         fecha_fin = calcular_fecha_fin(self.recurso, date(2025, 1, 13), 40, 8)

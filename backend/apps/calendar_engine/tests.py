@@ -48,6 +48,11 @@ class CalcularFechaFinTests(TestCase):
         self.assertEqual(calcular_fecha_fin(date(2025, 1, 13), 1), date(2025, 1, 13))
 
     def test_cruza_feriado(self):
-        # 19 mar 2025 es miércoles (San José, feriado Colombia)
-        # Empezando lunes 17 mar, 3 días: lun 17, mar 18, jue 20 (salta miércoles feriado)
-        self.assertEqual(calcular_fecha_fin(date(2025, 3, 17), 3), date(2025, 3, 20))
+        # San José (19 mar) en 2025 cae miércoles → Ley Emiliani lo mueve al lunes 24 mar
+        # Empezando lunes 17 mar, 3 días: lun 17, mar 18, mié 19 (no es feriado ese día) = 19 mar
+        self.assertEqual(calcular_fecha_fin(date(2025, 3, 17), 3), date(2025, 3, 19))
+        # Verificar que el feriado real (lunes 24 mar) sí se salta
+        # 3 días desde mié 19: mié 19, jue 20, vie 21 = 21 mar
+        self.assertEqual(calcular_fecha_fin(date(2025, 3, 19), 3), date(2025, 3, 21))
+        # 2 días desde jue 20 cruzando el lunes 24 (feriado): jue 20, vie 21, mar 25 = 25 mar
+        self.assertEqual(calcular_fecha_fin(date(2025, 3, 20), 3), date(2025, 3, 25))

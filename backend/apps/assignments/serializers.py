@@ -23,7 +23,8 @@ class AsignacionSerializer(serializers.ModelSerializer):
         read_only_fields = ["fecha_fin", "estado", "solicitada_por", "created_at"]
 
     def get_alerta_intensidad(self, obj):
-        return float(obj.intensidad_diaria) > 8
+        # Alerta si supera la jornada del viernes (la más restrictiva)
+        return float(obj.intensidad_diaria) > 8.0
 
 
 class AsignacionCreateSerializer(serializers.ModelSerializer):

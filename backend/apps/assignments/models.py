@@ -18,8 +18,8 @@ class Asignacion(SoftDeleteModel):
 
     recurso = models.ForeignKey(Recurso, on_delete=models.PROTECT, related_name="asignaciones")
     proyecto = models.ForeignKey(Proyecto, on_delete=models.PROTECT, related_name="asignaciones")
-    horas_totales = models.DecimalField(max_digits=7, decimal_places=2)
-    intensidad_diaria = models.DecimalField(max_digits=4, decimal_places=2)
+    horas_totales = models.PositiveIntegerField(help_text="Total de horas del recurso en el proyecto (ej: 40, 80, 160)")
+    intensidad_diaria = models.DecimalField(max_digits=4, decimal_places=1, help_text="Horas por día (ej: 4, 4.5, 8)")
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField(null=True, blank=True)
     politica_ausencia = models.CharField(max_length=20, choices=POLITICA_CHOICES, default="RECOMPUTAR")
