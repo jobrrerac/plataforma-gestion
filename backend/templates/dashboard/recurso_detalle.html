@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ recurso.nombre }} — Detalle{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+
+  .page-strip {
+    background: #fff;
+    border-bottom: 1px solid #e8e6f0;
+    padding: 18px 0 0;
+  }
+  .page-strip-inner { padding: 0 2rem 18px; }
+  .page-strip h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.25rem; font-weight: 800;
+    color: #110d26; margin: 0; letter-spacing: -.02em;
+  }
+  .page-strip h1 span { color: #e0178a; }
+
+  .banda-badge {
+    font-size: .7rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
+    background: #ede8f5; color: #4a1f7a;
+  }
+
+  .skill-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #f4f0fd; border: 1px solid #ddd4f5;
+    border-radius: 20px; padding: 3px 10px;
+    font-size: .75rem; color: #1a1033;
+  }
+  .skill-chip .stars { color: #e0178a; font-size: .8rem; letter-spacing: 1px; }
+
+  .section-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: .8rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: #110d26;
+    border-left: 3px solid #e0178a; padding-left: 8px;
+  }
+
+  .asig-table { font-size: .83rem; }
+  .asig-table thead th {
+    background: #1a1033; color: #fff;
+    font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .05em; font-weight: 600; padding: 8px 12px;
+  }
+  .asig-table tbody tr:hover { background: #faf8ff; }
+  .asig-table td { padding: 9px 12px; vertical-align: middle; }
+
+  .pct-bar-wrap { min-width: 80px; }
+  .pct-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; }
+  .pct-bar-fill { height: 100%; border-radius: 4px; }
+
+  .estado-badge {
+    font-size: .65rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; padding: 2px 8px; border-radius: 10px;
+  }
+  .estado-APROBADA   { background: #d1fae5; color: #065f46; }
+  .estado-SOLICITADA { background: #fef9c3; color: #713f12; }
+
+  .empty-state { color: #9ca3af; font-size: .85rem; padding: 18px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Page strip -->
+<div class="page-strip">
+  <div class="page-strip-inner">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="/" class="btn btn-sm btn-outline-secondary" style="font-size:.76rem">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+      </a>
+      <div>
+        <h1><span>{{ recurso.nombre }}</span></h1>
+        <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+          <span class="banda-badge">{{ recurso.get_banda_display }}</span>
+          <span class="text-muted" style="font-size:.8rem">
+            <i class="bi bi-envelope me-1"></i>{{ recurso.email }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills del recurso -->
+    {% if recurso.recurso_skills.all %}
+    <div class="mt-3 d-flex flex-wrap gap-2">
+      {% for rs in recurso.recurso_skills.all %}
+      <span class="skill-chip">
+        {{ rs.skill.nombre }}
+        <span class="stars">{{ rs.estrellas }}</span>
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="container-fluid py-4 px-4">
+
+  <!-- En curso -->
+  <div class="mb-4">
+    <p class="section-title mb-3">Asignaciones en curso</p>
+    {% if en_curso %}
+    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+      <table class="table asig-table mb-0">
+        <thead>
+          <tr>
+            <th>Proyecto</th>
+            <th>Cliente</th>
+            <th>Período</th>
+            <th>Días hábiles</th>
+            <th>% Ocupación</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in en_curso %}
+          <tr>
+            <td>
+              <div class="fw-semibold" style="color:#1a1033">{{ a.proyecto.codigo }}</div>
+              <div class="text-muted" style="font-size:.76rem">{{ a.proyecto.nombre }}</div>
+            </td>
+            <td style="color:#4a1f7a;font-size:.8rem">{{ a.proyecto.cliente }}</td>
+            <td style="white-space:nowrap;font-size:.8rem">
+              {{ a.fecha_inicio }} → {{ a.fecha_fin|default:"—" }}
+            </td>
+            <td class="text-center">{{ a.dias_habiles|default:"—" }}</td>
+            <td>
+              {% if a.jornada_completa %}
+              <div class="pct-bar-wrap">
+                <div class="d-flex justify-content-between mb-1">
+                  <span style="font-size:.72rem;font-weight:600;color:#065f46">100% — Jornada completa</span>
+                </div>
+                <div class="pct-bar">
+                  <div class="pct-bar-fill" style="width:100%;background:#10b981"></div>
+                </div>
+              </div>
+              {% else %}
+              <div class="pct-bar-wrap">
+                <div class="d-flex justify-content-between mb-1">
+                  <span style="font-size:.72rem;color:#374151">{{ a.intensidad_diaria }}h/día</span>
+                  <span style="font-size:.72rem;font-weight:600;color:#374151">{% widthratio a.intensidad_diaria 8 100 %}%</span>
+                </div>
+                <div class="pct-bar">
+                  <div class="pct-bar-fill" style="width:{% widthratio a.intensidad_diaria 8 100 %}%;background:{% if a.intensidad_diaria >= 7 %}#f87171{% elif a.intensidad_diaria >= 5 %}#fb923c{% elif a.intensidad_diaria >= 3 %}#facc15{% else %}#34d399{% endif %}"></div>
+                </div>
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="estado-badge estado-{{ a.estado }}">{{ a.get_estado_display }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty-state"><i class="bi bi-inbox me-2"></i>Sin asignaciones activas hoy.</p>
+    {% endif %}
+  </div>
+
+  <!-- Próximas -->
+  <div class="mb-4">
+    <p class="section-title mb-3">Próximas asignaciones</p>
+    {% if proximas %}
+    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+      <table class="table asig-table mb-0">
+        <thead>
+          <tr>
+            <th>Proyecto</th>
+            <th>Cliente</th>
+            <th>Período</th>
+            <th>Días hábiles</th>
+            <th>% Ocupación</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in proximas %}
+          <tr>
+            <td>
+              <div class="fw-semibold" style="color:#1a1033">{{ a.proyecto.codigo }}</div>
+              <div class="text-muted" style="font-size:.76rem">{{ a.proyecto.nombre }}</div>
+            </td>
+            <td style="color:#4a1f7a;font-size:.8rem">{{ a.proyecto.cliente }}</td>
+            <td style="white-space:nowrap;font-size:.8rem">
+              {{ a.fecha_inicio }} → {{ a.fecha_fin|default:"—" }}
+            </td>
+            <td class="text-center">{{ a.dias_habiles|default:"—" }}</td>
+            <td>
+              {% if a.jornada_completa %}
+              <div class="pct-bar-wrap">
+                <div class="d-flex justify-content-between mb-1">
+                  <span style="font-size:.72rem;font-weight:600;color:#065f46">100% — Jornada completa</span>
+                </div>
+                <div class="pct-bar">
+                  <div class="pct-bar-fill" style="width:100%;background:#10b981"></div>
+                </div>
+              </div>
+              {% else %}
+              <div class="pct-bar-wrap">
+                <div class="d-flex justify-content-between mb-1">
+                  <span style="font-size:.72rem;color:#374151">{{ a.intensidad_diaria }}h/día</span>
+                  <span style="font-size:.72rem;font-weight:600;color:#374151">{% widthratio a.intensidad_diaria 8 100 %}%</span>
+                </div>
+                <div class="pct-bar">
+                  <div class="pct-bar-fill" style="width:{% widthratio a.intensidad_diaria 8 100 %}%;background:{% if a.intensidad_diaria >= 7 %}#f87171{% elif a.intensidad_diaria >= 5 %}#fb923c{% elif a.intensidad_diaria >= 3 %}#facc15{% else %}#34d399{% endif %}"></div>
+                </div>
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="estado-badge estado-{{ a.estado }}">{{ a.get_estado_display }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty-state"><i class="bi bi-calendar-x me-2"></i>Sin asignaciones próximas.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

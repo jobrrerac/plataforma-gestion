@@ -69,11 +69,19 @@
     }
     .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.07); }
 
-    /* Botones de rango rápido: mismo tamaño */
-    .rango-btn { font-size:.72rem; min-width:74px; text-align:center; padding:2px 0; }
+    /* Botones de rango rápido */
+    .rango-btn { font-size:.71rem; min-width:44px; text-align:center; height:30px; padding:0 5px; line-height:1; border-color:#ced4da; }
+    .rango-btn:hover { background:#f0ecfc; border-color:#c0b4e8; }
 
-    /* TomSelect: altura fija de 1 línea aunque haya selecciones */
-    .ts-wrapper.multi .ts-control { max-height:31px; overflow-y:auto; flex-wrap:nowrap; }
+    /* TomSelect: misma altura que los input-group */
+    .ts-wrapper { margin-bottom:0 !important; height:30px !important; }
+    .ts-wrapper .ts-control { min-height:30px !important; max-height:30px !important; height:30px !important; overflow-y:auto !important; flex-wrap:nowrap !important; border-radius:6px !important; padding:0 8px !important; align-items:center !important; display:flex !important; }
+    .ts-wrapper.focus .ts-control { border-color:#e0178a !important; box-shadow:0 0 0 3px rgba(224,23,138,.12) !important; }
+
+    /* Etiqueta de fila de filtros */
+    .filter-row-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#9ca3af; margin-bottom:6px; }
+    /* Botones de acción del formulario — tamaño idéntico */
+    .filter-action-btn { height:30px; padding:0 18px; font-size:.82rem; border-radius:8px; font-family:'Montserrat',sans-serif; display:flex; align-items:center; white-space:nowrap; line-height:1; }
 
     /* Barra de disponibilidad */
     .avail-bar { height: 10px; border-radius: 5px; background: #e9ecef; overflow: hidden; min-width: 80px; }
@@ -89,54 +97,65 @@
   <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período y skills</p>
 
   <form method="get" action="/solicitud/">
-    <div class="d-flex align-items-end gap-3 flex-wrap">
+    <!-- inline-block hace que la fila 2 herede el ancho exacto de la fila 1 -->
+    <div style="display:inline-block;min-width:0">
 
-      <div>
-        <label class="form-label fw-semibold mb-1" style="font-size:.8rem">Fecha inicio</label>
-        <input type="date" name="fecha_inicio" class="form-control form-control-sm"
-               value="{{ fecha_inicio }}" required style="width:150px">
+      <!-- Fila 1: Rango de fechas + rangos rápidos -->
+      <div class="mb-3">
+        <div class="filter-row-label">Rango de fechas</div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              Desde
+            </span>
+            <input type="date" name="fecha_inicio" class="form-control"
+                   value="{{ fecha_inicio }}" required style="width:130px;border-color:#e0d6f5">
+          </div>
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              Hasta
+            </span>
+            <input type="date" name="fecha_fin" class="form-control"
+                   value="{{ fecha_fin }}" required style="width:130px;border-color:#e0d6f5">
+          </div>
+          <div class="d-flex align-items-center gap-1 ms-2">
+            <span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;white-space:nowrap;margin-right:2px">Rápido</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(1)">1 día</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(5)">1 sem</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(10)">2 sem</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(22)">1 mes</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(66)">3 mes</button>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label class="form-label fw-semibold mb-1" style="font-size:.8rem">Fecha fin</label>
-        <input type="date" name="fecha_fin" class="form-control form-control-sm"
-               value="{{ fecha_fin }}" required style="width:150px">
+      <!-- Fila 2: Skills + Buscar — mismo ancho que la fila 1 -->
+      <div class="pt-2 border-top" style="width:100%">
+        <div class="filter-row-label">Skills</div>
+        <div class="d-flex align-items-center gap-2">
+          <div style="flex:1;min-width:0">
+            <select id="skills-select" name="skills" multiple placeholder="Buscar y agregar skills…">
+              {% for sk in skills_disponibles %}
+              <option value="{{ sk.nombre }}"
+                {% if sk.nombre in skills_seleccionados %}selected{% endif %}>
+                {{ sk.nombre }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn fw-semibold flex-shrink-0 filter-action-btn"
+                  style="background:#110d26;color:#fff;border:none">
+            <i class="bi bi-search me-1"></i>Buscar
+          </button>
+          <a href="/solicitud/" class="btn fw-semibold flex-shrink-0 filter-action-btn"
+             style="background:var(--inet-pink);color:#fff;border:none">
+            <i class="bi bi-x-circle me-1"></i>Limpiar
+          </a>
+        </div>
       </div>
 
-      <div style="min-width:240px; max-width:380px; flex:1">
-        <label class="form-label fw-semibold mb-1" style="font-size:.8rem">
-          Skills <span class="text-muted fw-normal">(opcional)</span>
-        </label>
-        <select id="skills-select" name="skills" multiple placeholder="Buscar y agregar skills…">
-          {% for sk in skills_disponibles %}
-          <option value="{{ sk.nombre }}"
-            {% if sk.nombre in skills_seleccionados %}selected{% endif %}>
-            {{ sk.nombre }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <!-- label fantasma para alinear el botón con los inputs -->
-      <div>
-        <label class="form-label mb-1" style="visibility:hidden;font-size:.8rem;display:block">_</label>
-        <button type="submit" class="btn fw-semibold px-4"
-                style="background:var(--inet-pink);color:#fff;border:none;border-radius:8px;
-                       height:31px;font-size:.83rem;white-space:nowrap;
-                       font-family:'Montserrat',sans-serif">
-          <i class="bi bi-search me-1"></i>Buscar
-        </button>
-      </div>
-
-    </div>
-
-    <!-- Rangos rápidos -->
-    <div class="d-flex gap-1 mt-3 pb-3 border-bottom align-items-center">
-      <span class="text-muted me-2" style="font-size:.75rem;white-space:nowrap">Rango rápido:</span>
-      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(5)">1 semana</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(10)">2 semanas</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(22)">1 mes</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(66)">3 meses</button>
     </div>
   </form>
 </div>
@@ -301,7 +320,7 @@
     <div class="text-center text-muted py-5">
       <i class="bi bi-calendar-search" style="font-size:3rem;opacity:.25;color:#110d26"></i>
       <p class="mt-3" style="font-family:'Montserrat',sans-serif;font-size:.9rem">
-        Ingresá un rango de fechas para ver la disponibilidad de recursos.
+        Ingresa un rango de fechas para ver la disponibilidad de recursos.
       </p>
     </div>
   {% endif %}
@@ -409,12 +428,21 @@
 
   // Rangos rápidos
   function setRango(dias) {
-    var hoy = new Date();
-    var fin = new Date(hoy);
-    fin.setDate(fin.getDate() + dias - 1);
     var fmt = function(d) { return d.toISOString().split('T')[0]; };
-    document.querySelector('[name=fecha_inicio]').value = fmt(hoy);
-    document.querySelector('[name=fecha_fin]').value = fmt(fin);
+    var inicioInput = document.querySelector('[name=fecha_inicio]');
+    var finInput    = document.querySelector('[name=fecha_fin]');
+    var inicio;
+    if (inicioInput.value) {
+      // Si ya hay fecha de inicio, calcular desde ella sin modificarla
+      inicio = new Date(inicioInput.value + 'T00:00:00');
+    } else {
+      // Sin fecha: partir desde hoy y rellenar también el inicio
+      inicio = new Date();
+      inicioInput.value = fmt(inicio);
+    }
+    var fin = new Date(inicio);
+    fin.setDate(fin.getDate() + dias - 1);
+    finInput.value = fmt(fin);
   }
 </script>
 {% endblock %}

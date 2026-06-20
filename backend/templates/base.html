@@ -213,17 +213,21 @@
          class="inet-nav-link {% block active_solicitud %}{% endblock %}">
         <i class="bi bi-people"></i> Solicitudes
       </a>
+      {% if user.is_staff %}
       <a href="/admin/assignments/asignacion/"
          class="inet-nav-link {% block active_asignaciones %}{% endblock %}">
         <i class="bi bi-calendar-check"></i> Asignaciones
       </a>
+      {% endif %}
     </nav>
 
     <!-- Derecha -->
     <div class="inet-header-right">
+      {% if user.is_staff %}
       <a href="/admin/" class="inet-nav-link {% block active_admin %}{% endblock %}">
         <i class="bi bi-gear"></i> Admin
       </a>
+      {% endif %}
     </div>
 
   </div>
@@ -263,15 +267,18 @@
         <a href="/solicitud/" class="inet-footer-link">
           <i class="bi bi-people me-1 opacity-50"></i>Solicitudes
         </a>
+        {% if user.is_staff %}
         <a href="/admin/assignments/asignacion/" class="inet-footer-link">
           <i class="bi bi-calendar-check me-1 opacity-50"></i>Asignaciones
         </a>
         <a href="/admin/" class="inet-footer-link">
           <i class="bi bi-gear me-1 opacity-50"></i>Admin
         </a>
+        {% endif %}
       </div>
 
-      <!-- Columna módulos -->
+      <!-- Columna módulos (solo staff) -->
+      {% if user.is_staff %}
       <div class="col-6 col-md-2">
         <div class="inet-footer-heading">Módulos</div>
         <a href="/admin/core/recurso/" class="inet-footer-link">Recursos</a>
@@ -280,6 +287,7 @@
         <a href="/admin/calendar_engine/dianolaborable/" class="inet-footer-link">Calendario</a>
         <a href="/admin/assignments/logauditoria/" class="inet-footer-link">Auditoría</a>
       </div>
+      {% endif %}
 
       <!-- Columna derecha decorativa -->
       <div class="col-md-4 col-lg-5 d-none d-md-flex align-items-end justify-content-end">

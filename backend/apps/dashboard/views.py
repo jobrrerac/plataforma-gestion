@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -18,7 +18,7 @@ from apps.assignments.services import disponibilidad_recursos, crear_solicitud, 
 
 class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/ocupacion.html"
-    login_url = "/admin/login/"
+    login_url = "/login/"
 
 
 class OcupacionAPIView(APIView):
@@ -106,7 +106,7 @@ class OcupacionAPIView(APIView):
         })
 
 
-@method_decorator(login_required(login_url="/admin/login/"), name="dispatch")
+@method_decorator(login_required(login_url="/login/"), name="dispatch")
 class SolicitudView(View):
     """Buscador de disponibilidad de recursos para crear solicitudes de asignación."""
 
@@ -141,7 +141,7 @@ class SolicitudView(View):
         })
 
 
-@method_decorator(login_required(login_url="/admin/login/"), name="dispatch")
+@method_decorator(login_required(login_url="/login/"), name="dispatch")
 class SolicitudCrearView(View):
     """Formulario simple para crear una solicitud de asignación para un recurso y período ya elegidos."""
 
@@ -279,4 +279,31 @@ class SolicitudCrearView(View):
             "asignacion_creada": asignacion,
             "fue_recomputada": bool(conflict_dates),
             "conflict_dates_orig": conflict_dates,
+        })
+
+
+@method_decorator(login_required(login_url="/login/"), name="dispatch")
+class RecursoDetalleView(View):
+    """Detalle de un recurso: asignaciones en curso y próximas."""
+
+    def get(self, request, pk):
+        recurso = get_object_or_404(
+            Recurso.objects.prefetch_related("recurso_skills__skill"),
+            pk=pk, activo=True,
+        )
+        hoy = date.today()
+        asignaciones = list(
+            Asignacion.objects
+            .filter(recurso=recurso, estado__in=["APROBADA", "SOLICITADA"], fecha_fin__gte=hoy)
+            .select_related("proyecto")
+            .order_by("fecha_inicio")
+        )
+        en_curso = [a for a in asignaciones if a.fecha_inicio <= hoy]
+        proximas = [a for a in asignaciones if a.fecha_inicio > hoy]
+
+        return render(request, "dashboard/recurso_detalle.html", {
+            "recurso": recurso,
+            "en_curso": en_curso,
+            "proximas": proximas,
+            "hoy": hoy,
         })

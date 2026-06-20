@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block page_title %}Iniciar sesión{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .login-card {
+    max-width: 400px;
+    margin: 80px auto 0;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 4px 32px rgba(17,13,38,.10);
+    padding: 40px 36px 36px;
+  }
+  .login-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #110d26;
+    margin-bottom: 4px;
+  }
+  .login-title span { color: #e0178a; }
+  .login-sub {
+    font-size: .8rem;
+    color: #6b7280;
+    margin-bottom: 28px;
+  }
+  .login-card .form-label {
+    font-size: .8rem;
+    font-weight: 600;
+    color: #374151;
+  }
+  .login-card .form-control {
+    border-radius: 8px;
+    font-size: .88rem;
+    border-color: #e0d6f5;
+  }
+  .login-card .form-control:focus {
+    border-color: #e0178a;
+    box-shadow: 0 0 0 3px rgba(224,23,138,.12);
+  }
+  .btn-login {
+    background: #e0178a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: .88rem;
+    letter-spacing: .04em;
+    height: 42px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .btn-login:hover { background: #c4117a; color: #fff; }
+  .errornote {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #7f1d1d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: .82rem;
+    margin-bottom: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-card">
+  <div class="login-title">Plataforma de <span>Recursos</span></div>
+  <div class="login-sub">Ingresa con tu usuario de Inetum</div>
+
+  {% if form.errors %}
+  <div class="errornote">
+    <i class="bi bi-exclamation-circle me-1"></i>
+    Usuario o contraseña incorrectos. Intentá de nuevo.
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ request.path }}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <div class="mb-3">
+      <label class="form-label" for="id_username">Usuario</label>
+      <input type="text" name="username" id="id_username"
+             class="form-control" autofocus autocomplete="username"
+             value="{{ form.username.value|default:'' }}">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="id_password">Contraseña</label>
+      <input type="password" name="password" id="id_password"
+             class="form-control" autocomplete="current-password">
+    </div>
+
+    <button type="submit" class="btn btn-login">
+      <i class="bi bi-box-arrow-in-right me-2"></i>Iniciar sesión
+    </button>
+  </form>
+</div>
+{% endblock %}
