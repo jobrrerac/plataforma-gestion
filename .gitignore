@@ -18,13 +18,18 @@ db.sqlite3
 staticfiles/
 mediafiles/
 
-# Entorno — NUNCA subir al repo
+# Entorno 
 .env
 .env.local
 .env.*.local
 
 # Docker
 postgres_data/
+
+# Backups de base de datos
+*.sql
+*.dump
+*.backup
 
 # IDE
 .vscode/

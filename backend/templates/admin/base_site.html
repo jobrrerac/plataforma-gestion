@@ -1,0 +1,604 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | Inetum Admin{% endblock %}
+
+{% block branding %}
+<a id="inet-brand-link" href="{% url 'admin:index' %}">
+  <span class="inet-logo-text">
+    inetum<span class="inet-dot">.</span><span class="inet-sup">↗</span>
+  </span>
+  <span class="inet-brand-sub">Gestión de Recursos</span>
+</a>
+
+<nav class="inet-admin-nav">
+  <a href="/dashboard/"                          class="inet-admin-nav-link" data-match="/dashboard">&#9783; Dashboard</a>
+  <a href="/solicitud/"                          class="inet-admin-nav-link" data-match="/solicitud">&#128101; Solicitudes</a>
+  <a href="/admin/assignments/asignacion/"       class="inet-admin-nav-link" data-match="/admin/assignments/asignacion">Asignaciones</a>
+  <a href="/admin/core/recurso/"                 class="inet-admin-nav-link" data-match="/admin/core/recurso">Recursos</a>
+  <a href="/admin/core/proyecto/"                class="inet-admin-nav-link" data-match="/admin/core/proyecto">Proyectos</a>
+</nav>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   INETUM ADMIN THEME
+   Paleta: pink #e0178a · yellow #d5e500 · dark #110d26
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --inet-pink:       #e0178a;
+  --inet-pink-soft:  #c01278;
+  --inet-yellow:     #d5e500;
+  --inet-dark:       #110d26;
+  --inet-mid:        #1e1240;
+  --inet-sidebar:    #160e30;
+  --inet-sidebar-h:  #0f0920;
+}
+
+/* ─── HEADER ─────────────────────────────────────────────────── */
+#header {
+  background: linear-gradient(90deg, #5c1040 0%, #2a0e4a 22%, #110d26 60%) !important;
+  border-bottom: 3px solid var(--inet-pink) !important;
+  padding: 0 !important;
+  height: auto !important;
+  min-height: 60px;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Branding / logo */
+#inet-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none !important;
+  padding: 0 24px;
+  border-right: 1px solid rgba(255,255,255,.12);
+}
+#inet-brand-link:hover { background: rgba(255,255,255,.05); }
+
+.inet-logo-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+.inet-dot  { color: var(--inet-pink); }
+.inet-sup  { font-size: .66rem; vertical-align: super; opacity: .85; font-weight: 700; }
+
+.inet-brand-sub {
+  font-family: 'Montserrat', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: rgba(255,255,255,.5);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Django default branding — hide */
+#branding h1 { display: none !important; }
+#branding     { padding: 0 !important; }
+
+/* User tools (right side) */
+#user-tools {
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(255,255,255,.6) !important;
+}
+#user-tools a:link, #user-tools a:visited {
+  color: rgba(255,255,255,.75) !important;
+  text-decoration: none;
+  border-bottom: none;
+}
+#user-tools a:hover { color: #fff !important; }
+#user-tools strong  { color: rgba(255,255,255,.9) !important; }
+
+/* ─── BREADCRUMBS ───────────────────────────────────────────── */
+div.breadcrumbs {
+  background: var(--inet-mid) !important;
+  color: rgba(255,255,255,.65) !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 8px 16px !important;
+}
+div.breadcrumbs a:link, div.breadcrumbs a:visited {
+  color: var(--inet-pink) !important;
+}
+div.breadcrumbs a:hover { color: #fff !important; }
+
+/* ─── SIDEBAR ───────────────────────────────────────────────── */
+#nav-sidebar {
+  background: var(--inet-sidebar) !important;
+  border-right: 1px solid rgba(255,255,255,.07) !important;
+}
+
+/* Search bar in sidebar */
+#nav-sidebar form.sidebar-navigation #nav-filter {
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.15) !important;
+  color: #fff !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .75rem;
+}
+
+/* App section headers (ASIGNACIONES, CORE, etc.) */
+#nav-sidebar .module > h2,
+#nav-sidebar .module > caption,
+.nav-sidebar .module caption {
+  background: var(--inet-sidebar-h) !important;
+  color: var(--inet-yellow) !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: .63rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .14em !important;
+  padding: 8px 14px !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+}
+
+/* Sidebar links */
+.nav-sidebar .module ul li a,
+#nav-sidebar .module ul li a {
+  color: rgba(255,255,255,.72) !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .78rem;
+  padding: 5px 14px !important;
+}
+.nav-sidebar .module ul li a:hover,
+#nav-sidebar .module ul li a:hover {
+  color: #fff !important;
+  background: rgba(255,255,255,.06) !important;
+}
+
+/* Active / current app */
+.nav-sidebar .current-app .section:link,
+.nav-sidebar .current-app .section:visited {
+  color: var(--inet-pink) !important;
+  border-left: 3px solid var(--inet-pink) !important;
+  padding-left: 11px !important;
+}
+
+/* Selected model in sidebar */
+.nav-sidebar .module ul li.selected a {
+  color: #fff !important;
+  background: rgba(224, 23, 138, .18) !important;
+  border-left: 3px solid var(--inet-pink) !important;
+  padding-left: 11px !important;
+}
+
+/* Sidebar "Añadir" links */
+.nav-sidebar .module ul li a.addlink {
+  color: var(--inet-pink) !important;
+  font-weight: 700;
+}
+
+/* ─── CONTENT AREA ──────────────────────────────────────────── */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f4f4f8 !important;
+  color: #1a1033 !important;
+}
+#content, #content-related, .content-title { color: #1a1033 !important; }
+
+/* Module / section headers en contenido */
+.module h2, .module caption, .inline-group h2 {
+  background: var(--inet-dark) !important;
+  color: #fff !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+/* ─── FILTER PANEL — forzar fondo claro ────────────────────── */
+#changelist-filter {
+  background: #fff !important;
+  border-left: 1px solid #e5dff5 !important;
+  border-radius: 0 !important;
+}
+/* Header "FILTRO" */
+#changelist-filter h2 {
+  background: var(--inet-dark) !important;
+  color: var(--inet-yellow) !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  padding: 10px 14px !important;
+}
+/* Sub-encabezados "Por estado", "Por Modo"… */
+#changelist-filter h3 {
+  color: var(--inet-dark) !important;
+  background: transparent !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-bottom: 2px solid var(--inet-pink) !important;
+  padding-bottom: 4px;
+  margin-bottom: 6px !important;
+}
+/* Links dentro del filtro — legibles sobre blanco */
+#changelist-filter ul  { background: #fff !important; }
+#changelist-filter li  { background: #fff !important; color: #1a1033 !important; }
+#changelist-filter a:link, #changelist-filter a:visited {
+  color: #3b0764 !important;
+  font-size: .83rem;
+}
+#changelist-filter a:hover { color: var(--inet-pink) !important; }
+#changelist-filter li.selected a {
+  color: var(--inet-pink) !important;
+  font-weight: 700;
+}
+/* "Mostrar recuentos" */
+#changelist-filter p a:link,
+#changelist-filter p a:visited { color: #6b21a8 !important; font-size: .78rem; }
+
+/* ─── GENERAL LINKS — solo en contexto claro ───────────────── */
+/* Links en área de contenido (fondo claro garantizado) */
+#content a:link, #content a:visited { color: #6b21a8; }
+#content a:hover { color: var(--inet-pink); }
+/* Fallback general más claro que antes */
+a:link, a:visited { color: #6b21a8; }
+a:hover { color: var(--inet-pink); }
+
+/* ─── TABLE HEADER ──────────────────────────────────────────── */
+#result_list thead th {
+  background: var(--inet-dark) !important;
+  color: #fff !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+#result_list thead th a:link,
+#result_list thead th a:visited { color: rgba(255,255,255,.85) !important; }
+#result_list thead th a:hover  { color: var(--inet-yellow) !important; }
+#result_list thead th.sorted   { background: #1e1240 !important; }
+#result_list thead th.sorted .text span { color: var(--inet-yellow) !important; }
+
+/* ─── TABLE ROWS — fondo y texto siempre legibles ──────────── */
+#result_list tbody td,
+#result_list tbody th {
+  background: #fff !important;
+  color: #1a1033 !important;
+}
+#result_list tbody tr:nth-child(odd) td,
+#result_list tbody tr:nth-child(odd) th {
+  background: #f8f5ff !important;
+}
+/* Links en filas: suficiente contraste sobre fondo claro */
+#result_list tbody a:link, #result_list tbody a:visited {
+  color: #6b21a8 !important;
+}
+#result_list tbody a:hover { color: var(--inet-pink) !important; }
+/* Fila seleccionada: rosa claro Inetum, texto oscuro */
+#result_list tbody tr.selected td,
+#result_list tbody tr.selected th {
+  background: #fce7f3 !important;
+  color: #1a1033 !important;
+}
+#result_list tbody tr.selected a:link,
+#result_list tbody tr.selected a:visited { color: #9d174d !important; }
+/* Hover */
+#result_list tbody tr:hover td,
+#result_list tbody tr:hover th { background: #f3edf9 !important; }
+
+/* ─── BUTTONS ───────────────────────────────────────────────── */
+.button,
+input[type=submit],
+input[type=button],
+.submit-row input,
+a.button {
+  background: var(--inet-pink) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: .78rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+  padding: 8px 18px !important;
+  transition: background .15s !important;
+}
+.button:hover,
+input[type=submit]:hover,
+input[type=button]:hover,
+a.button:hover {
+  background: var(--inet-pink-soft) !important;
+  color: #fff !important;
+}
+
+/* "Añadir" button in top-right */
+.object-tools a.addlink,
+.object-tools a:link,
+.object-tools a:visited {
+  background: var(--inet-pink) !important;
+  border-radius: 6px !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.object-tools a:hover { background: var(--inet-pink-soft) !important; }
+
+/* Delete button — keep red */
+.deletelink,
+a.deletelink:link,
+a.deletelink:visited {
+  background: #dc3545 !important;
+  color: #fff !important;
+}
+.deletelink:hover,
+a.deletelink:hover { background: #bb2d3b !important; }
+
+/* Default button (secondary) */
+.button.default,
+input[type=submit].default {
+  background: var(--inet-dark) !important;
+}
+.button.default:hover,
+input[type=submit].default:hover { background: var(--inet-mid) !important; }
+
+/* Cancel / close */
+.closelink,
+input[type=button].closelink {
+  background: #6c757d !important;
+}
+
+/* ─── SUBMIT ROW ────────────────────────────────────────────── */
+.submit-row {
+  background: #f4f4f8 !important;
+  border-top: 3px solid var(--inet-pink) !important;
+}
+
+/* ─── PAGINATOR ─────────────────────────────────────────────── */
+.paginator a:link, .paginator a:visited {
+  background: var(--inet-dark) !important;
+  color: #fff !important;
+  border-radius: 4px;
+}
+.paginator a:hover { background: var(--inet-mid) !important; }
+.paginator .this-page {
+  background: var(--inet-pink) !important;
+  color: #fff !important;
+  border-radius: 4px;
+}
+
+/* ─── MESSAGES / ALERTS ─────────────────────────────────────── */
+.messagelist li.success {
+  background: #e8f9ee !important;
+  border-left: 4px solid #198754 !important;
+  color: #0a5c36 !important;
+}
+.messagelist li.error {
+  background: #fde8f0 !important;
+  border-left: 4px solid var(--inet-pink) !important;
+  color: #7c0040 !important;
+}
+.messagelist li.warning {
+  background: #fff9e0 !important;
+  border-left: 4px solid var(--inet-yellow) !important;
+  color: #664d03 !important;
+}
+
+/* ─── INLINE HEADERS ────────────────────────────────────────── */
+.inline-group .tabular .module h2,
+.inline-group h2 {
+  background: var(--inet-mid) !important;
+  color: #fff !important;
+}
+
+/* ─── SEARCH BOX ────────────────────────────────────────────── */
+#toolbar form input[type=text] {
+  border: 1px solid #ccc;
+  border-radius: 6px 0 0 6px;
+}
+#toolbar form input[type=submit] {
+  border-radius: 0 6px 6px 0 !important;
+  padding: 6px 14px !important;
+}
+
+/* ─── ACTIONS BAR ───────────────────────────────────────────── */
+#changelist .actions select {
+  border: 1px solid #d0c8e0;
+  border-radius: 6px;
+  font-size: .82rem;
+}
+
+/* ─── CUSTOM ACTION BUTTONS (our Aprobar/Rechazar) ──────────── */
+.button[style*="#16a34a"],
+a.button[style*="#16a34a"] {
+  background: #198754 !important;
+}
+.button[style*="#dc2626"],
+a.button[style*="#dc2626"] {
+  background: #dc3545 !important;
+}
+.button[style*="#f97316"],
+a.button[style*="#f97316"] {
+  background: #fd7e14 !important;
+}
+
+/* ─── FOOTER ────────────────────────────────────────────────── */
+#footer {
+  background: var(--inet-dark) !important;
+  border-top: 3px solid var(--inet-pink) !important;
+  color: rgba(255,255,255,.4) !important;
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem;
+  text-align: center;
+  padding: 14px !important;
+}
+
+/* ─── APP NAV IN HEADER ─────────────────────────────────────── */
+.inet-admin-nav {
+  display: flex;
+  align-items: stretch;
+  margin-left: 20px;
+  gap: 0;
+}
+.inet-admin-nav-link {
+  font-family: 'Montserrat', sans-serif;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: rgba(255,255,255,.65) !important;
+  text-decoration: none !important;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -3px;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.inet-admin-nav-link:hover {
+  color: #fff !important;
+  border-bottom-color: rgba(255,255,255,.3) !important;
+  background: rgba(255,255,255,.05);
+}
+.inet-admin-nav-link.inet-active {
+  color: var(--inet-yellow) !important;
+  border-bottom-color: var(--inet-yellow) !important;
+}
+
+/* ─── RESPONSIVE NAV TOGGLE ─────────────────────────────────── */
+#toggle-nav-sidebar {
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+  border-right: 1px solid rgba(255,255,255,.12) !important;
+}
+#toggle-nav-sidebar:hover { background: rgba(255,255,255,.2) !important; }
+
+/* ─── DARK MODE TOGGLE ──────────────────────────────────────── */
+.theme-toggle { opacity: .6; }
+
+/* ─── SKILLS POPUP EN CHANGELIST ────────────────────────────── */
+.inet-skill-wrap { position: relative; display: inline-block; }
+.inet-skill-btn {
+  background: #ede8f5; color: #4a1f7a; border: none; border-radius: 5px;
+  padding: 2px 10px; font-size: .78rem; cursor: pointer; font-weight: 600;
+  white-space: nowrap;
+}
+.inet-skill-btn:hover { background: #ddd1f0; }
+.inet-skill-popup {
+  display: none;
+  position: absolute;
+  right: 0; top: calc(100% + 6px);
+  background: #fff;
+  border: 1px solid #e0d6f5;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(17,13,38,.18);
+  padding: 8px 0;
+  min-width: 195px;
+  z-index: 9999;
+}
+.inet-skill-popup::before {
+  content: '';
+  position: absolute;
+  top: -7px; right: 14px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid #e0d6f5;
+}
+.inet-skill-popup::after {
+  content: '';
+  position: absolute;
+  top: -6px; right: 15px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #fff;
+}
+.inet-skill-popup-hd {
+  font-family: 'Montserrat', sans-serif;
+  font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: #110d26;
+  padding: 0 12px 6px;
+  border-bottom: 2px solid #e0178a;
+  margin-bottom: 2px;
+}
+.inet-skill-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 5px 12px;
+  border-bottom: 1px solid #f8f4fd;
+  font-size: .82rem; color: #1a1033;
+}
+.inet-skill-row-last { border-bottom: none; }
+.inet-skill-wrap.open .inet-skill-popup { display: block; }
+/* Evitar que la tabla recorte el popup */
+#result_list { overflow: visible !important; }
+#result_list td { overflow: visible !important; }
+</style>
+{% endblock %}
+
+{% block extrascripts %}
+{{ block.super }}
+<script>
+// Nav link activo
+(function () {
+  var path = window.location.pathname;
+  Array.from(document.querySelectorAll('.inet-admin-nav-link[data-match]'))
+    .sort(function(a, b) { return b.dataset.match.length - a.dataset.match.length; })
+    .some(function(a) {
+      if (path.startsWith(a.dataset.match)) { a.classList.add('inet-active'); return true; }
+    });
+})();
+</script>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+// Skills popup — función global, lista antes de cualquier click
+function inetSkillClick(e, btn) {
+  e.stopPropagation();
+  var wrap = btn.closest('.inet-skill-wrap');
+  var isOpen = wrap.classList.contains('open');
+  document.querySelectorAll('.inet-skill-wrap.open').forEach(function(w) { w.classList.remove('open'); });
+  if (!isOpen) {
+    wrap.classList.add('open');
+    // Cerrar al siguiente click fuera
+    setTimeout(function() {
+      document.addEventListener('click', function _close() {
+        document.querySelectorAll('.inet-skill-wrap.open').forEach(function(w) { w.classList.remove('open'); });
+        document.removeEventListener('click', _close);
+      });
+    }, 0);
+  }
+}
+</script>
+{% endblock %}
+
+{% block footer %}
+<div id="footer">
+  <span style="font-weight:800;letter-spacing:-.02em;color:rgba(255,255,255,.7)">
+    inetum<span style="color:#e0178a">.</span><span style="font-size:.65rem;vertical-align:super">↗</span>
+  </span>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  Plataforma de Gestión de Recursos — Uso interno
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <span style="color:rgba(255,255,255,.25)">v1.0</span>
+</div>
+{% endblock %}

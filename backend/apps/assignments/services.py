@@ -126,7 +126,7 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
     """
     from apps.core.models import Recurso
 
-    qs = Recurso.objects.prefetch_related("skills").filter(activo=True).order_by("nombre")
+    qs = Recurso.objects.prefetch_related("recurso_skills__skill").filter(activo=True).order_by("nombre")
     if skills:
         qs = qs.filter(skills__nombre__in=skills).distinct()
 
@@ -166,7 +166,14 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
 
         resultados.append({
             "recurso": recurso,
-            "skills": list(recurso.skills.values_list("nombre", flat=True)),
+            "skills": [
+                {
+                    "nombre": rs.skill.nombre,
+                    "suficiencia": rs.suficiencia,
+                    "estrellas": "★" * rs.suficiencia + "☆" * (5 - rs.suficiencia),
+                }
+                for rs in recurso.recurso_skills.all()
+            ],
             "dias_habiles": dias_habiles,
             "horas_capacidad": round(horas_cap, 1),
             "horas_ocupadas": round(horas_ocupadas, 1),

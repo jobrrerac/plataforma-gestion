@@ -8,23 +8,27 @@
   <style>
     body { background: #f4f4f8; }
 
-    /* Availability bar */
+    /* Availability bar — colores alineados con el heatmap del dashboard:
+       mismo criterio: verde=poco ocupado, amarillo=moderado, naranja=alto, rojo=lleno */
     .avail-bar-wrap { min-width: 140px; }
-    .avail-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; }
-    .avail-bar .fill { height: 100%; border-radius: 4px; transition: width .3s; }
-    .libre-100 { background: #198754; }
-    .libre-75  { background: #20c997; }
-    .libre-50  { background: #ffc107; }
-    .libre-25  { background: #fd7e14; }
-    .libre-0   { background: #dc3545; }
-    .badge-libre-100 { background: #d1f5e3; color: #0a5c36; }
-    .badge-libre-75  { background: #d0f4ec; color: #0a5442; }
-    .badge-libre-50  { background: #fff3cd; color: #664d03; }
-    .badge-libre-25  { background: #ffe5cc; color: #7c3300; }
-    .badge-libre-0   { background: #f8d7da; color: #58151c; }
+    /* >75% libre  = <25% ocupado  → verde  (como cell-low  #d1fae5) */
+    .libre-100 { background: #16a34a; }
+    /* 50-75% libre = 25-50% ocupado → ámbar  (como cell-mid  #fef08a) */
+    .libre-75  { background: #d97706; }
+    /* 25-50% libre = 50-75% ocupado → naranja (como cell-high #fdba74) */
+    .libre-50  { background: #ea580c; }
+    /* <25% libre  = >75% ocupado   → rojo   (como cell-full #f87171) */
+    .libre-25  { background: #dc2626; }
+    /* 0% libre    = 100% ocupado   → rojo intenso */
+    .libre-0   { background: #9f1239; }
+    .badge-libre-100 { background: #d1fae5; color: #14532d; }
+    .badge-libre-75  { background: #fef9c3; color: #713f12; }
+    .badge-libre-50  { background: #ffedd5; color: #7c2d12; }
+    .badge-libre-25  { background: #fee2e2; color: #7f1d1d; }
+    .badge-libre-0   { background: #fce7f3; color: #831843; }
     tr.sin-cupo { opacity: .55; }
     .btn-solicitar { font-size: .8rem; padding: 3px 12px; }
-    .skill-tag { display:inline-block; background:#ede8f5; color:#4a1f7a; border-radius:5px; padding:1px 7px; font-size:.75rem; margin:1px; }
+    .skill-pop-trigger { background:#ede8f5; color:#4a1f7a; border:none; border-radius:5px; padding:2px 10px; font-size:.78rem; cursor:pointer; font-weight:600; white-space:nowrap; }
     .badge-banda { font-size:.75rem; padding:3px 8px; border-radius:6px; }
     .avail-bar.pop-trigger { cursor: pointer; }
     .popover-dias { max-width: 320px; }
@@ -64,6 +68,16 @@
       padding: 10px 16px;
     }
     .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.07); }
+
+    /* Botones de rango rápido: mismo tamaño */
+    .rango-btn { font-size:.72rem; min-width:74px; text-align:center; padding:2px 0; }
+
+    /* TomSelect: altura fija de 1 línea aunque haya selecciones */
+    .ts-wrapper.multi .ts-control { max-height:31px; overflow-y:auto; flex-wrap:nowrap; }
+
+    /* Barra de disponibilidad */
+    .avail-bar { height: 10px; border-radius: 5px; background: #e9ecef; overflow: hidden; min-width: 80px; }
+    .avail-bar .fill { height: 100%; border-radius: 5px; transition: width .3s; }
   </style>
 {% endblock %}
 
@@ -75,21 +89,21 @@
   <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período y skills</p>
 
   <form method="get" action="/solicitud/">
-    <div class="d-flex align-items-end gap-3 flex-wrap pb-0">
+    <div class="d-flex align-items-end gap-3 flex-wrap">
 
       <div>
         <label class="form-label fw-semibold mb-1" style="font-size:.8rem">Fecha inicio</label>
         <input type="date" name="fecha_inicio" class="form-control form-control-sm"
-               value="{{ fecha_inicio }}" required style="width:155px">
+               value="{{ fecha_inicio }}" required style="width:150px">
       </div>
 
       <div>
         <label class="form-label fw-semibold mb-1" style="font-size:.8rem">Fecha fin</label>
         <input type="date" name="fecha_fin" class="form-control form-control-sm"
-               value="{{ fecha_fin }}" required style="width:155px">
+               value="{{ fecha_fin }}" required style="width:150px">
       </div>
 
-      <div style="min-width:260px; max-width:420px; flex:1">
+      <div style="min-width:240px; max-width:380px; flex:1">
         <label class="form-label fw-semibold mb-1" style="font-size:.8rem">
           Skills <span class="text-muted fw-normal">(opcional)</span>
         </label>
@@ -101,12 +115,15 @@
           </option>
           {% endfor %}
         </select>
-        <div class="form-text" style="font-size:.72rem">Sin selección = todos los recursos.</div>
       </div>
 
-      <div class="pb-0">
-        <button type="submit" class="btn btn-sm fw-semibold px-4 py-2"
-                style="background:var(--inet-pink);color:#fff;border:none;border-radius:8px;font-family:'Montserrat',sans-serif">
+      <!-- label fantasma para alinear el botón con los inputs -->
+      <div>
+        <label class="form-label mb-1" style="visibility:hidden;font-size:.8rem;display:block">_</label>
+        <button type="submit" class="btn fw-semibold px-4"
+                style="background:var(--inet-pink);color:#fff;border:none;border-radius:8px;
+                       height:31px;font-size:.83rem;white-space:nowrap;
+                       font-family:'Montserrat',sans-serif">
           <i class="bi bi-search me-1"></i>Buscar
         </button>
       </div>
@@ -114,12 +131,12 @@
     </div>
 
     <!-- Rangos rápidos -->
-    <div class="d-flex gap-1 mt-3 pb-3 border-bottom">
-      <span class="text-muted me-1 align-self-center" style="font-size:.75rem">Rango rápido:</span>
-      <button type="button" class="btn btn-outline-secondary btn-sm py-0" style="font-size:.72rem" onclick="setRango(5)">1 semana</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm py-0" style="font-size:.72rem" onclick="setRango(10)">2 semanas</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm py-0" style="font-size:.72rem" onclick="setRango(22)">1 mes</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm py-0" style="font-size:.72rem" onclick="setRango(66)">3 meses</button>
+    <div class="d-flex gap-1 mt-3 pb-3 border-bottom align-items-center">
+      <span class="text-muted me-2" style="font-size:.75rem;white-space:nowrap">Rango rápido:</span>
+      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(5)">1 semana</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(10)">2 semanas</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(22)">1 mes</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(66)">3 meses</button>
     </div>
   </form>
 </div>
@@ -208,11 +225,14 @@
               </td>
 
               <td>
-                {% for sk in r.skills %}
-                <span class="skill-tag">{{ sk }}</span>
-                {% empty %}
+                {% if r.skills %}
+                <button type="button" class="skill-pop-trigger"
+                        data-popover-id="skpop-{{ r.recurso.pk }}">
+                  {{ r.skills|length }} skill{{ r.skills|length|pluralize }}
+                </button>
+                {% else %}
                 <span class="text-muted">—</span>
-                {% endfor %}
+                {% endif %}
               </td>
 
               <td class="text-center">{{ r.dias_habiles }}</td>
@@ -231,7 +251,7 @@
                       {% elif pct >= 25 %}libre-50
                       {% elif pct > 0 %}libre-25
                       {% else %}libre-0{% endif %}"
-                      style="width:{{ pct }}%"></div>
+                      style="width:{{ pct|floatformat:0 }}%"></div>
                   </div>
                   <span class="badge rounded-pill small
                     {% if pct >= 75 %}badge-libre-100
@@ -288,7 +308,25 @@
 
 </div>
 
-<!-- Contenidos de popovers (ocultos) -->
+<!-- Contenidos de popovers de skills (ocultos) -->
+{% if resultados %}
+{% for r in resultados %}
+{% if r.skills %}
+<div id="skpop-{{ r.recurso.pk }}" class="d-none">
+  <div style="min-width:180px">
+    {% for sk in r.skills %}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;padding:4px 0;{% if not forloop.last %}border-bottom:1px solid #f0eaf8{% endif %}">
+      <span style="font-size:.82rem">{{ sk.nombre }}</span>
+      <span style="color:#e0178a;letter-spacing:1px;font-size:.9rem">{{ sk.estrellas }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+<!-- Contenidos de popovers de días ocupados (ocultos) -->
 {% if resultados %}
 {% for r in resultados %}
 {% if r.dias_con_carga %}
@@ -338,6 +376,21 @@
     var es = document.getElementById('cnt-sin-cupo');
     if (ec) ec.textContent = conCupo;
     if (es) es.textContent = sinCupo;
+  });
+
+  // Popovers de skills
+  document.querySelectorAll('.skill-pop-trigger[data-popover-id]').forEach(function(el) {
+    var contentEl = document.getElementById(el.dataset.popoverId);
+    if (contentEl) {
+      new bootstrap.Popover(el, {
+        html: true,
+        trigger: 'hover focus',
+        placement: 'top',
+        title: '<span style="font-family:Montserrat,sans-serif;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Skills</span>',
+        content: contentEl.innerHTML,
+        sanitize: false,
+      });
+    }
   });
 
   // Popovers de días ocupados

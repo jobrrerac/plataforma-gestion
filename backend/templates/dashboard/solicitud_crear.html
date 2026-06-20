@@ -8,6 +8,7 @@
     body { background: #f4f4f8; }
     .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
     .skill-tag { display:inline-block; background:#ede8f5; color:#4a1f7a; border-radius:5px; padding:1px 7px; font-size:.78rem; margin:1px; }
+    .skill-stars { font-size:.65rem; color:#e0178a; margin-left:3px; letter-spacing:0; }
     .form-control:focus, .form-select:focus { border-color: #e0178a; box-shadow: 0 0 0 .2rem rgba(224,23,138,.12); }
     .btn-crear { font-size: 1rem; padding: .55rem 2.5rem; }
     .resumen-item { display:flex; justify-content:space-between; border-bottom:1px solid #f0f0f0; padding:6px 0; }
@@ -130,18 +131,15 @@
             {% else %}bg-secondary{% endif %}">
             {{ recurso.get_banda_display }}
           </span>
-          {% for sk in recurso.skills.all %}
-          <span class="skill-tag">{{ sk.nombre }}</span>
+          {% for rs in recurso.recurso_skills.all %}
+          <span class="skill-tag">{{ rs.skill.nombre }}<span class="skill-stars">{{ rs.estrellas }}</span></span>
           {% endfor %}
         </div>
       </div>
       {% if info %}
       <div class="text-end" style="min-width:90px">
-        <div class="fw-bold
-          {% if info.porcentaje_libre >= 75 %}text-success
-          {% elif info.porcentaje_libre >= 50 %}text-info
-          {% elif info.porcentaje_libre >= 25 %}text-warning
-          {% else %}text-danger{% endif %}">
+        <div class="fw-bold"
+          style="color:{% if info.porcentaje_libre >= 75 %}#16a34a{% elif info.porcentaje_libre >= 50 %}#d97706{% elif info.porcentaje_libre >= 25 %}#ea580c{% else %}#dc2626{% endif %}">
           {{ info.porcentaje_libre }}% libre
         </div>
         <div class="text-muted small">{{ info.horas_libres }}h disponibles</div>

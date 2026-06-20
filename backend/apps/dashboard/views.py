@@ -151,7 +151,7 @@ class SolicitudCrearView(View):
         fecha_fin_str = request.GET.get("fecha_fin") or request.POST.get("fecha_fin")
 
         try:
-            recurso = Recurso.objects.prefetch_related("skills").get(pk=recurso_id, activo=True)
+            recurso = Recurso.objects.prefetch_related("recurso_skills__skill").get(pk=recurso_id, activo=True)
             fi = date.fromisoformat(fecha_inicio_str)
             ff = date.fromisoformat(fecha_fin_str)
         except Exception:
