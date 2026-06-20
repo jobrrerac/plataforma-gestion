@@ -1,31 +1,26 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard de Ocupación — Gestión de Recursos</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+{% extends "base.html" %}
+
+{% block page_title %}Dashboard de Ocupación{% endblock %}
+{% block active_dashboard %}active{% endblock %}
+
+{% block extra_head %}
   <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
   <style>
-    body { background: #f5f6fa; }
-    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
+    body { background: #f4f4f8; }
 
-    /* Heatmap table */
+    /* Heatmap */
     .heatmap-wrap { overflow-x: auto; }
     .heatmap { font-size: 0.72rem; border-collapse: collapse; min-width: 700px; }
     .heatmap th, .heatmap td { border: 1px solid #dee2e6; padding: 0; }
-    .heatmap thead th { background: #212529; color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
+    .heatmap thead th { background: #1a1033; color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
     .heatmap .col-recurso { min-width: 180px; max-width: 220px; padding: 6px 10px; background: #fff; font-weight: 500; }
     .heatmap .col-recurso small { display: block; color: #6c757d; font-weight: 400; }
-
-    /* Celdas de ocupación */
     .cell-nohabil { background: #f0f0f0; }
     .cell-bench   { background: #fff; }
-    .cell-low     { background: #d1fae5; }   /* <25%  verde muy claro */
-    .cell-mid     { background: #fef08a; }   /* 25-50% amarillo */
-    .cell-high    { background: #fdba74; }   /* 50-75% naranja */
-    .cell-full    { background: #f87171; }   /* 75-100% rojo */
-
+    .cell-low     { background: #d1fae5; }
+    .cell-mid     { background: #fef08a; }
+    .cell-high    { background: #fdba74; }
+    .cell-full    { background: #f87171; }
     .heatmap td.day-cell {
       width: 34px; min-width: 34px; max-width: 34px;
       text-align: center; cursor: default;
@@ -33,69 +28,95 @@
       vertical-align: middle; height: 32px;
     }
 
-    /* Cards de resumen */
+    /* Stat cards */
     .stat-card { border-left: 4px solid transparent; }
-    .stat-card.total  { border-color: #6366f1; }
+    .stat-card.total   { border-color: #e0178a; }
     .stat-card.ocupado { border-color: #f97316; }
-    .stat-card.bench  { border-color: #6b7280; }
+    .stat-card.bench   { border-color: #6b7280; }
     .stat-num { font-size: 2rem; font-weight: 700; line-height: 1; }
 
-    /* Badge inline */
-    .badge-bench  { background: #6b7280; font-size: 0.6rem; }
+    .badge-bench   { background: #6b7280; font-size: 0.6rem; }
     .badge-ocupado { background: #f97316; font-size: 0.6rem; }
-    .badge-hoy { font-size: 0.65rem; }
+    .badge-hoy     { font-size: 0.65rem; }
 
     .legend-box { width: 14px; height: 14px; display: inline-block; border: 1px solid #ccc; vertical-align: middle; margin-right: 4px; }
     .loading-overlay { display: none; position: absolute; inset: 0; background: rgba(255,255,255,.6); z-index: 10; align-items: center; justify-content: center; }
     .loading-overlay.show { display: flex; }
+
+    /* Page header strip */
+    .page-strip {
+      background: #fff;
+      border-bottom: 1px solid #e8e6f0;
+      padding: 18px 0 0;
+    }
+    .page-strip-inner {
+      padding: 0 2rem 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .page-strip h1 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #110d26;
+      margin: 0;
+      letter-spacing: -.02em;
+    }
+    .page-strip h1 span { color: #e0178a; }
   </style>
-</head>
-<body>
+{% endblock %}
 
-<!-- Navbar -->
-<nav class="navbar navbar-dark bg-dark px-3 py-2">
-  <span class="navbar-brand">Gestión de Recursos</span>
-  <div class="d-flex gap-2 align-items-center">
-    <a href="/api/" class="btn btn-outline-light btn-sm">API</a>
-    <a href="/admin/" class="btn btn-outline-light btn-sm">Admin</a>
-  </div>
-</nav>
+{% block content %}
 
-<div class="container-fluid py-3 px-4">
-
-  <!-- Filtros -->
-  <div class="row g-2 align-items-end mb-3">
-    <div class="col-auto">
-      <label class="form-label mb-1 fw-semibold" style="font-size:.85rem">Desde</label>
-      <input type="text" id="fecha-inicio" class="form-control form-control-sm" style="width:130px">
+<!-- Page strip -->
+<div class="page-strip">
+  <div class="page-strip-inner">
+    <div>
+      <h1>Dashboard de <span>Ocupación</span></h1>
+      <p class="text-muted mb-0" style="font-size:.8rem">Heatmap de asignaciones aprobadas por recurso y día</p>
     </div>
-    <div class="col-auto">
-      <label class="form-label mb-1 fw-semibold" style="font-size:.85rem">Hasta</label>
-      <input type="text" id="fecha-fin" class="form-control form-control-sm" style="width:130px">
-    </div>
-    <div class="col-auto">
-      <button id="btn-cargar" class="btn btn-primary btn-sm">Cargar</button>
-    </div>
-    <div class="col-auto ms-auto">
-      <!-- Leyenda -->
-      <span class="text-muted" style="font-size:.78rem">
-        <span class="legend-box" style="background:#fff;"></span>Bench
-        <span class="legend-box ms-2" style="background:#d1fae5;"></span>&lt;25%
-        <span class="legend-box ms-2" style="background:#fef08a;"></span>25–50%
-        <span class="legend-box ms-2" style="background:#fdba74;"></span>50–75%
-        <span class="legend-box ms-2" style="background:#f87171;"></span>75–100%
-        <span class="legend-box ms-2" style="background:#f0f0f0;"></span>No hábil
-      </span>
+    <div class="d-flex align-items-center gap-2 ms-auto flex-wrap pb-1">
+      <div class="d-flex align-items-center gap-2">
+        <label class="fw-semibold mb-0" style="font-size:.82rem;white-space:nowrap">Desde</label>
+        <input type="text" id="fecha-inicio" class="form-control form-control-sm" style="width:130px">
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="fw-semibold mb-0" style="font-size:.82rem;white-space:nowrap">Hasta</label>
+        <input type="text" id="fecha-fin" class="form-control form-control-sm" style="width:130px">
+      </div>
+      <button id="btn-cargar" class="btn btn-sm fw-semibold px-3"
+              style="background:var(--inet-pink);color:#fff;border:none">
+        <i class="bi bi-search me-1"></i>Cargar
+      </button>
     </div>
   </div>
+</div>
 
-  <!-- Cards de resumen -->
-  <div class="row g-3 mb-3" id="summary-cards"></div>
+<div class="container-fluid py-4 px-4">
 
-  <!-- Heatmap -->
-  <div class="card shadow-sm position-relative">
+  <!-- Leyenda -->
+  <div class="d-flex justify-content-end mb-3">
+    <span class="text-muted" style="font-size:.77rem">
+      <span class="legend-box" style="background:#fff;"></span>Bench
+      <span class="legend-box ms-2" style="background:#d1fae5;"></span>&lt;25%
+      <span class="legend-box ms-2" style="background:#fef08a;"></span>25–50%
+      <span class="legend-box ms-2" style="background:#fdba74;"></span>50–75%
+      <span class="legend-box ms-2" style="background:#f87171;"></span>75–100%
+      <span class="legend-box ms-2" style="background:#f0f0f0;"></span>No hábil
+    </span>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4" id="summary-cards"></div>
+
+  <!-- Heatmap card -->
+  <div class="card border-0 shadow-sm position-relative" style="border-radius:12px;overflow:hidden">
     <div class="loading-overlay" id="loading">
-      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
+      <div class="spinner-border" role="status" style="color:var(--inet-pink)">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
     </div>
     <div class="card-body p-0" id="heatmap-container">
       <p class="p-4 text-muted">Seleccioná un rango y presioná <strong>Cargar</strong>.</p>
@@ -103,20 +124,19 @@
   </div>
 
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 <script>
-  // ── Date pickers ──────────────────────────────────────────
   const hoy = new Date();
   const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-
   const fpOpts = { locale: "es", dateFormat: "Y-m-d" };
   flatpickr("#fecha-inicio", { ...fpOpts, defaultDate: primerDia });
   flatpickr("#fecha-fin",    { ...fpOpts, defaultDate: ultimoDia });
 
-  // ── Utilidades ────────────────────────────────────────────
   function cellClass(pct, noHabil) {
     if (noHabil) return "cell-nohabil";
     if (pct === 0)  return "cell-bench";
@@ -125,38 +145,31 @@
     if (pct <= 75)  return "cell-high";
     return "cell-full";
   }
-
   function fmtPct(pct) { return pct > 0 ? pct.toFixed(0) + "%" : ""; }
-
   function nombreDia(isoDate) {
     const d = new Date(isoDate + "T12:00:00");
-    const dias = ["D","L","M","X","J","V","S"];
-    return dias[d.getDay()];
+    return ["D","L","M","X","J","V","S"][d.getDay()];
   }
+  function numDia(isoDate) { return parseInt(isoDate.split("-")[2], 10); }
 
-  function numDia(isoDate) {
-    return parseInt(isoDate.split("-")[2], 10);
-  }
-
-  // ── Renderizado ───────────────────────────────────────────
   function renderSummary(recursos) {
     const bench   = recursos.filter(r => r.estado === "BENCH").length;
     const ocupado = recursos.filter(r => r.estado === "OCUPADO").length;
     document.getElementById("summary-cards").innerHTML = `
       <div class="col-auto">
-        <div class="card stat-card total shadow-sm py-2 px-3">
-          <div class="stat-num text-primary">${recursos.length}</div>
+        <div class="card stat-card total shadow-sm py-2 px-3" style="border-radius:10px">
+          <div class="stat-num" style="color:#e0178a">${recursos.length}</div>
           <div class="text-muted" style="font-size:.8rem">Total recursos</div>
         </div>
       </div>
       <div class="col-auto">
-        <div class="card stat-card ocupado shadow-sm py-2 px-3">
+        <div class="card stat-card ocupado shadow-sm py-2 px-3" style="border-radius:10px">
           <div class="stat-num" style="color:#f97316">${ocupado}</div>
           <div class="text-muted" style="font-size:.8rem">Ocupados hoy</div>
         </div>
       </div>
       <div class="col-auto">
-        <div class="card stat-card bench shadow-sm py-2 px-3">
+        <div class="card stat-card bench shadow-sm py-2 px-3" style="border-radius:10px">
           <div class="stat-num text-secondary">${bench}</div>
           <div class="text-muted" style="font-size:.8rem">En bench hoy</div>
         </div>
@@ -171,25 +184,16 @@
         '<p class="p-4 text-muted">No hay recursos activos.</p>';
       return;
     }
-
     const dias = recursos[0].detalle_por_dia;
-
-    // — Cabecera —
-    let headCols = `<th class="col-recurso" style="background:#212529">Recurso / día</th>`;
+    let headCols = `<th class="col-recurso" style="background:#1a1033">Recurso / día</th>`;
     dias.forEach(d => {
-      const nd = nombreDia(d.fecha);
-      const dd = numDia(d.fecha);
-      const esNoHabil = d.no_habil;
-      const style = esNoHabil ? "opacity:.45" : "";
-      headCols += `<th style="${style};text-align:center;padding:3px 1px">${nd}<br>${dd}</th>`;
+      const style = d.no_habil ? "opacity:.45" : "";
+      headCols += `<th style="${style};text-align:center;padding:3px 1px">${nombreDia(d.fecha)}<br>${numDia(d.fecha)}</th>`;
     });
-
-    // — Filas —
     let rows = "";
     recursos.forEach(r => {
-      const badgeCls  = r.estado === "BENCH" ? "badge-bench" : "badge-ocupado";
-      const pctHoy    = r.porcentaje_hoy > 0 ? `${r.porcentaje_hoy}%` : "—";
-
+      const badgeCls = r.estado === "BENCH" ? "badge-bench" : "badge-ocupado";
+      const pctHoy   = r.porcentaje_hoy > 0 ? `${r.porcentaje_hoy}%` : "—";
       let cells = `
         <td class="col-recurso">
           ${r.nombre}
@@ -199,7 +203,6 @@
             <span class="text-muted ms-1">${pctHoy} hoy</span>
           </small>
         </td>`;
-
       r.detalle_por_dia.forEach(d => {
         const cls     = cellClass(d.porcentaje, d.no_habil);
         const label   = d.no_habil ? "" : fmtPct(d.porcentaje);
@@ -208,10 +211,8 @@
           : (d.porcentaje > 0 ? `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}` : "Bench");
         cells += `<td class="day-cell ${cls}" title="${tooltip}">${label}</td>`;
       });
-
       rows += `<tr>${cells}</tr>`;
     });
-
     document.getElementById("heatmap-container").innerHTML = `
       <div class="heatmap-wrap">
         <table class="heatmap w-100">
@@ -225,15 +226,12 @@
     `;
   }
 
-  // ── Carga de datos ────────────────────────────────────────
   async function cargar() {
     const inicio = document.getElementById("fecha-inicio").value;
     const fin    = document.getElementById("fecha-fin").value;
     if (!inicio || !fin) return;
-
     document.getElementById("loading").classList.add("show");
     document.getElementById("btn-cargar").disabled = true;
-
     try {
       const resp = await fetch(`/api/dashboard/ocupacion/?fecha_inicio=${inicio}&fecha_fin=${fin}`, {
         headers: { "X-Requested-With": "XMLHttpRequest" }
@@ -256,7 +254,6 @@
   }
 
   document.getElementById("btn-cargar").addEventListener("click", cargar);
-  cargar(); // carga automática al abrir
+  cargar();
 </script>
-</body>
-</html>
+{% endblock %}

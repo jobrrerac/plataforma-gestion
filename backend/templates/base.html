@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block page_title %}Gestión de Recursos{% endblock %} — Inetum</title>
+
+  <!-- Bootstrap + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <!-- Montserrat (tipografía Inetum) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ═══ INETUM BRAND TOKENS ═══════════════════════════════════════ */
+    :root {
+      --inet-pink:        #e0178a;
+      --inet-yellow:      #d5e500;
+      --inet-dark:        #110d26;
+      --inet-grad-left:   #5c1040;
+      --inet-grad-mid:    #2a0e4a;
+      --inet-grad-right:  #110d26;
+    }
+
+    /* ─── HEADER ────────────────────────────────────────────────── */
+    .inet-header {
+      background: linear-gradient(90deg,
+        var(--inet-grad-left)  0%,
+        var(--inet-grad-mid)  22%,
+        var(--inet-grad-right) 60%);
+      border-bottom: 3px solid var(--inet-pink);
+      position: sticky;
+      top: 0;
+      z-index: 1030;
+    }
+
+    .inet-header-inner {
+      display: flex;
+      align-items: stretch;
+      padding: 0 2rem;
+      min-height: 62px;
+    }
+
+    /* Logo "inetum.↗" */
+    .inet-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 1.42rem;
+      font-weight: 800;
+      color: #fff;
+      text-decoration: none;
+      letter-spacing: -.03em;
+      margin-right: 3rem;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .inet-logo:hover { color: #fff; text-decoration: none; }
+    .inet-logo .inet-dot { color: var(--inet-pink); }
+    .inet-logo .inet-sup {
+      font-size: .68rem;
+      font-weight: 700;
+      vertical-align: super;
+      opacity: .85;
+      margin-left: 1px;
+    }
+
+    /* Navegación */
+    .inet-nav {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      flex: 1;
+    }
+
+    .inet-nav-link {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: rgba(255, 255, 255, .75);
+      text-decoration: none;
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -3px;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .inet-nav-link:hover {
+      color: #fff;
+      border-bottom-color: rgba(255, 255, 255, .3);
+    }
+    .inet-nav-link.active {
+      color: var(--inet-yellow);
+      border-bottom-color: var(--inet-yellow);
+    }
+
+    /* Área derecha del header */
+    .inet-header-right {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      gap: 4px;
+    }
+
+    /* ─── FOOTER ────────────────────────────────────────────────── */
+    .inet-footer {
+      background: var(--inet-dark);
+      border-top: 3px solid var(--inet-pink);
+      padding: 44px 0 24px;
+      margin-top: 64px;
+    }
+
+    .inet-footer-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -.03em;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+    .inet-footer-logo .inet-dot { color: var(--inet-pink); }
+
+    .inet-footer-tagline {
+      font-size: .71rem;
+      font-family: 'Montserrat', sans-serif;
+      color: rgba(255,255,255,.38);
+      margin: 0 0 14px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .inet-footer-desc {
+      font-size: .78rem;
+      font-family: 'Montserrat', sans-serif;
+      color: rgba(255,255,255,.48);
+      line-height: 1.65;
+      margin: 0;
+    }
+
+    .inet-footer-heading {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .64rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      color: var(--inet-yellow);
+      margin-bottom: 14px;
+    }
+
+    .inet-footer-link {
+      display: block;
+      color: rgba(255,255,255,.62);
+      text-decoration: none;
+      font-size: .81rem;
+      font-family: 'Montserrat', sans-serif;
+      padding: 3px 0;
+      transition: color .15s;
+    }
+    .inet-footer-link:hover { color: #fff; }
+
+    .inet-footer-divider {
+      border-top: 1px solid rgba(255,255,255,.1);
+      margin: 32px 0 20px;
+    }
+
+    .inet-footer-copy {
+      font-size: .72rem;
+      font-family: 'Montserrat', sans-serif;
+      color: rgba(255,255,255,.35);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ─── Accent rule decoration ─────────────────────────── */
+    .inet-accent-bar {
+      width: 36px;
+      height: 3px;
+      background: var(--inet-pink);
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     INETUM HEADER
+══════════════════════════════════════════════════════════════ -->
+<header class="inet-header">
+  <div class="inet-header-inner">
+
+    <!-- Logo -->
+    <a href="/dashboard/" class="inet-logo">
+      inetum<span class="inet-dot">.</span><span class="inet-sup">↗</span>
+    </a>
+
+    <!-- Navegación principal -->
+    <nav class="inet-nav">
+      <a href="/dashboard/"
+         class="inet-nav-link {% block active_dashboard %}{% endblock %}">
+        <i class="bi bi-grid-3x3-gap"></i> Dashboard
+      </a>
+      <a href="/solicitud/"
+         class="inet-nav-link {% block active_solicitud %}{% endblock %}">
+        <i class="bi bi-people"></i> Solicitudes
+      </a>
+      <a href="/admin/assignments/asignacion/"
+         class="inet-nav-link {% block active_asignaciones %}{% endblock %}">
+        <i class="bi bi-calendar-check"></i> Asignaciones
+      </a>
+    </nav>
+
+    <!-- Derecha -->
+    <div class="inet-header-right">
+      <a href="/admin/" class="inet-nav-link {% block active_admin %}{% endblock %}">
+        <i class="bi bi-gear"></i> Admin
+      </a>
+    </div>
+
+  </div>
+</header>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     CONTENIDO
+══════════════════════════════════════════════════════════════ -->
+{% block content %}{% endblock %}
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     INETUM FOOTER
+══════════════════════════════════════════════════════════════ -->
+<footer class="inet-footer">
+  <div class="container-fluid px-4">
+    <div class="row g-4">
+
+      <!-- Columna marca -->
+      <div class="col-md-4 col-lg-3">
+        <div class="inet-footer-logo">
+          inetum<span class="inet-dot">.</span><span style="font-size:.72rem;vertical-align:super;opacity:.85">↗</span>
+        </div>
+        <p class="inet-footer-tagline">Positive Digital Flow</p>
+        <p class="inet-footer-desc">
+          Plataforma interna de<br>gestión de asignación<br>de recursos.
+        </p>
+      </div>
+
+      <!-- Columna navegación -->
+      <div class="col-6 col-md-2">
+        <div class="inet-footer-heading">Navegación</div>
+        <a href="/dashboard/" class="inet-footer-link">
+          <i class="bi bi-grid-3x3-gap me-1 opacity-50"></i>Dashboard
+        </a>
+        <a href="/solicitud/" class="inet-footer-link">
+          <i class="bi bi-people me-1 opacity-50"></i>Solicitudes
+        </a>
+        <a href="/admin/assignments/asignacion/" class="inet-footer-link">
+          <i class="bi bi-calendar-check me-1 opacity-50"></i>Asignaciones
+        </a>
+        <a href="/admin/" class="inet-footer-link">
+          <i class="bi bi-gear me-1 opacity-50"></i>Admin
+        </a>
+      </div>
+
+      <!-- Columna módulos -->
+      <div class="col-6 col-md-2">
+        <div class="inet-footer-heading">Módulos</div>
+        <a href="/admin/core/recurso/" class="inet-footer-link">Recursos</a>
+        <a href="/admin/core/proyecto/" class="inet-footer-link">Proyectos</a>
+        <a href="/admin/core/skill/" class="inet-footer-link">Skills</a>
+        <a href="/admin/calendar_engine/dianolaborable/" class="inet-footer-link">Calendario</a>
+        <a href="/admin/assignments/logauditoria/" class="inet-footer-link">Auditoría</a>
+      </div>
+
+      <!-- Columna derecha decorativa -->
+      <div class="col-md-4 col-lg-5 d-none d-md-flex align-items-end justify-content-end">
+        <div class="text-end">
+          <div class="inet-accent-bar ms-auto mb-2"></div>
+          <p style="font-size:.7rem;color:rgba(255,255,255,.28);font-family:'Montserrat',sans-serif;margin:0;line-height:1.7">
+            Plataforma de Gestión de Recursos<br>
+            Uso exclusivamente interno · v1.0
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="inet-footer-divider"></div>
+    <div class="inet-footer-copy">
+      <span>© 2026 Inetum España · Plataforma interna · Fase 1</span>
+      <span>inetum.com</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
