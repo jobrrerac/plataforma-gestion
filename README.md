@@ -52,7 +52,7 @@ Abrir en el navegador:
 
 ```
 .
-├── CLAUDE.md                  ← Reglas y contexto para Claude Code
+├── CLAUDE.md                  ← Reglas y convenciones del proyecto
 ├── docs/SPEC.md               ← Especificación completa del sistema
 ├── docker-compose.yml         ← Servicios: web (Django) + db (PostgreSQL)
 ├── .env.example               ← Plantilla de variables de entorno

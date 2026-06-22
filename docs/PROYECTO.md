@@ -723,7 +723,7 @@ Imagen mínima de Python. Las dependencias se instalan primero (capa cacheada po
 
 ## 12. Reglas de negocio no negociables
 
-Estas reglas están en `CLAUDE.md` y se respetan en todo el código:
+Estas reglas están definidas en las guías del proyecto y se respetan en todo el código:
 
 | Regla | Dónde se implementa |
 |---|---|
