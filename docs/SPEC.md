@@ -76,14 +76,16 @@ while habiles < dias_necesarios:
         if habiles == dias_necesarios: break
     fecha += 1 dia
 fecha_fin = fecha
-alerta_intensidad = intensidad_diaria > 8   # alerta, no bloqueo
+tope_dia = 8.5 si lunes–jueves, 8.0 si viernes   # jornada real Inetum
+alerta_intensidad = intensidad_diaria > tope_dia  # alerta, no bloqueo
 ```
 
 ### 5.2 Capacidad cruzada (anti-sobreasignación)
 ```
 para cada dia habil en [fecha_inicio .. fecha_fin]:
+    tope = 8.5 si lunes–jueves, 8.0 si viernes   # jornada real Inetum
     carga = suma(intensidad_diaria de asignaciones APROBADAS del recurso que cubren ese dia)
-    if carga + intensidad_diaria > 8:
+    if carga + intensidad_diaria > tope:
         BLOQUEAR
 ```
 

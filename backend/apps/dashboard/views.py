@@ -13,7 +13,7 @@ from apps.assignments.models import Asignacion
 from apps.calendar_engine.services import es_habil
 from decimal import Decimal
 from math import ceil
-from apps.assignments.services import disponibilidad_recursos, crear_solicitud, analizar_conflictos
+from apps.assignments.services import disponibilidad_recursos, crear_solicitud, analizar_conflictos, capacidad_maxima_dia
 
 
 class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
@@ -67,7 +67,7 @@ class OcupacionAPIView(APIView):
                     detalle_por_dia.append({
                         "fecha": cur.isoformat(),
                         "horas_asignadas": round(horas, 2),
-                        "porcentaje": min(100, round((horas / 8) * 100, 1)),
+                        "porcentaje": min(100, round((horas / capacidad_maxima_dia(cur)) * 100, 1)),
                         "proyectos": list({a.proyecto.codigo for a in asig_hoy}),
                     })
                 else:
@@ -94,7 +94,7 @@ class OcupacionAPIView(APIView):
                 "email": recurso.email,
                 "estado": "BENCH" if horas_hoy == 0 else "OCUPADO",
                 "horas_hoy": horas_hoy,
-                "porcentaje_hoy": min(100, round((horas_hoy / 8) * 100, 1)),
+                "porcentaje_hoy": min(100, round((horas_hoy / capacidad_maxima_dia(hoy)) * 100, 1)),
                 "asignaciones_activas": len(asig_recurso),
                 "detalle_por_dia": detalle_por_dia,
             })
