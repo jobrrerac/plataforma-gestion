@@ -1,12 +1,12 @@
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
 from .models import Recurso, Proyecto
 from .serializers import RecursoSerializer, ProyectoSerializer
+from .permissions import SoloLecturaOAdmin
 
 
 class RecursoViewSet(viewsets.ModelViewSet):
     serializer_class = RecursoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [SoloLecturaOAdmin]
 
     def get_queryset(self):
         qs = Recurso.objects.all()
@@ -24,7 +24,7 @@ class RecursoViewSet(viewsets.ModelViewSet):
 
 class ProyectoViewSet(viewsets.ModelViewSet):
     serializer_class = ProyectoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [SoloLecturaOAdmin]
 
     def get_queryset(self):
         qs = Proyecto.objects.all()

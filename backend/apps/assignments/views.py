@@ -2,13 +2,24 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import EsAdmin, EsAdminOPM
 from .models import Asignacion, LogAuditoria
 from .serializers import AsignacionSerializer, AsignacionCreateSerializer, LogAuditoriaSerializer
 from .services import calcular_fecha_fin, aprobar_asignacion, rechazar_asignacion, revocar_asignacion
 
+# Acciones que solo Admin puede ejecutar
+_ACCIONES_ADMIN = {"aprobar", "rechazar", "revocar", "update", "partial_update", "destroy"}
+# Acciones que requieren PM o Admin
+_ACCIONES_PM = {"create"}
+
 
 class AsignacionViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.action in _ACCIONES_ADMIN:
+            return [EsAdmin()]
+        if self.action in _ACCIONES_PM:
+            return [EsAdminOPM()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = Asignacion.objects.select_related("recurso", "proyecto", "solicitada_por")

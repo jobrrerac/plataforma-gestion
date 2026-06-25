@@ -160,7 +160,13 @@ class AsignacionAdmin(admin.ModelAdmin):
         from django.urls import reverse
         return HttpResponseRedirect(reverse("admin:assignments_asignacion_changelist"))
 
+    def _es_admin(self, request):
+        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+
     def view_aprobar(self, request, pk):
+        if not self._es_admin(request):
+            self.message_user(request, "Se requiere rol Admin para aprobar asignaciones.", messages.ERROR)
+            return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
         if asig.estado != "SOLICITADA":
             self.message_user(request, "Solo se pueden aprobar asignaciones en estado SOLICITADA.", messages.ERROR)
@@ -178,6 +184,9 @@ class AsignacionAdmin(admin.ModelAdmin):
         return self._redirect_lista()
 
     def view_aprobar_confirmar(self, request, pk):
+        if not self._es_admin(request):
+            self.message_user(request, "Se requiere rol Admin para aprobar asignaciones.", messages.ERROR)
+            return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
         conflict_dates, nueva_fecha_fin, nuevas_horas = analizar_conflictos(asig)
 
@@ -214,12 +223,18 @@ class AsignacionAdmin(admin.ModelAdmin):
         return dj_render(request, "admin/assignments/recomputo_confirmar.html", ctx)
 
     def view_rechazar(self, request, pk):
+        if not self._es_admin(request):
+            self.message_user(request, "Se requiere rol Admin para rechazar asignaciones.", messages.ERROR)
+            return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
         rechazar_asignacion(asig, request.user)
         self.message_user(request, f"Asignación #{pk} rechazada.", messages.WARNING)
         return self._redirect_lista()
 
     def view_revocar(self, request, pk):
+        if not self._es_admin(request):
+            self.message_user(request, "Se requiere rol Admin para revocar asignaciones.", messages.ERROR)
+            return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
         revocar_asignacion(asig, request.user)
         self.message_user(request, f"Asignación #{pk} revocada.", messages.WARNING)

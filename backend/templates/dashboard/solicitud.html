@@ -96,12 +96,26 @@
   <h1>Solicitud de <span>Recursos</span></h1>
   <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período y skills</p>
 
-  <form method="get" action="/solicitud/">
-    <!-- inline-block hace que la fila 2 herede el ancho exacto de la fila 1 -->
+  <form method="get" action="/solicitud/" id="form-busqueda">
+    <input type="hidden" name="modo_busqueda" id="modo_busqueda" value="{{ modo_busqueda|default:'rango' }}">
     <div style="display:inline-block;min-width:0">
 
-      <!-- Fila 1: Rango de fechas + rangos rápidos -->
-      <div class="mb-3">
+      <!-- Toggle modo -->
+      <div class="d-flex gap-1 mb-3">
+        <button type="button" id="btn-modo-rango" onclick="setModo('rango')"
+                class="btn btn-sm fw-semibold"
+                style="font-size:.72rem;border-radius:6px;padding:3px 12px">
+          <i class="bi bi-calendar-range me-1"></i>Por rango de fechas
+        </button>
+        <button type="button" id="btn-modo-horas" onclick="setModo('horas')"
+                class="btn btn-sm fw-semibold"
+                style="font-size:.72rem;border-radius:6px;padding:3px 12px">
+          <i class="bi bi-hourglass-split me-1"></i>Por horas totales
+        </button>
+      </div>
+
+      <!-- Fila 1A: modo RANGO -->
+      <div id="bloque-rango" class="mb-3" {% if modo_busqueda == 'horas' %}style="display:none"{% endif %}>
         <div class="filter-row-label">Rango de fechas</div>
         <div class="d-flex align-items-center gap-2">
           <div class="input-group input-group-sm" style="width:auto">
@@ -109,8 +123,8 @@
                   style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
               Desde
             </span>
-            <input type="date" name="fecha_inicio" class="form-control"
-                   value="{{ fecha_inicio }}" required style="width:130px;border-color:#e0d6f5">
+            <input type="date" name="fecha_inicio" id="fi-rango" class="form-control"
+                   value="{{ fecha_inicio }}" style="width:130px;border-color:#e0d6f5">
           </div>
           <div class="input-group input-group-sm" style="width:auto">
             <span class="input-group-text fw-semibold"
@@ -118,7 +132,7 @@
               Hasta
             </span>
             <input type="date" name="fecha_fin" class="form-control"
-                   value="{{ fecha_fin }}" required style="width:130px;border-color:#e0d6f5">
+                   value="{{ fecha_fin }}" style="width:130px;border-color:#e0d6f5">
           </div>
           <div class="d-flex align-items-center gap-1 ms-2">
             <span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;white-space:nowrap;margin-right:2px">Rápido</span>
@@ -131,7 +145,41 @@
         </div>
       </div>
 
-      <!-- Fila 2: Skills + Buscar — mismo ancho que la fila 1 -->
+      <!-- Fila 1B: modo HORAS -->
+      <div id="bloque-horas" class="mb-3" {% if modo_busqueda != 'horas' %}style="display:none"{% endif %}>
+        <div class="filter-row-label">Horas totales requeridas</div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              Desde
+            </span>
+            <input type="date" name="fecha_inicio" id="fi-horas" class="form-control"
+                   value="{{ fecha_inicio }}" style="width:130px;border-color:#e0d6f5">
+          </div>
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              Horas
+            </span>
+            <input type="number" name="horas_totales" class="form-control"
+                   value="{{ horas_totales }}" min="1" max="2000" placeholder="ej: 100"
+                   style="width:80px;border-color:#e0d6f5">
+          </div>
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              h/día
+            </span>
+            <input type="number" name="intensidad_busqueda" class="form-control"
+                   value="{{ intensidad_busqueda }}" min="0.5" max="8.5" step="0.5" placeholder="ej: 2"
+                   style="width:70px;border-color:#e0d6f5">
+          </div>
+          <span class="text-muted" style="font-size:.78rem" id="label-dias-calc"></span>
+        </div>
+      </div>
+
+      <!-- Fila 2: Skills + Buscar -->
       <div class="pt-2 border-top" style="width:100%">
         <div class="filter-row-label">Skills</div>
         <div class="d-flex align-items-center gap-2">
@@ -217,11 +265,12 @@
             <tr>
               <th class="ps-3">Recurso</th>
               <th>Banda</th>
+              {% if puede_ver_costos %}<th>Tarifa €/h</th>{% endif %}
               <th>Skills</th>
               <th>Días hábiles</th>
               <th style="min-width:190px">Disponibilidad</th>
               <th>H. libres</th>
-              <th>H. totales</th>
+              {% if modo_busqueda == 'horas' %}<th>H. requeridas</th>{% else %}<th>H. totales</th>{% endif %}
               <th></th>
             </tr>
           </thead>
@@ -242,6 +291,17 @@
                 </span>
                 {% endwith %}
               </td>
+
+              {% if puede_ver_costos %}
+              <td class="text-end pe-2">
+                {% if r.tarifa_hora %}
+                <span class="fw-semibold">{{ r.tarifa_hora }}</span>
+                <span class="text-muted small"> €/h</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              {% endif %}
 
               <td>
                 {% if r.skills %}
@@ -293,12 +353,16 @@
                 <strong>{{ r.horas_libres }}</strong><span class="text-muted">h</span>
               </td>
               <td class="text-end pe-2">
+                {% if modo_busqueda == 'horas' %}
+                <strong>{{ horas_totales }}</strong><span class="text-muted">h</span>
+                {% else %}
                 {{ r.horas_capacidad }}<span class="text-muted">h</span>
+                {% endif %}
               </td>
 
               <td class="pe-3">
                 {% if pct > 0 %}
-                <a href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+                <a href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}{% if modo_busqueda == 'horas' %}&modo_crear=horas&horas_crear={{ horas_totales }}&intensidad_crear={{ intensidad_busqueda }}{% endif %}"
                    class="btn btn-sm fw-semibold"
                    style="background:var(--inet-pink);color:#fff;border:none;font-size:.78rem;border-radius:7px">
                   <i class="bi bi-plus-circle me-1"></i>Solicitar
@@ -320,7 +384,7 @@
     <div class="text-center text-muted py-5">
       <i class="bi bi-calendar-search" style="font-size:3rem;opacity:.25;color:#110d26"></i>
       <p class="mt-3" style="font-family:'Montserrat',sans-serif;font-size:.9rem">
-        Ingresa un rango de fechas para ver la disponibilidad de recursos.
+        Ingresa un rango de fechas o define las horas totales requeridas para ver la disponibilidad.
       </p>
     </div>
   {% endif %}
@@ -383,66 +447,121 @@
     placeholder: 'Buscar y agregar skills…',
   });
 
-  // Contadores de resumen
-  document.addEventListener('DOMContentLoaded', function () {
-    var rows = document.querySelectorAll('#tbl-recursos tbody tr');
-    if (!rows.length) return;
-    var conCupo = 0, sinCupo = 0;
-    rows.forEach(function(r) {
-      parseFloat(r.dataset.cupo) > 0 ? conCupo++ : sinCupo++;
-    });
-    var ec = document.getElementById('cnt-disponibles');
-    var es = document.getElementById('cnt-sin-cupo');
-    if (ec) ec.textContent = conCupo;
-    if (es) es.textContent = sinCupo;
-  });
+  // ── Toggle modo búsqueda ─────────────────────────────────────────────────
+  function setModo(modo) {
+    document.getElementById('modo_busqueda').value = modo;
+    var bloqueRango = document.getElementById('bloque-rango');
+    var bloqueHoras = document.getElementById('bloque-horas');
+    var btnR = document.getElementById('btn-modo-rango');
+    var btnH = document.getElementById('btn-modo-horas');
 
-  // Popovers de skills
-  document.querySelectorAll('.skill-pop-trigger[data-popover-id]').forEach(function(el) {
-    var contentEl = document.getElementById(el.dataset.popoverId);
-    if (contentEl) {
-      new bootstrap.Popover(el, {
-        html: true,
-        trigger: 'hover focus',
-        placement: 'top',
-        title: '<span style="font-family:Montserrat,sans-serif;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Skills</span>',
-        content: contentEl.innerHTML,
-        sanitize: false,
-      });
+    var fiRango = document.getElementById('fi-rango');
+    var fiHoras = document.getElementById('fi-horas');
+
+    if (modo === 'horas') {
+      // Sincronizar fecha_inicio de rango → horas al cambiar de modo
+      if (fiRango && fiHoras && fiRango.value) fiHoras.value = fiRango.value;
+      bloqueRango.style.display = 'none';
+      bloqueHoras.style.display = '';
+      bloqueRango.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
+      bloqueHoras.querySelectorAll('input').forEach(function(i){ i.disabled = false; });
+      btnH.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#110d26;color:#fff;border:none';
+      btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
+    } else {
+      // Sincronizar fecha_inicio de horas → rango al cambiar de modo
+      if (fiHoras && fiRango && fiHoras.value) fiRango.value = fiHoras.value;
+      bloqueHoras.style.display = 'none';
+      bloqueRango.style.display = '';
+      bloqueHoras.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
+      bloqueRango.querySelectorAll('input').forEach(function(i){ i.disabled = false; });
+      btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#110d26;color:#fff;border:none';
+      btnH.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
     }
-  });
+    actualizarDiasCalc();
+  }
 
-  // Popovers de días ocupados
-  document.querySelectorAll('.pop-trigger[data-popover-id]').forEach(function(el) {
-    var contentEl = document.getElementById(el.dataset.popoverId);
-    if (contentEl) {
-      new bootstrap.Popover(el, {
-        html: true,
-        trigger: 'hover focus',
-        placement: 'left',
-        content: contentEl.innerHTML,
-        customClass: 'popover-dias',
-      });
-    }
-  });
+  // ── Estimador en tiempo real para modo horas ──────────────────────────────
+  function actualizarDiasCalc() {
+    var inpH = document.querySelector('[name=horas_totales]');
+    var inpI = document.querySelector('[name=intensidad_busqueda]');
+    var lbl  = document.getElementById('label-dias-calc');
+    if (!inpH || !inpI || !lbl) return;
+    var h = parseFloat(inpH.value) || 0;
+    var intens = parseFloat((inpI.value || '').replace(',', '.')) || 0;
+    lbl.textContent = (h > 0 && intens > 0) ? '≈ ' + Math.ceil(h / intens) + ' días hábiles' : '';
+  }
 
-  // Rangos rápidos
+  // ── Rangos rápidos (modo rango) ───────────────────────────────────────────
   function setRango(dias) {
     var fmt = function(d) { return d.toISOString().split('T')[0]; };
-    var inicioInput = document.querySelector('[name=fecha_inicio]');
+    var inicioInput = document.getElementById('fi-rango');
     var finInput    = document.querySelector('[name=fecha_fin]');
     var inicio;
-    if (inicioInput.value) {
-      // Si ya hay fecha de inicio, calcular desde ella sin modificarla
+    if (inicioInput && inicioInput.value) {
       inicio = new Date(inicioInput.value + 'T00:00:00');
     } else {
-      // Sin fecha: partir desde hoy y rellenar también el inicio
       inicio = new Date();
-      inicioInput.value = fmt(inicio);
+      if (inicioInput) inicioInput.value = fmt(inicio);
     }
     var fin = new Date(inicio);
     fin.setDate(fin.getDate() + dias - 1);
-    finInput.value = fmt(fin);
+    if (finInput) finInput.value = fmt(fin);
   }
+
+  // ── Inicialización al cargar ──────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function () {
+    // Aplicar modo guardado (si venimos de un submit en modo horas)
+    var modoActual = document.getElementById('modo_busqueda').value || 'rango';
+    setModo(modoActual);
+
+    // Listeners estimador de días
+    var inpH = document.querySelector('[name=horas_totales]');
+    var inpI = document.querySelector('[name=intensidad_busqueda]');
+    if (inpH) inpH.addEventListener('input', actualizarDiasCalc);
+    if (inpI) inpI.addEventListener('input', actualizarDiasCalc);
+    actualizarDiasCalc();
+
+    // Contadores de resumen
+    var rows = document.querySelectorAll('#tbl-recursos tbody tr');
+    if (rows.length) {
+      var conCupo = 0, sinCupo = 0;
+      rows.forEach(function(r) {
+        parseFloat(r.dataset.cupo) > 0 ? conCupo++ : sinCupo++;
+      });
+      var ec = document.getElementById('cnt-disponibles');
+      var es = document.getElementById('cnt-sin-cupo');
+      if (ec) ec.textContent = conCupo;
+      if (es) es.textContent = sinCupo;
+    }
+
+    // Popovers de skills
+    document.querySelectorAll('.skill-pop-trigger[data-popover-id]').forEach(function(el) {
+      var contentEl = document.getElementById(el.dataset.popoverId);
+      if (contentEl) {
+        new bootstrap.Popover(el, {
+          html: true,
+          trigger: 'hover focus',
+          placement: 'top',
+          title: '<span style="font-family:Montserrat,sans-serif;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Skills</span>',
+          content: contentEl.innerHTML,
+          sanitize: false,
+        });
+      }
+    });
+
+    // Popovers de días ocupados
+    document.querySelectorAll('.pop-trigger[data-popover-id]').forEach(function(el) {
+      var contentEl = document.getElementById(el.dataset.popoverId);
+      if (contentEl) {
+        new bootstrap.Popover(el, {
+          html: true,
+          trigger: 'hover focus',
+          placement: 'left',
+          content: contentEl.innerHTML,
+          customClass: 'popover-dias',
+        });
+      }
+    });
+  });
 </script>
 {% endblock %}

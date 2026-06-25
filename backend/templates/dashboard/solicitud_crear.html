@@ -69,7 +69,12 @@
     <h4 class="fw-bold mb-1" style="color:#198754;font-family:'Montserrat',sans-serif">Solicitud creada</h4>
     <p class="text-muted mb-3">
       La solicitud #{{ asignacion_creada.pk }} está pendiente de aprobación.
-      {% if fue_recomputada %}
+      {% if dias_bloqueados %}
+      <br><span class="badge bg-warning text-dark mt-1">
+        <i class="bi bi-skip-forward me-1"></i>
+        {{ dias_bloqueados|length }} día{{ dias_bloqueados|length|pluralize:"s" }} bloqueado{{ dias_bloqueados|length|pluralize:"s" }} saltado{{ dias_bloqueados|length|pluralize:"s" }}
+      </span>
+      {% elif fue_recomputada %}
       <br><span class="badge bg-warning text-dark mt-1">
         <i class="bi bi-calendar-check me-1"></i>
         Fecha fin ajustada por {{ conflict_dates_orig|length }} día{{ conflict_dates_orig|length|pluralize:"s" }} bloqueado{{ conflict_dates_orig|length|pluralize:"s" }}
@@ -86,6 +91,20 @@
       <div class="resumen-item"><span class="text-muted">Intensidad</span><strong>Jornada completa</strong></div>
       {% else %}
       <div class="resumen-item"><span class="text-muted">Intensidad diaria</span><strong>{{ asignacion_creada.intensidad_diaria }} h/día</strong></div>
+      {% endif %}
+      {% if puede_ver_costos and tarifa %}
+      <div class="resumen-item"><span class="text-muted">Tarifa aplicada</span><strong>{{ tarifa.valor_hora }} €/h</strong></div>
+      <div class="resumen-item"><span class="text-muted">Costo estimado</span>
+        <strong id="costo-final">—</strong>
+        <script>
+          (function(){
+            var h = {{ asignacion_creada.horas_totales|default:0 }};
+            var t = parseFloat('{{ tarifa.valor_hora|default:0 }}'.replace(',', '.'));
+            if (h && t) document.getElementById('costo-final').textContent =
+              (h * t).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+          })();
+        </script>
+      </div>
       {% endif %}
       <div class="resumen-item"><span class="text-muted">Estado</span>
         <span class="badge" style="background:#6366f1">Solicitada — pendiente aprobación</span>
@@ -136,15 +155,20 @@
           {% endfor %}
         </div>
       </div>
-      {% if info %}
-      <div class="text-end" style="min-width:90px">
+      <div class="text-end" style="min-width:110px">
+        {% if info %}
         <div class="fw-bold"
           style="color:{% if info.porcentaje_libre >= 75 %}#16a34a{% elif info.porcentaje_libre >= 50 %}#d97706{% elif info.porcentaje_libre >= 25 %}#ea580c{% else %}#dc2626{% endif %}">
           {{ info.porcentaje_libre }}% libre
         </div>
         <div class="text-muted small">{{ info.horas_libres }}h disponibles</div>
+        {% endif %}
+        {% if puede_ver_costos and tarifa %}
+        <div class="mt-1 fw-semibold small" style="color:#4a1f7a">
+          {{ tarifa.valor_hora }} €/h
+        </div>
+        {% endif %}
       </div>
-      {% endif %}
     </div>
   </div>
 
@@ -155,19 +179,33 @@
         <div class="text-muted small">Fecha inicio</div>
         <div class="fw-bold">{{ fi|date:"d/m/Y" }}</div>
       </div>
+      {% if modo_crear != 'horas' %}
       <div class="col border-end">
         <div class="text-muted small">Fecha fin</div>
         <div class="fw-bold">{{ ff|date:"d/m/Y" }}</div>
       </div>
+      {% else %}
+      <div class="col border-end">
+        <div class="text-muted small">Fecha fin</div>
+        <div class="fw-bold text-muted" style="font-size:.85rem">calculada al crear</div>
+      </div>
+      {% endif %}
       {% if info %}
       <div class="col border-end">
         <div class="text-muted small">Días hábiles</div>
-        <div class="fw-bold">{{ info.dias_habiles }}</div>
+        <div class="fw-bold">{% if modo_crear == 'horas' %}—{% else %}{{ info.dias_habiles }}{% endif %}</div>
       </div>
+      {% if modo_crear == 'horas' %}
+      <div class="col">
+        <div class="text-muted small">Período</div>
+        <div class="fw-bold text-muted" style="font-size:.78rem">se extiende<br>hasta completar horas</div>
+      </div>
+      {% else %}
       <div class="col">
         <div class="text-muted small">Horas disponibles</div>
         <div class="fw-bold text-success">{{ info.horas_libres }}h</div>
       </div>
+      {% endif %}
       {% endif %}
     </div>
   </div>
@@ -210,11 +248,40 @@
       <i class="bi bi-clipboard-check me-2" style="color:#e0178a"></i>Completar solicitud
     </h5>
 
-    <form method="post" action="/solicitud/crear/">
+    <form method="post" action="/solicitud/crear/" id="form-crear">
       {% csrf_token %}
       <input type="hidden" name="recurso" value="{{ recurso.pk }}">
       <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
       <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
+      <input type="hidden" name="modo_crear" id="modo_crear" value="{{ modo_crear|default:'rango' }}">
+
+      <!-- Toggle modo -->
+      <div class="d-flex gap-1 mb-4">
+        <button type="button" id="btn-modo-rango" onclick="setModoCrea('rango')"
+                class="btn btn-sm fw-semibold" style="font-size:.72rem;border-radius:6px;padding:3px 14px">
+          <i class="bi bi-calendar-range me-1"></i>Por rango de fechas
+        </button>
+        <button type="button" id="btn-modo-horas" onclick="setModoCrea('horas')"
+                class="btn btn-sm fw-semibold" style="font-size:.72rem;border-radius:6px;padding:3px 14px">
+          <i class="bi bi-hourglass-split me-1"></i>Por horas totales
+        </button>
+      </div>
+
+      <!-- Campo horas (solo modo horas) -->
+      <div id="bloque-horas-crear" class="mb-4 p-3 rounded" style="background:#f9f5ff;border:1px solid #e0d6f5;{% if modo_crear != 'horas' %}display:none{% endif %}">
+        <label class="form-label fw-semibold">Horas totales requeridas</label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="number" name="horas_crear" id="id_horas_crear"
+                 class="form-control" style="width:100px"
+                 min="1" max="2000" placeholder="ej: 100"
+                 value="{{ horas_crear }}">
+          <span class="text-muted">horas en total</span>
+        </div>
+        <div class="form-text">
+          El sistema calcula la fecha fin desde la fecha de inicio, saltando días donde el recurso
+          ya está al tope de capacidad. El período puede extenderse más allá del rango buscado originalmente.
+        </div>
+      </div>
 
       <!-- Proyecto -->
       <div class="mb-4">
@@ -230,9 +297,9 @@
         </select>
       </div>
 
-      <!-- Intensidad -->
+      <!-- Dedicación diaria -->
       <div class="mb-3">
-        <label class="form-label fw-semibold">Dedicación diaria</label>
+        <label class="form-label fw-semibold">Dedicación diaria <span class="text-muted small" id="label-dedicacion-hint">(máxima, por día hábil libre)</span></label>
 
         <div class="form-check form-switch mb-2">
           <input class="form-check-input" type="checkbox" name="jornada_completa"
@@ -249,25 +316,51 @@
             <input type="number" name="intensidad_diaria" id="id_intensidad"
                    class="form-control" style="width:110px"
                    step="0.5" min="0.5" max="8.5" placeholder="ej: 4"
-                   value="{{ post.intensidad_diaria }}">
+                   value="{{ post.intensidad_diaria|default:intensidad_crear }}">
             <span class="text-muted">horas/día</span>
           </div>
           <div class="form-text">Entre 0.5 y 8.5 h/día.</div>
         </div>
       </div>
 
-      <!-- Resumen estimado -->
+      <!-- Panel de estimación -->
+      {% if puede_ver_costos and tarifa %}
+      <div class="border rounded px-3 py-2 mb-4" id="resumen-live"
+           style="background:#f9f5ff;border-color:#e0d6f5!important;font-size:.85rem">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <i class="bi bi-calculator me-1" style="color:#e0178a"></i>
+            <span id="res-info-rango">
+              <strong id="res-dias">{{ dias_habiles }}</strong> días hábiles ·
+              <strong id="res-horas">—</strong> h totales
+            </span>
+            <span id="res-info-horas" style="display:none">
+              <strong id="res-horas-h">—</strong> h · ~<strong id="res-dias-h">—</strong> días hábiles
+            </span>
+          </div>
+          <div class="fw-bold" style="color:#4a1f7a;font-size:.95rem">
+            Costo est.: <span id="res-costo">—</span> €
+          </div>
+        </div>
+        <div class="text-muted mt-1" style="font-size:.75rem">
+          Tarifa vigente: <strong>{{ tarifa.valor_hora }} €/h</strong>
+          <span id="hint-rango"> · ingresá las horas/día para calcular</span>
+          <span id="hint-horas" style="display:none"> · la fecha fin se calcula saltando días ocupados</span>
+        </div>
+      </div>
+      {% else %}
       <div class="alert border py-2 px-3 mb-4 small" id="resumen-live"
-           style="display:none;background:#f9f5ff;border-color:#e0178a!important">
+           style="{% if modo_crear != 'horas' %}display:none;{% endif %}background:#f9f5ff;border-color:#e0178a!important">
         <i class="bi bi-calculator me-1" style="color:#e0178a"></i>
         Estimado: <strong id="res-dias">—</strong> días hábiles ·
         <strong id="res-horas">—</strong> horas totales
       </div>
+      {% endif %}
 
       <div class="d-flex gap-2">
         <button type="submit" class="btn fw-semibold btn-crear"
                 style="background:var(--inet-pink);color:#fff;border:none;border-radius:9px;font-family:'Montserrat',sans-serif">
-          <i class="bi bi-send me-2"></i>Crear solicitud
+          <i class="bi bi-send me-2"></i><span id="btn-crear-txt">Crear solicitud</span>
         </button>
         <a href="/solicitud/?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
            class="btn btn-outline-secondary">Cancelar</a>
@@ -332,45 +425,138 @@
 
 {% block scripts %}
 <script>
-(function () {
-  var chk = document.getElementById('id_jornada_completa');
-  var wrap = document.getElementById('wrap-intensidad');
-  var inp = document.getElementById('id_intensidad');
-  var resumen = document.getElementById('resumen-live');
-  var resDias = document.getElementById('res-dias');
-  var resHoras = document.getElementById('res-horas');
+// ── Constantes del servidor ────────────────────────────────────────────────
+var _DIAS_HABILES = {{ dias_habiles|default:0 }};
+var _TARIFA_HORA  = {% if puede_ver_costos and tarifa %}parseFloat('{{ tarifa.valor_hora }}'.replace(',','.')){% else %}0{% endif %};
 
-  var diasHabiles = {{ info.dias_habiles|default:0 }};
+// ── Toggles de modo (globales — necesario para onclick en HTML) ───────────
+function setModoCrea(modo) {
+  var el = document.getElementById('modo_crear');
+  if (el) el.value = modo;
 
-  function actualizar() {
-    var completa = chk && chk.checked;
-    if (wrap) wrap.style.display = completa ? 'none' : '';
-    if (!resumen) return;
-    if (completa) {
-      var hEst = Math.round(diasHabiles * 8.2 * 10) / 10;
-      resDias.textContent = diasHabiles;
-      resHoras.textContent = '≈' + hEst;
-      resumen.style.display = '';
-    } else {
-      var h = parseFloat(inp ? inp.value : 0);
-      if (h > 0 && diasHabiles > 0) {
-        resDias.textContent = diasHabiles;
-        resHoras.textContent = Math.ceil(diasHabiles * h);
-        resumen.style.display = '';
-      } else {
-        resumen.style.display = 'none';
-      }
-    }
+  var bloqueH   = document.getElementById('bloque-horas-crear');
+  var btnR      = document.getElementById('btn-modo-rango');
+  var btnH      = document.getElementById('btn-modo-horas');
+  var btnTxt    = document.getElementById('btn-crear-txt');
+  var lbl       = document.getElementById('label-dedicacion-hint');
+
+  var styleOn  = 'font-size:.72rem;border-radius:6px;padding:3px 14px;background:#110d26;color:#fff;border:none';
+  var styleOff = 'font-size:.72rem;border-radius:6px;padding:3px 14px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
+
+  if (modo === 'horas') {
+    if (bloqueH) bloqueH.style.display = '';
+    if (btnH) btnH.style.cssText = styleOn;
+    if (btnR) btnR.style.cssText = styleOff;
+    if (btnTxt) btnTxt.textContent = 'Calcular y crear solicitud';
+    if (lbl)    lbl.textContent    = '(máxima, por día hábil libre)';
+  } else {
+    if (bloqueH) bloqueH.style.display = 'none';
+    if (btnR) btnR.style.cssText = styleOn;
+    if (btnH) btnH.style.cssText = styleOff;
+    if (btnTxt) btnTxt.textContent = 'Crear solicitud';
+    if (lbl)    lbl.textContent    = '';
+  }
+  actualizarEstimado();
+}
+
+// ── Estimador en tiempo real ───────────────────────────────────────────────
+function actualizarEstimado() {
+  var modo      = (document.getElementById('modo_crear') || {value:'rango'}).value;
+  var chk       = document.getElementById('id_jornada_completa');
+  var wrap      = document.getElementById('wrap-intensidad');
+  var inp       = document.getElementById('id_intensidad');
+  var inpH      = document.getElementById('id_horas_crear');
+  var resumen   = document.getElementById('resumen-live');
+  var resCosto  = document.getElementById('res-costo');
+  var infoR     = document.getElementById('res-info-rango');
+  var infoH     = document.getElementById('res-info-horas');
+  var hintR     = document.getElementById('hint-rango');
+  var hintH     = document.getElementById('hint-horas');
+  var resDias   = document.getElementById('res-dias');
+  var resHoras  = document.getElementById('res-horas');
+  var resDiasH  = document.getElementById('res-dias-h');
+  var resHorasH = document.getElementById('res-horas-h');
+
+  var completa = chk && chk.checked;
+  if (wrap) wrap.style.display = completa ? 'none' : '';
+  if (!resumen) return;
+
+  function leerNum(el) {
+    if (!el) return 0;
+    var v = el.valueAsNumber;
+    if (!isNaN(v) && v > 0) return v;
+    v = parseFloat((el.value || '').replace(',', '.'));
+    return (!isNaN(v) && v > 0) ? v : 0;
   }
 
-  if (chk) chk.addEventListener('change', actualizar);
-  if (inp) inp.addEventListener('input', actualizar);
-  actualizar();
-})();
+  var horas = 0;
 
-// Tooltips Bootstrap en los días
-document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-  new bootstrap.Tooltip(el, { html: false });
+  if (modo === 'horas') {
+    if (infoR) infoR.style.display = 'none';
+    if (infoH) infoH.style.display = '';
+    if (hintR) hintR.style.display = 'none';
+    if (hintH) hintH.style.display = '';
+
+    var horasTotal = leerNum(inpH);
+    var intens     = completa ? 8.25 : leerNum(inp);
+
+    if (horasTotal > 0) {
+      horas = horasTotal;
+      if (resHorasH) resHorasH.textContent = horasTotal;
+      if (resDiasH)  resDiasH.textContent  = intens > 0 ? Math.ceil(horasTotal / intens) : '?';
+    } else {
+      if (resHorasH) resHorasH.textContent = '—';
+      if (resDiasH)  resDiasH.textContent  = '—';
+      if (resCosto)  resCosto.textContent   = '—';
+      return;
+    }
+  } else {
+    if (infoR) infoR.style.display = '';
+    if (infoH) infoH.style.display = 'none';
+    if (hintR) hintR.style.display = '';
+    if (hintH) hintH.style.display = 'none';
+
+    if (_DIAS_HABILES === 0) return;
+
+    if (completa) {
+      horas = Math.round(_DIAS_HABILES * 8.2 * 10) / 10;
+    } else {
+      var h = leerNum(inp);
+      if (h > 0) {
+        horas = Math.ceil(_DIAS_HABILES * h);
+      } else {
+        if (resHoras) resHoras.textContent = '—';
+        if (resCosto) resCosto.textContent = '—';
+        return;
+      }
+    }
+    if (resDias)  resDias.textContent  = _DIAS_HABILES;
+    if (resHoras) resHoras.textContent = completa ? ('≈' + horas) : horas;
+  }
+
+  resumen.style.display = '';
+  if (resCosto) {
+    resCosto.textContent = (_TARIFA_HORA > 0 && horas > 0)
+      ? (horas * _TARIFA_HORA).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : '—';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+  var modoInicial = (document.getElementById('modo_crear') || {value:'rango'}).value;
+  setModoCrea(modoInicial);
+
+  var chk  = document.getElementById('id_jornada_completa');
+  var inp  = document.getElementById('id_intensidad');
+  var inpH = document.getElementById('id_horas_crear');
+  if (chk)  chk.addEventListener('change', actualizarEstimado);
+  if (inp)  { inp.addEventListener('input', actualizarEstimado); inp.addEventListener('keyup', actualizarEstimado); }
+  if (inpH) { inpH.addEventListener('input', actualizarEstimado); inpH.addEventListener('keyup', actualizarEstimado); }
+
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el, { html: false });
+  });
 });
 </script>
 {% endblock %}

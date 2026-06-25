@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from apps.core.models import SoftDeleteModel, Recurso, Proyecto
+from apps.core.models import SoftDeleteModel, Recurso, Proyecto, Cluster
 
 
 class Asignacion(SoftDeleteModel):
@@ -23,6 +23,11 @@ class Asignacion(SoftDeleteModel):
 
     recurso = models.ForeignKey(Recurso, on_delete=models.PROTECT, related_name="asignaciones")
     proyecto = models.ForeignKey(Proyecto, on_delete=models.PROTECT, related_name="asignaciones")
+    cluster = models.ForeignKey(
+        Cluster, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="asignaciones", verbose_name="Cluster",
+        help_text="Cluster del recurso bajo el que opera esta asignación.",
+    )
     modo_asignacion = models.CharField(max_length=10, choices=MODO_CHOICES, default="HORAS", verbose_name="Modo")
     horas_totales = models.PositiveIntegerField(null=True, blank=True, help_text="Total de horas (ej: 40, 80, 160)")
     dias_habiles = models.PositiveIntegerField(null=True, blank=True, help_text="Días hábiles de trabajo")

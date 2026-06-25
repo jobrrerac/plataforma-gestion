@@ -41,6 +41,20 @@ class Skill(models.Model):
         return self.nombre
 
 
+class Cluster(models.Model):
+    """Unidad organizativa / pool al que pertenece un recurso en SAP."""
+    codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=100, blank=True, verbose_name="Descripción")
+
+    class Meta:
+        ordering = ["codigo"]
+        verbose_name = "Cluster"
+        verbose_name_plural = "Clusters"
+
+    def __str__(self):
+        return f"{self.codigo}" + (f" — {self.nombre}" if self.nombre else "")
+
+
 class Recurso(SoftDeleteModel):
     BANDA_CHOICES = [
         ("JR", "Junior"),
@@ -52,6 +66,14 @@ class Recurso(SoftDeleteModel):
     email = models.EmailField(unique=True)
     banda = models.CharField(max_length=10, choices=BANDA_CHOICES)
     activo = models.BooleanField(default=True)
+    nro_persona_sap = models.CharField(
+        max_length=20, unique=True, null=True, blank=True,
+        verbose_name="N° persona SAP",
+        help_text="Identificador único de persona en SAP (ej: 30011076).",
+    )
+    clusters = models.ManyToManyField(
+        Cluster, blank=True, related_name="recursos", verbose_name="Clusters",
+    )
     skills = models.ManyToManyField(
         Skill, through="RecursoSkill", blank=True, related_name="recursos"
     )
@@ -100,6 +122,43 @@ class RecursoSkill(models.Model):
     @property
     def estrellas(self):
         return "★" * self.suficiencia + "☆" * (5 - self.suficiencia)
+
+
+class TarifaVigente(models.Model):
+    """Historial de tarifas por hora de un recurso. Append-only: nunca se edita ni borra."""
+    recurso = models.ForeignKey(
+        Recurso, on_delete=models.PROTECT, related_name="tarifas",
+    )
+    valor_hora = models.DecimalField(
+        max_digits=10, decimal_places=2, verbose_name="Tarifa €/h",
+    )
+    fecha_desde = models.DateField(
+        verbose_name="Vigente desde",
+        help_text="Fecha a partir de la cual aplica esta tarifa.",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_desde"]
+        unique_together = [("recurso", "fecha_desde")]
+        verbose_name = "Tarifa"
+        verbose_name_plural = "Tarifas"
+
+    def __str__(self):
+        return f"{self.recurso.nombre} — {self.valor_hora} €/h (desde {self.fecha_desde})"
+
+    @classmethod
+    def vigente_para(cls, recurso, fecha=None):
+        """Retorna la tarifa activa en la fecha dada (la más reciente con fecha_desde ≤ fecha)."""
+        from datetime import date as _date
+        if fecha is None:
+            fecha = _date.today()
+        return (
+            cls.objects
+            .filter(recurso=recurso, fecha_desde__lte=fecha)
+            .order_by("-fecha_desde")
+            .first()
+        )
 
 
 class Proyecto(SoftDeleteModel):

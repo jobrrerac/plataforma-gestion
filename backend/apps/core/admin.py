@@ -1,7 +1,7 @@
 import json
 from django.contrib import admin
 from django.utils.html import format_html, mark_safe, escape
-from .models import Recurso, Proyecto, Skill, RecursoSkill
+from .models import Recurso, Proyecto, Skill, RecursoSkill, Cluster, TarifaVigente
 
 
 @admin.register(Skill)
@@ -20,6 +20,28 @@ class SkillAdmin(admin.ModelAdmin):
     @admin.display(description="Recursos activos")
     def total_recursos(self, obj):
         return obj.recurso_skills.filter(recurso__activo=True, recurso__deleted_at__isnull=True).count()
+
+
+@admin.register(Cluster)
+class ClusterAdmin(admin.ModelAdmin):
+    list_display = ["codigo", "nombre", "total_recursos"]
+    search_fields = ["codigo", "nombre"]
+    fields = ["codigo", "nombre"]
+
+    @admin.display(description="Recursos")
+    def total_recursos(self, obj):
+        return obj.recursos.filter(activo=True, deleted_at__isnull=True).count()
+
+
+class TarifaVigenteInline(admin.TabularInline):
+    model = TarifaVigente
+    extra = 1
+    readonly_fields = ["creado_en"]
+    fields = ["valor_hora", "fecha_desde", "creado_en"]
+    ordering = ["-fecha_desde"]
+
+    def has_change_permission(self, request, obj=None):
+        return False  # append-only: solo agregar, nunca editar
 
 
 class RecursoSkillInline(admin.TabularInline):
@@ -46,12 +68,20 @@ class RecursoSkillInline(admin.TabularInline):
 
 @admin.register(Recurso)
 class RecursoAdmin(admin.ModelAdmin):
-    list_display = ["nombre", "email", "banda", "skills_display", "activo", "created_at"]
-    list_filter = ["banda", "activo", "skills"]
-    search_fields = ["nombre", "email"]
-    inlines = [RecursoSkillInline]
+    list_display = ["nombre", "nro_persona_sap", "email", "banda", "clusters_display", "skills_display", "activo"]
+    list_filter = ["banda", "activo", "clusters", "skills"]
+    search_fields = ["nombre", "email", "nro_persona_sap"]
+    inlines = [RecursoSkillInline, TarifaVigenteInline]
     list_per_page = 50
     exclude = ["deleted_at", "created_at", "updated_at", "skills"]
+    filter_horizontal = ["clusters"]
+
+    @admin.display(description="Clusters")
+    def clusters_display(self, obj):
+        items = list(obj.clusters.all())
+        if not items:
+            return format_html('<span style="color:#aaa">—</span>')
+        return ", ".join(c.codigo for c in items)
 
     @admin.display(description="Skills")
     def skills_display(self, obj):
