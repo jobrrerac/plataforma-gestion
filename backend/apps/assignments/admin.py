@@ -293,7 +293,7 @@ class AsignacionAdmin(admin.ModelAdmin):
             ("Asignación", {
                 "fields": [
                     "modo_asignacion",
-                    "recurso", "proyecto",
+                    "recurso", "proyecto", "cluster",
                     "fecha_inicio",
                     "horas_totales",
                     "dias_habiles",
