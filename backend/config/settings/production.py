@@ -17,10 +17,13 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 REFERRER_POLICY = "same-origin"
 
-# HSTS y SSL redirect: descomentar cuando el terminador TLS esté confirmado
-# SECURE_SSL_REDIRECT = True
-# SECURE_HSTS_SECONDS = 31536000
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# Azure Container Apps (y cualquier proxy/LB) termina TLS en el ingress y reenvía HTTP al
+# contenedor. Sin este header Django no detecta HTTPS y puede entrar en loop de redirección.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = True
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True  # activar tras confirmar que el dominio funciona bien varios días
 
 # Sin BasicAuthentication en producción
 REST_FRAMEWORK = {

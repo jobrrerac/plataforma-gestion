@@ -10,6 +10,16 @@ class RecursoSerializer(serializers.ModelSerializer):
         fields = ["id", "nombre", "email", "banda", "banda_display", "activo", "created_at"]
         read_only_fields = ["created_at"]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request:
+            u = request.user
+            puede_ver_email = u.is_superuser or u.groups.filter(name__in=["Admin", "PM"]).exists()
+            if not puede_ver_email:
+                data.pop("email", None)
+        return data
+
 
 class ProyectoSerializer(serializers.ModelSerializer):
     pm_username = serializers.CharField(source="pm.username", read_only=True)
