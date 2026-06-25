@@ -273,6 +273,68 @@ body {
 a:link, a:visited { color: #6b21a8; }
 a:hover { color: var(--inet-pink); }
 
+/* ─── ADMIN INDEX / APP INDEX: módulos de navegación ────────── */
+/* Las filas de modelos tienen fondo oscuro (dark mode de Django):
+   forzamos blanco explícito para todas las celdas y links */
+#content-main .module tbody tr {
+  background: #1b1540 !important;
+}
+#content-main .module tbody tr:hover {
+  background: #241d55 !important;
+}
+#content-main .module tbody th,
+#content-main .module tbody td {
+  color: rgba(255,255,255,.9) !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+}
+#content-main .module tbody th a:link,
+#content-main .module tbody th a:visited,
+#content-main .module tbody td a:link,
+#content-main .module tbody td a:visited {
+  color: rgba(255,255,255,.9) !important;
+}
+#content-main .module tbody th a:hover,
+#content-main .module tbody td a:hover {
+  color: #fff !important;
+}
+/* Añadir y Modificar en la página de índice */
+#content-main .module a.addlink:link,
+#content-main .module a.addlink:visited { color: #86efac !important; font-weight: 700 !important; }
+#content-main .module a.changelink:link,
+#content-main .module a.changelink:visited { color: var(--inet-yellow) !important; font-weight: 600 !important; }
+
+/* ─── ACCIONES RECIENTES ─────────────────────────────────────── */
+#content-related {
+  background: transparent !important;
+}
+#recent-actions-module {
+  background: #1b1540 !important;
+  border-radius: 6px;
+  overflow: hidden;
+}
+#recent-actions-module h2 {
+  background: var(--inet-sidebar-h) !important;
+  color: var(--inet-yellow) !important;
+}
+#recent-actions-module h3 {
+  color: rgba(255,255,255,.55) !important;
+  background: transparent !important;
+  font-size: .7rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: .08em !important;
+  padding: 8px 14px 4px !important;
+  margin: 0 !important;
+}
+#recent-actions-module a:link,
+#recent-actions-module a:visited { color: rgba(255,255,255,.88) !important; }
+#recent-actions-module a:hover  { color: #fff !important; }
+#recent-actions-module .actionlist li {
+  padding: 5px 14px !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  color: rgba(255,255,255,.5) !important;
+  font-size: .78rem !important;
+}
+
 /* ─── TABLE HEADER ──────────────────────────────────────────── */
 #result_list thead th {
   background: var(--inet-dark) !important;
