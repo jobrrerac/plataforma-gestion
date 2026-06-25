@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from django.db import transaction
 from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles, es_habil
 from .models import Asignacion, LogAuditoria
+from apps.core.models import TarifaVigente
 
 # Jornada real: lun–jue 8.5 h, vie 8 h → máximo semanal 42 h
 JORNADA_LUNES_JUEVES = 8.5
@@ -164,6 +165,10 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
         horas_libres = max(0.0, horas_cap - horas_ocupadas)
         pct_libre = round(100.0 * horas_libres / horas_cap, 1) if horas_cap > 0 else 0.0
 
+        tarifa_obj = TarifaVigente.vigente_para(recurso, fecha_inicio)
+        tarifa_hora = float(tarifa_obj.valor_hora) if tarifa_obj else None
+        costo_estimado = round(tarifa_hora * horas_libres, 2) if tarifa_hora and horas_libres else None
+
         resultados.append({
             "recurso": recurso,
             "skills": [
@@ -182,10 +187,69 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
             "porcentaje_ocupado": round(100.0 - pct_libre, 1),
             "dias_sin_cupo": dias_sin_cupo,
             "dias_con_carga": dias_con_carga,
+            "tarifa_hora": tarifa_hora,
+            "costo_estimado": costo_estimado,
         })
 
     resultados.sort(key=lambda x: x["porcentaje_libre"], reverse=True)
     return resultados
+
+
+def calcular_solicitud_horas(recurso, fecha_inicio: date, horas_target: float, intensidad: float | None = None, jornada_completa: bool = False) -> tuple:
+    """
+    Calcula (fecha_fin, dias_habiles, horas_reales, dias_bloqueados) para una solicitud
+    por horas totales, saltando días donde la carga existente + intensidad excede la capacidad.
+    A diferencia de calcular_fecha_fin(), respeta la ocupación real del recurso.
+    """
+    acum = 0.0
+    dias_count = 0
+    dias_bloqueados = []
+    fecha = fecha_inicio
+    limite = fecha_inicio + timedelta(days=730)
+
+    while acum < horas_target and fecha <= limite:
+        if es_habil(fecha, recurso):
+            cap = capacidad_maxima_dia(fecha)
+            carga_existente = carga_en_fecha(recurso, fecha)
+            h_dia = cap if jornada_completa else intensidad
+
+            if carga_existente + h_dia > cap:
+                dias_bloqueados.append(fecha)
+            else:
+                h_hoy = min(h_dia, horas_target - acum)
+                acum += h_hoy
+                dias_count += 1
+                if acum >= horas_target:
+                    return fecha, dias_count, int(ceil(acum)), dias_bloqueados
+        fecha += timedelta(days=1)
+
+    return fecha, dias_count, int(ceil(acum)), dias_bloqueados
+
+
+def crear_solicitud_por_horas(recurso, proyecto, fecha_inicio, horas_target, intensidad, jornada_completa, solicitante):
+    """Crea una Asignacion SOLICITADA en modo HORAS calculando fecha_fin respetando ocupación existente."""
+    ff, dias, horas_reales, dias_bloqueados = calcular_solicitud_horas(
+        recurso, fecha_inicio, float(horas_target), intensidad, jornada_completa
+    )
+    intens_dec = Decimal("8.0") if jornada_completa else Decimal(str(intensidad))
+    asignacion = Asignacion.objects.create(
+        recurso=recurso,
+        proyecto=proyecto,
+        modo_asignacion="HORAS",
+        fecha_inicio=fecha_inicio,
+        fecha_fin=ff,
+        dias_habiles=dias,
+        horas_totales=int(horas_target),
+        intensidad_diaria=intens_dec,
+        jornada_completa=jornada_completa,
+        estado="SOLICITADA",
+        solicitada_por=solicitante,
+    )
+    LogAuditoria.objects.create(
+        asignacion=asignacion, accion="CREAR", actor=solicitante,
+        detalle={"modo": "HORAS_FILL", "horas_target": int(horas_target), "dias": dias, "bloqueados": len(dias_bloqueados)},
+    )
+    return asignacion, dias_bloqueados
 
 
 def analizar_conflictos(asignacion):
