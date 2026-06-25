@@ -350,32 +350,43 @@ a:hover { color: var(--inet-pink); }
 #result_list thead th.sorted   { background: #1e1240 !important; }
 #result_list thead th.sorted .text span { color: var(--inet-yellow) !important; }
 
-/* ─── TABLE ROWS — fondo y texto siempre legibles ──────────── */
+/* ─── TABLE ROWS — fondo oscuro, texto blanco ──────────────── */
 #result_list tbody td,
 #result_list tbody th {
-  background: #fff !important;
-  color: #1a1033 !important;
+  background: #1b1540 !important;
+  color: rgba(255,255,255,.88) !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
 }
 #result_list tbody tr:nth-child(odd) td,
 #result_list tbody tr:nth-child(odd) th {
-  background: #f8f5ff !important;
+  background: #15113a !important;
 }
-/* Links en filas: suficiente contraste sobre fondo claro */
-#result_list tbody a:link, #result_list tbody a:visited {
-  color: #6b21a8 !important;
+#result_list tbody tr:hover td,
+#result_list tbody tr:hover th {
+  background: #241d55 !important;
 }
-#result_list tbody a:hover { color: var(--inet-pink) !important; }
-/* Fila seleccionada: rosa claro Inetum, texto oscuro */
+/* Links en filas */
+#result_list tbody a:link,
+#result_list tbody a:visited { color: rgba(255,255,255,.9) !important; }
+#result_list tbody a:hover   { color: #fff !important; }
+/* Fila seleccionada */
 #result_list tbody tr.selected td,
 #result_list tbody tr.selected th {
-  background: #fce7f3 !important;
-  color: #1a1033 !important;
+  background: rgba(224,23,138,.22) !important;
+  color: #fff !important;
 }
 #result_list tbody tr.selected a:link,
-#result_list tbody tr.selected a:visited { color: #9d174d !important; }
-/* Hover */
-#result_list tbody tr:hover td,
-#result_list tbody tr:hover th { background: #f3edf9 !important; }
+#result_list tbody tr.selected a:visited { color: #fff !important; }
+
+/* ─── RESULT COUNT / FOOTER DE TABLA ───────────────────────── */
+#changelist-form .cl-footer,
+#changelist p.paginator,
+.results ~ p {
+  background: #0d0e1f !important;
+  color: rgba(255,255,255,.6) !important;
+  padding: 8px 14px !important;
+  font-size: .8rem !important;
+}
 
 /* ─── BUTTONS ───────────────────────────────────────────────── */
 .button,

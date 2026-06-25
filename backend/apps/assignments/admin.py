@@ -82,10 +82,10 @@ class LogAuditoriaInline(admin.TabularInline):
 class AsignacionAdmin(admin.ModelAdmin):
     form = AsignacionAdminForm
     list_display = [
-        "recurso", "proyecto", "estado_badge", "modo_asignacion",
-        "horas_totales", "dias_habiles", "intensidad_diaria",
-        "fecha_inicio", "fecha_fin", "acciones_rapidas",
+        "recurso", "acciones_rapidas", "proyecto", "estado_badge", "modo_asignacion",
+        "horas_totales", "intensidad_diaria", "fecha_inicio", "fecha_fin",
     ]
+    list_display_links = ["recurso"]
     list_filter = ["estado", "modo_asignacion", "politica_ausencia", "proyecto"]
     search_fields = ["recurso__nombre", "proyecto__codigo"]
     readonly_fields = ["estado", "fecha_fin", "tarifa_aplicada", "costo_estimado", "solicitada_por", "created_at"]
@@ -97,6 +97,12 @@ class AsignacionAdmin(admin.ModelAdmin):
         js = ["assignments/admin_asignacion.js"]
 
     def has_add_permission(self, request):
+        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+
+    def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
 
     def changelist_view(self, request, extra_context=None):
@@ -128,20 +134,33 @@ class AsignacionAdmin(admin.ModelAdmin):
         )
 
     # ── Botones de acción en la columna de lista ─────────────────────────
+    @staticmethod
+    def _btn(href, label, color):
+        style = (
+            f"background:{color};color:#fff;padding:2px 10px;border-radius:4px;"
+            "text-decoration:none;font-size:.75em;font-weight:600;white-space:nowrap;"
+            "text-transform:none;letter-spacing:0;font-family:inherit"
+        )
+        return format_html('<a href="{}" style="{}">{}</a>', href, style, label)
+
     @admin.display(description="Acciones")
     def acciones_rapidas(self, obj):
+        editar = self._btn(f"{obj.pk}/change/", "✎ Editar", "#4f46e5")
+
         if obj.estado == "SOLICITADA":
+            aprobar  = self._btn(f"aprobar/{obj.pk}/",  "✓ Aprobar",  "#16a34a")
+            rechazar = self._btn(f"rechazar/{obj.pk}/", "✗ Rechazar", "#dc2626")
             return format_html(
-                '<a href="aprobar/{}/" class="button" style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;text-decoration:none;font-size:.8em;margin-right:4px">✓ Aprobar</a>'
-                '<a href="rechazar/{}/" class="button" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;text-decoration:none;font-size:.8em">✗ Rechazar</a>',
-                obj.pk, obj.pk
+                '<div style="display:flex;gap:4px;align-items:center">{}{}{}</div>',
+                editar, aprobar, rechazar,
             )
         if obj.estado == "APROBADA":
+            revocar = self._btn(f"revocar/{obj.pk}/", "↩ Revocar", "#f97316")
             return format_html(
-                '<a href="revocar/{}/" class="button" style="background:#f97316;color:#fff;padding:2px 8px;border-radius:4px;text-decoration:none;font-size:.8em">↩ Revocar</a>',
-                obj.pk
+                '<div style="display:flex;gap:4px;align-items:center">{}{}</div>',
+                editar, revocar,
             )
-        return "—"
+        return format_html('<div>{}</div>', editar)
 
     # ── URLs personalizadas para los botones ─────────────────────────────
     def get_urls(self):
