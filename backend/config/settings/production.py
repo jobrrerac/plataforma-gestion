@@ -5,6 +5,10 @@ DEBUG = False
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
+# Necesario detrás del ingress de Azure para que pasen los POST con CSRF
+# (ej: https://miapp.azurewebsites.net)
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
 # Cookies seguras (requiere HTTPS en el servidor)
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True

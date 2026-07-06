@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose *)",
+      "Bash(docker compose exec -T web python manage.py shell -c ' *)"
+    ]
+  }
+}

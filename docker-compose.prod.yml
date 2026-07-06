@@ -12,8 +12,10 @@ services:
       --error-logfile -
     volumes:
       - static_volume:/app/staticfiles
-    ports:
-      - "8000:8000"
+    # Sin "ports": gunicorn solo es alcanzable desde nginx en la red interna.
+    # Publicar 8000 permitiría saltarse nginx (TLS, límite de body).
+    expose:
+      - "8000"
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
     env_file:

@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
@@ -7,7 +9,8 @@ from apps.accounts.views import LoginRateLimitView
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
-    path("admin/login/", lambda req: redirect(f"/login/?next={req.GET.get('next', '/admin/')}")),
+    # (urlencode evita inyectar parámetros extra vía ?next=)
+    path("admin/login/", lambda req: redirect("/login/?" + urlencode({"next": req.GET.get("next", "/admin/")}))),
     path("admin/", admin.site.urls),
     # API
     path("api/", include("apps.core.urls")),

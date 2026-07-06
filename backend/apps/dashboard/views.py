@@ -10,7 +10,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from apps.core.models import Recurso, Proyecto, Skill
 from apps.assignments.models import Asignacion
-from apps.calendar_engine.services import es_habil
+from apps.calendar_engine.services import CalendarioRango
 from decimal import Decimal
 from math import ceil
 from apps.assignments.services import disponibilidad_recursos, crear_solicitud, analizar_conflictos, capacidad_maxima_dia
@@ -63,6 +63,14 @@ class OcupacionAPIView(APIView):
             ).select_related("recurso", "proyecto")
         )
 
+        # Calendario precargado (días no laborables + indisponibilidades) en 2 queries
+        cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
+
+        puede_ver_datos_personales = (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=["Admin", "PM"]).exists()
+        )
+
         result = []
         for recurso in recursos:
             asig_recurso = [a for a in asignaciones if a.recurso_id == recurso.pk]
@@ -70,7 +78,7 @@ class OcupacionAPIView(APIView):
             detalle_por_dia = []
             cur = fecha_inicio
             while cur <= fecha_fin:
-                habil = es_habil(cur, recurso)
+                habil = cal.es_habil(cur, recurso)
                 if habil:
                     asig_hoy = [a for a in asig_recurso if a.fecha_inicio <= cur <= a.fecha_fin]
                     horas = sum(float(a.intensidad_diaria) for a in asig_hoy)
@@ -97,10 +105,6 @@ class OcupacionAPIView(APIView):
             else:
                 horas_hoy = 0
 
-            puede_ver_datos_personales = (
-                request.user.is_superuser
-                or request.user.groups.filter(name__in=["Admin", "PM"]).exists()
-            )
             entry = {
                 "id": recurso.pk,
                 "nombre": recurso.nombre,

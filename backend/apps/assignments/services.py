@@ -2,7 +2,11 @@ from math import ceil
 from decimal import Decimal
 from datetime import date, timedelta
 from django.db import transaction
-from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles, es_habil
+from apps.calendar_engine.services import (
+    CalendarioRango,
+    calcular_fecha_fin as _cal_fecha_fin,
+    contar_dias_habiles,
+)
 from .models import Asignacion, LogAuditoria
 from apps.core.models import TarifaVigente
 
@@ -26,13 +30,23 @@ def calcular_fecha_fin(recurso, fecha_inicio, horas_totales, intensidad_diaria):
 
 def calcular_horas_jornada_completa(fecha_inicio: date, fecha_fin: date, recurso=None) -> int:
     """Suma las horas máximas disponibles por cada día hábil del rango."""
+    cal = CalendarioRango(fecha_inicio, fecha_fin, [recurso] if recurso is not None else None)
     total = 0.0
     fecha = fecha_inicio
     while fecha <= fecha_fin:
-        if es_habil(fecha, recurso):
+        if cal.es_habil(fecha, recurso):
             total += capacidad_maxima_dia(fecha)
         fecha += timedelta(days=1)
     return ceil(total)
+
+
+def _iter_habiles(cal: CalendarioRango, recurso, fecha_inicio: date, fecha_fin: date):
+    """Itera los días hábiles de un rango usando un calendario ya precargado."""
+    fecha = fecha_inicio
+    while fecha <= fecha_fin:
+        if cal.es_habil(fecha, recurso):
+            yield fecha
+        fecha += timedelta(days=1)
 
 
 def _carga_propia(asignacion, fecha: date) -> float:
@@ -55,16 +69,49 @@ def carga_en_fecha(recurso, fecha, excluir_id=None) -> float:
     return sum(_carga_propia(a, fecha) for a in qs)
 
 
+def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None) -> dict:
+    """
+    Precalcula en una sola query la carga diaria (asignaciones APROBADAS)
+    de varios recursos en un rango. Retorna dict[recurso_id][fecha] -> horas.
+    Equivale a llamar carga_en_fecha() por cada día, sin el costo de una
+    query por día.
+    """
+    qs = Asignacion.objects.filter(
+        recurso_id__in=list(recurso_ids),
+        estado="APROBADA",
+        fecha_inicio__lte=fecha_fin,
+        fecha_fin__gte=fecha_inicio,
+    )
+    if excluir_id:
+        qs = qs.exclude(pk=excluir_id)
+
+    carga: dict = {rid: {} for rid in recurso_ids}
+    for a in qs:
+        por_dia = carga.setdefault(a.recurso_id, {})
+        fecha = max(a.fecha_inicio, fecha_inicio)
+        fin = min(a.fecha_fin, fecha_fin)
+        while fecha <= fin:
+            por_dia[fecha] = por_dia.get(fecha, 0.0) + _carga_propia(a, fecha)
+            fecha += timedelta(days=1)
+    return carga
+
+
 def puede_asignar(asignacion) -> tuple[bool, object]:
     """
     Verifica que en ningún día hábil del rango la carga no supere la jornada del día:
       lun–jue → 8.5 h, vie → 8 h (máx 42 h semanales).
     Retorna (True, None) si cabe, (False, fecha_conflicto) si hay sobreasignación.
     """
+    recurso_id = asignacion.recurso_id
+    cal = CalendarioRango(asignacion.fecha_inicio, asignacion.fecha_fin, [recurso_id])
+    carga_dias = mapa_carga(
+        [recurso_id], asignacion.fecha_inicio, asignacion.fecha_fin, excluir_id=asignacion.pk
+    )[recurso_id]
+
     fecha = asignacion.fecha_inicio
     while fecha <= asignacion.fecha_fin:
-        if es_habil(fecha, asignacion.recurso):
-            carga = carga_en_fecha(asignacion.recurso, fecha, excluir_id=asignacion.pk)
+        if cal.es_habil(fecha, recurso_id):
+            carga = carga_dias.get(fecha, 0.0)
             if carga + _carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
                 return False, fecha
         fecha += timedelta(days=1)
@@ -98,12 +145,14 @@ def aprobar_asignacion(asignacion, actor):
 
 def detalle_dias_recurso(recurso, fecha_inicio: date, fecha_fin: date) -> list:
     """Detalle de ocupación por día hábil para un único recurso."""
+    cal = CalendarioRango(fecha_inicio, fecha_fin, [recurso])
+    carga_dias = mapa_carga([recurso.pk], fecha_inicio, fecha_fin)[recurso.pk]
     result = []
     fecha = fecha_inicio
     while fecha <= fecha_fin:
-        if es_habil(fecha, recurso):
+        if cal.es_habil(fecha, recurso):
             cap = capacidad_maxima_dia(fecha)
-            carga = carga_en_fecha(recurso, fecha)
+            carga = carga_dias.get(fecha, 0.0)
             libre = max(0.0, cap - carga)
             pct_ocu = round(100.0 * min(carga, cap) / cap, 1) if cap > 0 else 0.0
             result.append({
@@ -131,8 +180,13 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
     if skills:
         qs = qs.filter(skills__nombre__in=skills).distinct()
 
+    recursos = list(qs)
+    cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
+    cargas = mapa_carga([r.pk for r in recursos], fecha_inicio, fecha_fin)
+
     resultados = []
-    for recurso in qs:
+    for recurso in recursos:
+        carga_dias = cargas.get(recurso.pk, {})
         horas_cap = 0.0
         horas_ocupadas = 0.0
         dias_habiles = 0
@@ -141,9 +195,9 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
 
         fecha = fecha_inicio
         while fecha <= fecha_fin:
-            if es_habil(fecha, recurso):
+            if cal.es_habil(fecha, recurso):
                 cap = capacidad_maxima_dia(fecha)
-                carga = carga_en_fecha(recurso, fecha)
+                carga = carga_dias.get(fecha, 0.0)
                 libre = max(0.0, cap - carga)
                 pct_ocu = round(100.0 * min(carga, cap) / cap, 1) if cap > 0 else 0.0
                 horas_cap += cap
@@ -207,10 +261,13 @@ def calcular_solicitud_horas(recurso, fecha_inicio: date, horas_target: float, i
     fecha = fecha_inicio
     limite = fecha_inicio + timedelta(days=730)
 
+    cal = CalendarioRango(fecha_inicio, limite, [recurso])
+    carga_dias = mapa_carga([recurso.pk], fecha_inicio, limite)[recurso.pk]
+
     while acum < horas_target and fecha <= limite:
-        if es_habil(fecha, recurso):
+        if cal.es_habil(fecha, recurso):
             cap = capacidad_maxima_dia(fecha)
-            carga_existente = carga_en_fecha(recurso, fecha)
+            carga_existente = carga_dias.get(fecha, 0.0)
             h_dia = cap if jornada_completa else intensidad
 
             if carga_existente + h_dia > cap:
@@ -257,12 +314,19 @@ def analizar_conflictos(asignacion):
     Detecta días con sobreasignación y calcula la nueva fecha_fin si se recomputa saltándolos.
     Retorna (conflict_dates: list[date], nueva_fecha_fin: date|None, nuevas_horas: int|None).
     """
+    recurso_id = asignacion.recurso_id
+    limite = asignacion.fecha_inicio + timedelta(days=730)
+    cal = CalendarioRango(asignacion.fecha_inicio, limite, [recurso_id])
+    carga_dias = mapa_carga(
+        [recurso_id], asignacion.fecha_inicio, asignacion.fecha_fin, excluir_id=asignacion.pk
+    )[recurso_id]
+
     conflict_dates = []
     conflict_set = set()
     fecha = asignacion.fecha_inicio
     while fecha <= asignacion.fecha_fin:
-        if es_habil(fecha, asignacion.recurso):
-            carga = carga_en_fecha(asignacion.recurso, fecha, excluir_id=asignacion.pk)
+        if cal.es_habil(fecha, recurso_id):
+            carga = carga_dias.get(fecha, 0.0)
             if carga + _carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
                 conflict_dates.append(fecha)
                 conflict_set.add(fecha)
@@ -271,18 +335,17 @@ def analizar_conflictos(asignacion):
     if not conflict_dates:
         return [], None, None
 
-    needed = asignacion.dias_habiles or contar_dias_habiles(
-        asignacion.fecha_inicio, asignacion.fecha_fin, asignacion.recurso
+    needed = asignacion.dias_habiles or sum(
+        1 for _ in _iter_habiles(cal, recurso_id, asignacion.fecha_inicio, asignacion.fecha_fin)
     )
 
     count = 0
     total_horas = 0.0
     nueva_fecha_fin = asignacion.fecha_inicio
     fecha = asignacion.fecha_inicio
-    limite = asignacion.fecha_inicio + timedelta(days=730)
 
     while count < needed and fecha <= limite:
-        if es_habil(fecha, asignacion.recurso) and fecha not in conflict_set:
+        if cal.es_habil(fecha, recurso_id) and fecha not in conflict_set:
             count += 1
             total_horas += (
                 capacidad_maxima_dia(fecha) if asignacion.jornada_completa

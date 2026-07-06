@@ -13,7 +13,12 @@ class FeriadosView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        year = int(request.query_params.get("year", date.today().year))
+        try:
+            year = int(request.query_params.get("year", date.today().year))
+        except (TypeError, ValueError):
+            return Response({"error": "Año inválido."}, status=400)
+        if not (2000 <= year <= 2100):
+            return Response({"error": "Año fuera de rango (2000–2100)."}, status=400)
         return Response(feriados_en_rango(date(year, 1, 1), date(year, 12, 31)))
 
 
