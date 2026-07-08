@@ -3,6 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html
+from apps.accounts.roles import es_admin
 from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles
 from .models import Asignacion, LogAuditoria
 from django.shortcuts import render as dj_render
@@ -97,13 +98,13 @@ class AsignacionAdmin(admin.ModelAdmin):
         js = ["assignments/admin_asignacion.js"]
 
     def has_add_permission(self, request):
-        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return es_admin(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return es_admin(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return es_admin(request.user)
 
     def changelist_view(self, request, extra_context=None):
         if not self.has_add_permission(request):
@@ -180,7 +181,7 @@ class AsignacionAdmin(admin.ModelAdmin):
         return HttpResponseRedirect(reverse("admin:assignments_asignacion_changelist"))
 
     def _es_admin(self, request):
-        return request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return es_admin(request.user)
 
     def view_aprobar(self, request, pk):
         if not self._es_admin(request):

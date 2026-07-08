@@ -1,4 +1,3 @@
-import json
 from django.contrib import admin
 from django.utils.html import format_html, mark_safe, escape
 from .models import Recurso, Proyecto, Skill, RecursoSkill, Cluster, TarifaVigente

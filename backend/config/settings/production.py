@@ -19,7 +19,7 @@ CSRF_COOKIE_HTTPONLY = True
 # Headers de seguridad
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
-REFERRER_POLICY = "same-origin"
+SECURE_REFERRER_POLICY = "same-origin"
 
 # Azure Container Apps (y cualquier proxy/LB) termina TLS en el ingress y reenvía HTTP al
 # contenedor. Sin este header Django no detecta HTTPS y puede entrar en loop de redirección.
@@ -28,6 +28,17 @@ SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 # SECURE_HSTS_PRELOAD = True  # activar tras confirmar que el dominio funciona bien varios días
+
+# Cache compartido entre workers/instancias. El rate limiting del login cuenta
+# intentos en el cache: con LocMemCache (default) el contador es por proceso y
+# gunicorn corre varios workers, así que el límite real se multiplica.
+# Requiere crear la tabla una vez: python manage.py createcachetable
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+    }
+}
 
 # Sin BasicAuthentication en producción
 REST_FRAMEWORK = {

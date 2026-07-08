@@ -13,6 +13,7 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from apps.accounts.roles import es_admin_o_pm
 from apps.core.carga_utils import leer_csv, parse_fecha
 from apps.core.models import Proyecto
 
@@ -91,8 +92,8 @@ class Command(BaseCommand):
         try:
             pm = User.objects.get(username=pm_username)
         except User.DoesNotExist:
-            raise ValueError(f"pm_username '{pm_username}' no existe (cargue primero los usuarios)")
-        if not (pm.is_superuser or pm.groups.filter(name__in=["Admin", "PM"]).exists()):
+            raise ValueError(f"pm_username '{pm_username}' no existe (cargue primero los usuarios)") from None
+        if not es_admin_o_pm(pm):
             self.stderr.write(self.style.WARNING(
                 f"  · aviso: '{pm_username}' no pertenece a Admin/PM; se asigna igual."
             ))

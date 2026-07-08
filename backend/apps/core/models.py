@@ -90,6 +90,23 @@ class Recurso(SoftDeleteModel):
         return f"{self.nombre} ({self.get_banda_display()})"
 
 
+def recursos_asignables():
+    """
+    Recursos que pueden recibir asignaciones (los que se muestran en el
+    dashboard y en el buscador de solicitudes): activos y cuyo usuario de
+    login NO es Admin, PM, staff ni superusuario. Los recursos sin usuario
+    vinculado se consideran asignables.
+    """
+    from apps.accounts.roles import ADMIN, PM
+
+    return (
+        Recurso.objects.filter(activo=True)
+        .exclude(usuario__is_staff=True)
+        .exclude(usuario__is_superuser=True)
+        .exclude(usuario__groups__name__in=[ADMIN, PM])
+    )
+
+
 class RecursoSkill(models.Model):
     """Relación Recurso↔Skill con nivel de dominio (suficiencia)."""
     SUFICIENCIA_CHOICES = [

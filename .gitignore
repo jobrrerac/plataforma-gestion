@@ -18,10 +18,13 @@ db.sqlite3
 staticfiles/
 mediafiles/
 
-# Entorno 
+# Entorno
 .env
 .env.local
 .env.*.local
+
+# Reportes de credenciales generadas (contraseñas en texto plano — nunca a git)
+credenciales*.csv
 
 # Docker
 postgres_data/

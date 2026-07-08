@@ -296,6 +296,9 @@ docker compose cp web:/tmp/credenciales.csv ./credenciales_produccion.csv
 [ ] Aplicar migraciones:
       docker compose exec web python manage.py migrate
 
+[ ] Crear la tabla de cache (solo producción; la usa el rate limiting del login):
+      docker compose exec web python manage.py createcachetable
+
 [ ] Crear superusuario admin:
       docker compose exec web python manage.py createsuperuser
 

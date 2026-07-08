@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.accounts.roles import puede_ver_datos_personales
 from .models import Recurso, Proyecto
 
 
@@ -13,11 +15,8 @@ class RecursoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        if request:
-            u = request.user
-            puede_ver_email = u.is_superuser or u.groups.filter(name__in=["Admin", "PM"]).exists()
-            if not puede_ver_email:
-                data.pop("email", None)
+        if request and not puede_ver_datos_personales(request.user):
+            data.pop("email", None)
         return data
 
 

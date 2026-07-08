@@ -1,0 +1,13 @@
+# Config de ruff (linter). CI lo corre con: ruff check backend
+target-version = "py312"
+line-length = 120
+
+[lint]
+# Reglas por defecto (pyflakes + errores de pycodestyle) + bugbear.
+# E501 (línea larga) desactivado: hay líneas largas legadas; no bloquear CI por eso.
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# Los settings usan `from .base import *` a propósito
+"backend/config/settings/*.py" = ["F401", "F403", "F405"]

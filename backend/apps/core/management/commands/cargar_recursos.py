@@ -212,7 +212,7 @@ class Command(BaseCommand):
                 try:
                     nivel = int(nivel_raw.strip())
                 except ValueError:
-                    raise ValueError(f"nivel de skill inválido en '{item}' (use skill:1-5)")
+                    raise ValueError(f"nivel de skill inválido en '{item}' (use skill:1-5)") from None
             else:
                 nombre, nivel = item, 3
             nombre = nombre.strip()
@@ -248,7 +248,7 @@ class Command(BaseCommand):
         try:
             valor = Decimal(valor_raw.replace(",", "."))
         except InvalidOperation:
-            raise ValueError(f"tarifa_valor_hora inválida: '{valor_raw}'")
+            raise ValueError(f"tarifa_valor_hora inválida: '{valor_raw}'") from None
         if valor <= 0:
             raise ValueError("tarifa_valor_hora debe ser mayor a 0")
         fecha = parse_fecha(fecha_raw, "tarifa_fecha_desde")

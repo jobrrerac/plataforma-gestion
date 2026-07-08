@@ -37,6 +37,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check backend
+
       - name: Run tests
         working-directory: backend
         env:

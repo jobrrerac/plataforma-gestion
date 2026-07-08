@@ -49,8 +49,9 @@ def _iter_habiles(cal: CalendarioRango, recurso, fecha_inicio: date, fecha_fin: 
         fecha += timedelta(days=1)
 
 
-def _carga_propia(asignacion, fecha: date) -> float:
-    """Carga real de una asignación en un día: jornada completa usa el tope del día."""
+def carga_propia(asignacion, fecha: date) -> float:
+    """Carga real de una asignación en un día: jornada completa usa el tope del
+    día (8.5 lun–jue / 8 vie), no el placeholder de intensidad_diaria."""
     if asignacion.jornada_completa:
         return capacidad_maxima_dia(fecha)
     return float(asignacion.intensidad_diaria)
@@ -66,7 +67,7 @@ def carga_en_fecha(recurso, fecha, excluir_id=None) -> float:
     )
     if excluir_id:
         qs = qs.exclude(pk=excluir_id)
-    return sum(_carga_propia(a, fecha) for a in qs)
+    return sum(carga_propia(a, fecha) for a in qs)
 
 
 def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None) -> dict:
@@ -91,7 +92,7 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
         fecha = max(a.fecha_inicio, fecha_inicio)
         fin = min(a.fecha_fin, fecha_fin)
         while fecha <= fin:
-            por_dia[fecha] = por_dia.get(fecha, 0.0) + _carga_propia(a, fecha)
+            por_dia[fecha] = por_dia.get(fecha, 0.0) + carga_propia(a, fecha)
             fecha += timedelta(days=1)
     return carga
 
@@ -112,7 +113,7 @@ def puede_asignar(asignacion) -> tuple[bool, object]:
     while fecha <= asignacion.fecha_fin:
         if cal.es_habil(fecha, recurso_id):
             carga = carga_dias.get(fecha, 0.0)
-            if carga + _carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
+            if carga + carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
                 return False, fecha
         fecha += timedelta(days=1)
     return True, None
@@ -174,9 +175,9 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
     Filtra por skills si se pasa una lista de nombres.
     Ordena de más a menos disponible.
     """
-    from apps.core.models import Recurso
+    from apps.core.models import recursos_asignables
 
-    qs = Recurso.objects.prefetch_related("recurso_skills__skill").filter(activo=True).order_by("nombre")
+    qs = recursos_asignables().prefetch_related("recurso_skills__skill").order_by("nombre")
     if skills:
         qs = qs.filter(skills__nombre__in=skills).distinct()
 
@@ -327,7 +328,7 @@ def analizar_conflictos(asignacion):
     while fecha <= asignacion.fecha_fin:
         if cal.es_habil(fecha, recurso_id):
             carga = carga_dias.get(fecha, 0.0)
-            if carga + _carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
+            if carga + carga_propia(asignacion, fecha) > capacidad_maxima_dia(fecha):
                 conflict_dates.append(fecha)
                 conflict_set.add(fecha)
         fecha += timedelta(days=1)

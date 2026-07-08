@@ -8,12 +8,16 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
-from apps.core.models import Recurso, Proyecto, Skill
+from apps.accounts.roles import es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales
+from apps.core.models import Recurso, Proyecto, Skill, recursos_asignables
 from apps.assignments.models import Asignacion
 from apps.calendar_engine.services import CalendarioRango
 from decimal import Decimal
 from math import ceil
-from apps.assignments.services import disponibilidad_recursos, crear_solicitud, analizar_conflictos, capacidad_maxima_dia
+from apps.assignments.services import (
+    disponibilidad_recursos, crear_solicitud, analizar_conflictos,
+    capacidad_maxima_dia, carga_propia,
+)
 
 
 class PMOAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
@@ -22,8 +26,7 @@ class PMOAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     raise_exception = True  # devuelve 403 en vez de redirigir al login si ya está autenticado
 
     def test_func(self):
-        u = self.request.user
-        return u.is_superuser or u.groups.filter(name__in=["Admin", "PM"]).exists()
+        return es_admin_o_pm(self.request.user)
 
 
 class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
@@ -52,7 +55,8 @@ class OcupacionAPIView(APIView):
         if (fecha_fin - fecha_inicio).days > 90:
             return Response({"error": "El rango máximo es 90 días."}, status=400)
 
-        recursos = list(Recurso.objects.filter(activo=True).order_by("nombre"))
+        # Solo recursos asignables: los Admin/PM/staff no aparecen en el heatmap
+        recursos = list(recursos_asignables().order_by("nombre"))
 
         # Prefetch de todas las asignaciones aprobadas en el rango (una sola query)
         asignaciones = list(
@@ -66,10 +70,7 @@ class OcupacionAPIView(APIView):
         # Calendario precargado (días no laborables + indisponibilidades) en 2 queries
         cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
 
-        puede_ver_datos_personales = (
-            request.user.is_superuser
-            or request.user.groups.filter(name__in=["Admin", "PM"]).exists()
-        )
+        ve_datos_personales = puede_ver_datos_personales(request.user)
 
         result = []
         for recurso in recursos:
@@ -81,7 +82,9 @@ class OcupacionAPIView(APIView):
                 habil = cal.es_habil(cur, recurso)
                 if habil:
                     asig_hoy = [a for a in asig_recurso if a.fecha_inicio <= cur <= a.fecha_fin]
-                    horas = sum(float(a.intensidad_diaria) for a in asig_hoy)
+                    # carga_propia: jornada completa cuenta como el tope del día
+                    # (8.5 lun–jue / 8 vie), no como su intensidad placeholder
+                    horas = sum(carga_propia(a, cur) for a in asig_hoy)
                     detalle_por_dia.append({
                         "fecha": cur.isoformat(),
                         "horas_asignadas": round(horas, 2),
@@ -101,7 +104,7 @@ class OcupacionAPIView(APIView):
             # Estado del día de hoy
             if fecha_inicio <= hoy <= fecha_fin:
                 asig_hoy_list = [a for a in asig_recurso if a.fecha_inicio <= hoy <= a.fecha_fin]
-                horas_hoy = sum(float(a.intensidad_diaria) for a in asig_hoy_list)
+                horas_hoy = sum(carga_propia(a, hoy) for a in asig_hoy_list)
             else:
                 horas_hoy = 0
 
@@ -115,7 +118,7 @@ class OcupacionAPIView(APIView):
                 "asignaciones_activas": len(asig_recurso),
                 "detalle_por_dia": detalle_por_dia,
             }
-            if puede_ver_datos_personales:
+            if ve_datos_personales:
                 entry["email"] = recurso.email
             result.append(entry)
 
@@ -185,7 +188,7 @@ class SolicitudView(PMOAdminRequiredMixin, View):
             "intensidad_busqueda": intensidad_str,
             "modo_busqueda": modo_busqueda,
             "error": error,
-            "puede_ver_costos": not request.user.groups.filter(name="Ingeniero").exists(),
+            "puede_ver_costos": puede_ver_costos(request.user),
         })
 
 
@@ -201,7 +204,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         intensidad_crear = request.GET.get("intensidad_crear") or request.POST.get("intensidad_crear", "")
 
         try:
-            recurso = Recurso.objects.prefetch_related("recurso_skills__skill").get(pk=recurso_id, activo=True)
+            recurso = recursos_asignables().prefetch_related("recurso_skills__skill").get(pk=recurso_id)
             fi = date.fromisoformat(fecha_inicio_str)
             ff = date.fromisoformat(fecha_fin_str) if fecha_fin_str else fi
         except Exception:
@@ -228,7 +231,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             "detalle_dias": detalle_dias,
             "dias_habiles": dias_habiles,
             "tarifa": tarifa,
-            "puede_ver_costos": not request.user.groups.filter(name="Ingeniero").exists(),
+            "puede_ver_costos": puede_ver_costos(request.user),
             "modo_crear": modo_crear,
             "horas_crear": horas_crear,
             "intensidad_crear": intensidad_crear,
@@ -269,7 +272,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
 
     def _post_horas(self, request, ctx, recurso, fi):
         """Crea la solicitud en modo 'Por horas totales', calculando fecha_fin real."""
-        from apps.assignments.services import calcular_solicitud_horas, crear_solicitud_por_horas
+        from apps.assignments.services import crear_solicitud_por_horas
 
         horas_raw = request.POST.get("horas_crear", "").strip()
         jornada_completa = request.POST.get("jornada_completa") == "on"
@@ -388,9 +391,10 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             })
             return render(request, "dashboard/solicitud_crear.html", ctx)
 
-        # Crear la solicitud (con fecha recomputada si había conflictos)
+        # Crear la solicitud (con fecha recomputada si había conflictos).
+        # Nota: crear_solicitud recalcula las horas a partir del rango final;
+        # nuevas_horas solo se usa para mostrar la alerta de confirmación.
         fecha_fin_final = nueva_fecha_fin if conflict_dates else ff
-        horas_final = nuevas_horas if conflict_dates else horas
 
         asignacion = crear_solicitud(
             recurso=recurso,

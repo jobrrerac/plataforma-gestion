@@ -66,6 +66,10 @@ DATABASES = {
         "PASSWORD": env("POSTGRES_PASSWORD"),
         "HOST": env("POSTGRES_HOST", default="localhost"),
         "PORT": env("POSTGRES_PORT", default="5432"),
+        # Reutilizar conexiones entre requests: sin esto cada request abre una
+        # conexión nueva (caro con una BD gestionada en Azure).
+        "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 
