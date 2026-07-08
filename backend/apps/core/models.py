@@ -168,6 +168,11 @@ class Proyecto(SoftDeleteModel):
         ("CERRADO", "Cerrado"),
     ]
     codigo = models.CharField(max_length=50, unique=True)
+    codigo_pep = models.CharField(
+        max_length=50, unique=True, null=True, blank=True,
+        verbose_name="Código PEP",
+        help_text="Elemento PEP del proyecto en SAP (ej: P-2026-00123). Único cuando se informa.",
+    )
     nombre = models.CharField(max_length=200)
     cliente = models.CharField(max_length=200)
     fecha_inicio = models.DateField()

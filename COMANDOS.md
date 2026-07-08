@@ -38,8 +38,13 @@ docker compose logs -f db
 docker compose exec web python manage.py migrate
 
 # Crear migraciones nuevas (después de cambiar un modelo)
-# IMPORTANTE: siempre pasar los nombres de las apps explícitamente
-docker compose exec web python manage.py makemigrations core calendar_engine assignments accounts
+# IMPORTANTE: siempre pasar los nombres de las apps explícitamente.
+# El contenedor corre como 'appuser' (sin permiso de escritura sobre el código
+# montado), así que makemigrations debe correrse como root:
+docker compose exec -u root web python manage.py makemigrations core calendar_engine assignments accounts
+
+# 'migrate' sí corre normal (solo escribe en la BD, no en el código):
+docker compose exec web python manage.py migrate
 
 # Ver qué migraciones están pendientes
 docker compose exec web python manage.py showmigrations
@@ -56,6 +61,40 @@ docker compose exec web python manage.py createsuperuser
 # Cambiar contraseña de un usuario existente
 docker compose exec web python manage.py changepassword <nombre_usuario>
 ```
+
+---
+
+## Carga masiva de datos (recursos y proyectos)
+
+> Detalle completo de columnas y reglas de negocio en `docs/plantillas/README.md`.
+> Reejecutar es seguro (upsert): lo que ya existe se actualiza, no se duplica.
+
+```bash
+# 0. Requisito una sola vez: crear los grupos de roles (Admin, PM, Ingeniero)
+docker compose exec web python manage.py setup_grupos
+
+# 1. Copiar los CSV al contenedor (la carpeta docs/plantillas NO está montada)
+docker compose cp docs/plantillas/recursos.csv web:/tmp/recursos.csv
+docker compose cp docs/plantillas/proyectos.csv web:/tmp/proyectos.csv
+
+# 2. Simular sin escribir nada (recomendado la primera vez; muestra errores por fila)
+docker compose exec web python manage.py cargar_recursos /tmp/recursos.csv --dry-run
+
+# 3. Cargar recursos/usuarios: crea User + Recurso + tarifa (ingenieros).
+#    Datos de SAP vienen como "Apellidos Nombres" -> usar --orden-nombre apellido-nombre.
+#    Genera un CSV con las contraseñas de los usuarios NUEVOS.
+docker compose exec web python manage.py cargar_recursos /tmp/recursos.csv \
+    --orden-nombre apellido-nombre --reporte /tmp/credenciales.csv
+
+# 4. Cargar proyectos (los PM deben existir ya como usuarios: cargar recursos PRIMERO)
+docker compose exec web python manage.py cargar_proyectos /tmp/proyectos.csv
+
+# 5. Sacar el reporte de credenciales del contenedor a tu máquina
+docker compose cp web:/tmp/credenciales.csv ./credenciales_generadas.csv
+```
+
+> El reporte de credenciales tiene contraseñas en texto plano: entregalo por canal
+> seguro, pedí cambio de clave en el primer ingreso y borralo. No lo subas a git.
 
 ---
 
@@ -212,20 +251,29 @@ docker compose exec web python manage.py migrate
 docker compose exec -T db psql -U postgres plataforma_gestion < datos_produccion.sql
 ```
 
-### Opción B — Llevar solo datos maestros (recursos y proyectos, sin asignaciones de prueba)
+### Opción B — Cargar datos maestros desde CSV (recursos y proyectos)
+
+Para poblar el servidor desde los CSV (útil para la carga inicial de personal y
+proyectos). A diferencia de `loaddata`, los loaders crean también los usuarios de
+login con su rol y generan las credenciales. Detalle en la sección
+"Carga masiva de datos" de arriba y en `docs/plantillas/README.md`.
 
 ```bash
-# 1. En local: limpiar asignaciones de prueba desde /admin/ y luego exportar
-docker compose exec web python manage.py dumpdata core.recurso core.proyecto --indent 2 > fixtures_inicial.json
-
-# 2. Copiar el archivo al servidor
-scp fixtures_inicial.json usuario@ip-servidor:/ruta/plataforma_gestion/
-
-# 3. En el servidor: levantar, migrar y cargar
+# 1. En el servidor: levantar, migrar y crear los grupos de roles
 docker compose up -d --build
 docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
-docker compose exec web python manage.py loaddata fixtures_inicial.json
+docker compose exec web python manage.py setup_grupos
+docker compose exec web python manage.py createsuperuser   # solo el admin inicial
+
+# 2. Copiar los CSV al contenedor y cargarlos (recursos PRIMERO, luego proyectos)
+docker compose cp recursos.csv web:/tmp/recursos.csv
+docker compose cp proyectos.csv web:/tmp/proyectos.csv
+docker compose exec web python manage.py cargar_recursos /tmp/recursos.csv \
+    --orden-nombre apellido-nombre --reporte /tmp/credenciales.csv
+docker compose exec web python manage.py cargar_proyectos /tmp/proyectos.csv
+
+# 3. Sacar el reporte de credenciales del contenedor (entregar seguro y borrar)
+docker compose cp web:/tmp/credenciales.csv ./credenciales_produccion.csv
 ```
 
 ### Checklist de despliegue en servidor

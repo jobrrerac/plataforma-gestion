@@ -27,7 +27,7 @@ class ProyectoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proyecto
         fields = [
-            "id", "codigo", "nombre", "cliente",
+            "id", "codigo", "codigo_pep", "nombre", "cliente",
             "fecha_inicio", "fecha_fin", "estado",
             "pm", "pm_username",
         ]
