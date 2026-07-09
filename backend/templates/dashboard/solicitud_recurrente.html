@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block page_title %}Solicitud Recurrente{% endblock %}
+{% block active_solicitud %}active{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
+<style>
+  /* Calendario: feriados/no laborables en rojo, findes atenuados */
+  .flatpickr-day.dia-no-habil { background:#fee2e2; border-color:#fecaca; color:#b91c1c; font-weight:700; }
+  .flatpickr-day.dia-no-habil:hover { background:#fecaca; }
+  .flatpickr-day.dia-finde { color:#dc2626; opacity:.6; }
+  .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#e0178a; border-color:#e0178a; color:#fff; opacity:1; }
+  body { background: #f4f4f8; }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:20px 2rem; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.25rem; font-weight:800; color:#110d26; margin:0 0 4px; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .card { border:none; border-radius:12px; box-shadow:0 1px 6px rgba(0,0,0,.07); }
+  .card-header-inet { background:#110d26; color:#fff; border-radius:12px 12px 0 0 !important; font-family:'Montserrat',sans-serif; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; padding:10px 16px; }
+  .dia-input { width:80px; text-align:center; }
+  .dia-label { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#4a1f7a; }
+  .badge-ok { background:#d1fae5; color:#14532d; }
+  .badge-no-habil { background:#e5e7eb; color:#374151; }
+  .badge-sin-cupo { background:#fee2e2; color:#7f1d1d; }
+  .resumen-item { display:flex; justify-content:space-between; gap:16px; padding:4px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-strip">
+  <h1>Solicitud <span>Recurrente</span></h1>
+  <p class="text-muted mb-0" style="font-size:.82rem">
+    Patrón semanal — ej: “próximos 4 lunes, 4 h” o “2 semanas: lunes 2 h, miércoles 4 h, viernes 2 h”.
+  </p>
+</div>
+
+<div class="container-fluid px-4 py-4" style="max-width:900px;margin:0">
+
+  {% if errores %}
+  <div class="alert alert-danger py-2">
+    <ul class="mb-0 ps-3">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if creadas %}
+  <!-- ── Resultado: serie creada ─────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header-inet"><i class="bi bi-check-circle me-1"></i> Serie creada</div>
+    <div class="card-body">
+      <p class="mb-3">
+        Se crearon <strong>{{ creadas|length }}</strong> solicitud{{ creadas|length|pluralize:"es" }}
+        para <strong>{{ recurso.nombre }}</strong>
+        ({{ total_horas|floatformat:1 }} h en total), agrupadas en la serie
+        <code>{{ serie|stringformat:"s"|slice:":8" }}</code>.
+        Quedan en estado <span class="badge bg-primary">SOLICITADA</span> pendientes de aprobación.
+      </p>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th>Fecha</th><th>Día</th><th class="text-end">Horas</th><th>Proyecto</th></tr></thead>
+          <tbody>
+            {% for a in creadas %}
+            <tr>
+              <td>{{ a.fecha_inicio }}</td>
+              <td>{{ a.fecha_inicio|date:"l" }}</td>
+              <td class="text-end">{{ a.intensidad_diaria }} h</td>
+              <td>{{ a.proyecto.codigo }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if omitidas %}
+      <div class="alert alert-warning mt-3 mb-0 py-2" style="font-size:.85rem">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>{{ omitidas|length }}</strong> día{{ omitidas|length|pluralize:"s" }} del patrón
+        no se incluyeron:
+        {% for p in omitidas %}
+          {{ p.fecha|date:"D d/m" }}
+          ({% if p.estado == "NO_HABIL" %}no hábil{% else %}sin cupo: {{ p.carga_existente }}h/{{ p.cap }}h ocupadas{% endif %}){% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="mt-3">
+        <a href="/solicitud/" class="btn btn-sm fw-semibold" style="background:#110d26;color:#fff">
+          <i class="bi bi-arrow-left me-1"></i>Volver al buscador
+        </a>
+        <a href="/recurso/{{ recurso.pk }}/" class="btn btn-sm btn-outline-secondary fw-semibold">
+          Ver detalle de {{ recurso.nombre }}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ── Formulario del patrón ───────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header-inet"><i class="bi bi-arrow-repeat me-1"></i> Patrón semanal{% if recurso %} — {{ recurso.nombre }} ({{ recurso.get_banda_display }}){% endif %}</div>
+    <div class="card-body">
+      <form method="post" action="/solicitud/recurrente/">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Recurso <span class="text-danger">*</span></label>
+          <select name="recurso" class="form-select form-select-sm" required style="max-width:560px">
+            <option value="">— Seleccioná un recurso —</option>
+            {% for r in recursos %}
+            <option value="{{ r.pk }}" {% if recurso and recurso.pk == r.pk %}selected{% endif %}>
+              {{ r.nombre }} ({{ r.get_banda_display }})
+            </option>
+            {% endfor %}
+          </select>
+          {% if not recurso %}
+          <div class="text-muted mt-1" style="font-size:.76rem">
+            Tip: desde el <a href="/solicitud/">buscador</a> podés verificar la disponibilidad y llegar acá con el recurso ya elegido (botón <i class="bi bi-arrow-repeat"></i>).
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Proyecto <span class="text-danger">*</span></label>
+          <select name="proyecto" class="form-select form-select-sm" required style="max-width:560px">
+            <option value="">— Seleccioná un proyecto —</option>
+            {% for p in proyectos %}
+            <option value="{{ p.pk }}" {% if proyecto_sel == p.pk|stringformat:"s" %}selected{% endif %}>
+              {{ p.codigo }}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="d-flex gap-3 mb-3 flex-wrap">
+          <div>
+            <label class="form-label fw-semibold mb-1">Desde <span class="text-danger">*</span></label>
+            <input type="date" name="fecha_inicio" id="fi-recurrente" class="form-control form-control-sm"
+                   value="{{ fecha_inicio }}" required style="width:150px">
+          </div>
+          <div>
+            <label class="form-label fw-semibold mb-1">Repetir por (semanas) <span class="text-danger">*</span></label>
+            <input type="number" name="semanas" class="form-control form-control-sm"
+                   value="{{ semanas }}" min="1" max="{{ semanas_max }}" required style="width:110px">
+          </div>
+        </div>
+
+        <div class="form-check form-switch mb-3"
+             title="Apagado: si alguna sesión del patrón cae en un día sin cupo, la serie no se crea. Encendido: esas sesiones se omiten y la serie se crea con las restantes.">
+          <input class="form-check-input" type="checkbox" role="switch" id="chk-flexibles-rec"
+                 name="dias_flexibles" {% if dias_flexibles %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="chk-flexibles-rec" style="font-size:.8rem;color:#4a1f7a;cursor:pointer">
+            Días flexibles <span class="text-muted fw-normal">— permitir omitir sesiones en días sin cupo</span>
+          </label>
+        </div>
+
+        <label class="form-label fw-semibold mb-1">Horas por día de la semana</label>
+        <p class="text-muted mb-2" style="font-size:.78rem">Dejá vacío los días que no aplican. Máximo 8.5 h (lun–jue) / 8 h (vie).</p>
+        <div class="d-flex gap-3 mb-4 flex-wrap">
+          {% for d in dias_form %}
+          <div class="text-center">
+            <div class="dia-label mb-1">{{ d.nombre }}</div>
+            <input type="number" name="h_{{ d.num }}" class="form-control form-control-sm dia-input"
+                   value="{{ d.valor }}" min="0.5" max="8.5" step="0.5" placeholder="—">
+          </div>
+          {% endfor %}
+        </div>
+
+        {% if plan %}
+        <button type="submit" name="accion" value="previsualizar" class="btn btn-sm btn-outline-secondary fw-semibold">
+          <i class="bi bi-arrow-clockwise me-1"></i>Recalcular
+        </button>
+        <button type="submit" name="accion" value="confirmar" class="btn btn-sm fw-semibold"
+                style="background:var(--inet-pink);color:#fff"
+                {% if plan_ok == 0 %}disabled{% endif %}>
+          <i class="bi bi-check-circle me-1"></i>Confirmar {{ plan_ok }} solicitud{{ plan_ok|pluralize:"es" }}
+        </button>
+        {% else %}
+        <button type="submit" name="accion" value="previsualizar" class="btn btn-sm fw-semibold"
+                style="background:#110d26;color:#fff">
+          <i class="bi bi-eye me-1"></i>Previsualizar plan
+        </button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  {% if plan %}
+  <!-- ── Previsualización ────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header-inet">
+      <i class="bi bi-calendar-week me-1"></i>
+      Plan: {{ plan_ok }} de {{ plan|length }} día{{ plan|length|pluralize:"s" }} viable{{ plan_ok|pluralize:"s" }}
+      · {{ plan_horas|floatformat:1 }} h
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Fecha</th><th>Día</th><th class="text-end">Horas</th><th class="text-end">Ocupación previa</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          {% for p in plan %}
+          <tr {% if p.estado != "OK" %}style="opacity:.6"{% endif %}>
+            <td class="ps-3">{{ p.fecha }}</td>
+            <td>{{ p.fecha|date:"l" }}</td>
+            <td class="text-end">{{ p.horas }} h</td>
+            <td class="text-end">{{ p.carga_existente }} / {{ p.cap }} h</td>
+            <td>
+              {% if p.estado == "OK" %}<span class="badge badge-ok">Se creará</span>
+              {% elif p.estado == "NO_HABIL" %}<span class="badge badge-no-habil">No hábil — se omite</span>
+              {% else %}<span class="badge badge-sin-cupo">Sin cupo — se omite</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
+<script src="{% static 'dashboard/calendario_picker.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    inetumCalendario.init('#fi-recurrente');
+  });
+</script>
+{% endblock %}

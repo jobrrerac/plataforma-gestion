@@ -11,6 +11,9 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost"])
 
+# Máscaras de formato SAP (proyecto/PEP/grafo). False = solo avisos; True = bloquea al guardar.
+SAP_VALIDACION_ESTRICTA = env.bool("SAP_VALIDACION_ESTRICTA", default=False)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

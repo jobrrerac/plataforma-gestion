@@ -5,7 +5,13 @@
 
 {% block extra_head %}
   <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
   <style>
+    /* Calendario: feriados/no laborables en rojo, findes atenuados */
+    .flatpickr-day.dia-no-habil { background:#fee2e2; border-color:#fecaca; color:#b91c1c; font-weight:700; }
+    .flatpickr-day.dia-no-habil:hover { background:#fecaca; }
+    .flatpickr-day.dia-finde { color:#dc2626; opacity:.6; }
+    .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#e0178a; border-color:#e0178a; color:#fff; opacity:1; }
     body { background: #f4f4f8; }
 
     /* Availability bar — colores alineados con el heatmap del dashboard:
@@ -94,7 +100,7 @@
 <!-- Page strip con filtros -->
 <div class="page-strip pb-4">
   <h1>Solicitud de <span>Recursos</span></h1>
-  <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período y skills</p>
+  <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período, nombre y skills</p>
 
   <form method="get" action="/solicitud/" id="form-busqueda">
     <input type="hidden" name="modo_busqueda" id="modo_busqueda" value="{{ modo_busqueda|default:'rango' }}">
@@ -112,6 +118,12 @@
                 style="font-size:.72rem;border-radius:6px;padding:3px 12px">
           <i class="bi bi-hourglass-split me-1"></i>Por horas totales
         </button>
+        <span class="vr mx-2" style="opacity:.2"></span>
+        <a href="/solicitud/recurrente/" class="btn btn-sm fw-semibold"
+           title="Crear una solicitud con patrón semanal (ej: lunes 2 h, miércoles 4 h)"
+           style="font-size:.72rem;border-radius:6px;padding:3px 12px;background:#fff;color:var(--inet-pink);border:1px solid var(--inet-pink)">
+          <i class="bi bi-arrow-repeat me-1"></i>Solicitud recurrente
+        </a>
       </div>
 
       <!-- Fila 1A: modo RANGO -->
@@ -179,11 +191,20 @@
         </div>
       </div>
 
-      <!-- Fila 2: Skills + Buscar -->
+      <!-- Fila 2: Nombre + Skills + Buscar -->
       <div class="pt-2 border-top" style="width:100%">
-        <div class="filter-row-label">Skills</div>
-        <div class="d-flex align-items-center gap-2">
-          <div style="flex:1;min-width:0">
+        <div class="filter-row-label">Recurso y skills</div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="input-group input-group-sm flex-shrink-0" style="width:auto">
+            <span class="input-group-text fw-semibold"
+                  style="font-size:.74rem;background:#f8f7ff;border-color:#e0d6f5;color:#4a1f7a;padding:0 10px">
+              Nombre
+            </span>
+            <input type="text" name="nombre" class="form-control"
+                   value="{{ nombre_busqueda }}" placeholder="ej: Pablo"
+                   style="width:180px;border-color:#e0d6f5">
+          </div>
+          <div style="flex:1 1 340px;min-width:340px;max-width:560px">
             <select id="skills-select" name="skills" multiple placeholder="Buscar y agregar skills…">
               {% for sk in skills_disponibles %}
               <option value="{{ sk.nombre }}"
@@ -192,6 +213,15 @@
               </option>
               {% endfor %}
             </select>
+          </div>
+          <div class="form-check form-switch flex-shrink-0 d-flex align-items-center gap-1"
+               title="Apagado: solo se pueden solicitar recursos que caben en lo pedido tal cual. Encendido: se permiten recursos parcialmente ocupados y el sistema ajusta saltando días llenos o extendiendo la fecha fin.">
+            <input class="form-check-input" type="checkbox" role="switch" id="chk-flexibles"
+                   name="dias_flexibles" {% if dias_flexibles %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="chk-flexibles"
+                   style="font-size:.76rem;color:#4a1f7a;white-space:nowrap;cursor:pointer">
+              Días flexibles <i class="bi bi-info-circle text-muted"></i>
+            </label>
           </div>
           <button type="submit" class="btn fw-semibold flex-shrink-0 filter-action-btn"
                   style="background:#110d26;color:#fff;border:none">
@@ -220,7 +250,7 @@
     {% if not resultados %}
     <div class="alert alert-warning">
       <i class="bi bi-info-circle me-1"></i>
-      No se encontraron recursos{% if skills_seleccionados %} con los skills seleccionados{% endif %}.
+      No se encontraron recursos{% if nombre_busqueda %} con nombre "{{ nombre_busqueda }}"{% endif %}{% if skills_seleccionados %} con los skills seleccionados{% endif %}.
     </div>
 
     {% else %}
@@ -236,13 +266,13 @@
       <div class="col-auto">
         <div class="card px-3 py-2 text-center" style="min-width:100px">
           <div class="fw-bold fs-4 text-success" id="cnt-disponibles">—</div>
-          <div class="small text-muted">Con cupo</div>
+          <div class="small text-muted">Disponibles</div>
         </div>
       </div>
       <div class="col-auto">
         <div class="card px-3 py-2 text-center" style="min-width:100px">
           <div class="fw-bold fs-4 text-danger" id="cnt-sin-cupo">—</div>
-          <div class="small text-muted">Sin cupo</div>
+          <div class="small text-muted">No disponibles</div>
         </div>
       </div>
     </div>
@@ -277,7 +307,7 @@
           <tbody>
             {% for r in resultados %}
             {% with pct=r.porcentaje_libre %}
-            <tr class="{% if pct == 0 %}sin-cupo{% endif %}" data-cupo="{{ pct }}">
+            <tr class="{% if not r.elegible %}sin-cupo{% endif %}" data-cupo="{% if r.elegible %}{{ pct }}{% else %}0{% endif %}">
               <td class="ps-3 fw-semibold" style="color:#110d26">{{ r.recurso.nombre }}</td>
 
               <td>
@@ -361,14 +391,38 @@
               </td>
 
               <td class="pe-3">
-                {% if pct > 0 %}
-                <a href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}{% if modo_busqueda == 'horas' %}&modo_crear=horas&horas_crear={{ horas_totales }}&intensidad_crear={{ intensidad_busqueda }}{% endif %}"
-                   class="btn btn-sm fw-semibold"
-                   style="background:var(--inet-pink);color:#fff;border:none;font-size:.78rem;border-radius:7px">
-                  <i class="bi bi-plus-circle me-1"></i>Solicitar
-                </a>
+                {% if r.elegible %}
+                <div class="btn-group">
+                  <a href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}{% if dias_flexibles %}&dias_flexibles=on{% endif %}{% if modo_busqueda == 'horas' %}&modo_crear=horas&horas_crear={{ horas_totales }}&intensidad_crear={{ intensidad_busqueda }}{% endif %}"
+                     class="btn btn-sm fw-semibold"
+                     style="background:var(--inet-pink);color:#fff;border:none;font-size:.78rem;border-radius:7px 0 0 7px">
+                    <i class="bi bi-plus-circle me-1"></i>Solicitar
+                  </a>
+                  <button type="button" class="btn btn-sm dropdown-toggle dropdown-toggle-split"
+                          data-bs-toggle="dropdown" aria-expanded="false"
+                          style="background:var(--inet-pink);color:#fff;border:none;border-left:1px solid rgba(255,255,255,.35);border-radius:0 7px 7px 0">
+                    <span class="visually-hidden">Tipo de solicitud</span>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end" style="font-size:.82rem">
+                    <li>
+                      <a class="dropdown-item" href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}{% if dias_flexibles %}&dias_flexibles=on{% endif %}{% if modo_busqueda == 'horas' %}&modo_crear=horas&horas_crear={{ horas_totales }}&intensidad_crear={{ intensidad_busqueda }}{% endif %}">
+                        <i class="bi bi-calendar-plus me-2" style="color:#e0178a"></i>Puntual
+                        <span class="text-muted d-block" style="font-size:.72rem">Un rango de fechas u horas totales</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" href="/solicitud/recurrente/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}{% if dias_flexibles %}&dias_flexibles=on{% endif %}">
+                        <i class="bi bi-arrow-repeat me-2" style="color:#e0178a"></i>Recurrente
+                        <span class="text-muted d-block" style="font-size:.72rem">Patrón semanal — ej: lunes 2 h, miércoles 4 h</span>
+                      </a>
+                    </li>
+                  </ul>
+                </div>
                 {% else %}
-                <span class="text-muted small">Sin cupo</span>
+                <span class="badge bg-secondary-subtle text-secondary" style="font-size:.72rem;cursor:help"
+                      title="{{ r.motivo_no_elegible }}">
+                  <i class="bi bi-slash-circle me-1"></i>No disponible
+                </span>
                 {% endif %}
               </td>
             </tr>
@@ -438,8 +492,17 @@
 {% endblock %}
 
 {% block scripts %}
+{% load static %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
+<script src="{% static 'dashboard/calendario_picker.js' %}"></script>
 <script>
+  // Fija una fecha respetando el datepicker si está inicializado
+  function setFecha(fp, el, valorIso) {
+    if (fp) { fp.setDate(valorIso, false); }
+    else if (el) { el.value = valorIso; }
+  }
   new TomSelect('#skills-select', {
     plugins: ['remove_button'],
     create: false,
@@ -460,7 +523,7 @@
 
     if (modo === 'horas') {
       // Sincronizar fecha_inicio de rango → horas al cambiar de modo
-      if (fiRango && fiHoras && fiRango.value) fiHoras.value = fiRango.value;
+      if (fiRango && fiHoras && fiRango.value) setFecha(window._fpFiHoras, fiHoras, fiRango.value);
       bloqueRango.style.display = 'none';
       bloqueHoras.style.display = '';
       bloqueRango.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
@@ -469,7 +532,7 @@
       btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
     } else {
       // Sincronizar fecha_inicio de horas → rango al cambiar de modo
-      if (fiHoras && fiRango && fiHoras.value) fiRango.value = fiHoras.value;
+      if (fiHoras && fiRango && fiHoras.value) setFecha(window._fpFiRango, fiRango, fiHoras.value);
       bloqueHoras.style.display = 'none';
       bloqueRango.style.display = '';
       bloqueHoras.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
@@ -501,15 +564,21 @@
       inicio = new Date(inicioInput.value + 'T00:00:00');
     } else {
       inicio = new Date();
-      if (inicioInput) inicioInput.value = fmt(inicio);
+      setFecha(window._fpFiRango, inicioInput, fmt(inicio));
     }
     var fin = new Date(inicio);
     fin.setDate(fin.getDate() + dias - 1);
-    if (finInput) finInput.value = fmt(fin);
+    setFecha(window._fpFin, finInput, fmt(fin));
   }
 
   // ── Inicialización al cargar ──────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
+    // Datepickers con feriados/no laborables en rojo (antes de setModo,
+    // para que el toggle deshabilite también los inputs visibles del picker)
+    window._fpFiRango = inetumCalendario.init('#fi-rango');
+    window._fpFin    = inetumCalendario.init('#bloque-rango [name=fecha_fin]');
+    window._fpFiHoras = inetumCalendario.init('#fi-horas');
+
     // Aplicar modo guardado (si venimos de un submit en modo horas)
     var modoActual = document.getElementById('modo_busqueda').value || 'rango';
     setModo(modoActual);

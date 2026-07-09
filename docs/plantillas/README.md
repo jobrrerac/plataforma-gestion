@@ -85,6 +85,7 @@ docker compose exec web python manage.py cargar_proyectos proyectos.csv
 |---|---|---|
 | `codigo` | Sí | Código interno del proyecto (clave de upsert, único) |
 | `codigo_pep` | No | Elemento PEP en SAP (único cuando se informa) |
+| `grafo` | No | Grafo / orden de red en SAP (único cuando se informa). Jerarquía 1:1:1: proyecto → PEP → grafo |
 | `nombre` | Sí | Nombre del proyecto |
 | `cliente` | Sí | Cliente |
 | `fecha_inicio` | Sí | `YYYY-MM-DD` |

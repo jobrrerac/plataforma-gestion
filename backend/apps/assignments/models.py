@@ -43,6 +43,12 @@ class Asignacion(SoftDeleteModel):
     solicitada_por = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name="asignaciones_solicitadas"
     )
+    # Solicitudes recurrentes: las asignaciones generadas por un mismo patrón
+    # semanal (ej: "próximos 4 lunes, 4 h") comparten esta serie.
+    serie = models.UUIDField(
+        null=True, blank=True, db_index=True, verbose_name="Serie",
+        help_text="Agrupa las asignaciones creadas por una misma solicitud recurrente.",
+    )
 
     class Meta:
         verbose_name = "Asignación"

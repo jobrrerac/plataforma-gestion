@@ -56,3 +56,43 @@ class CalcularFechaFinTests(TestCase):
         self.assertEqual(calcular_fecha_fin(date(2025, 3, 19), 3), date(2025, 3, 21))
         # 2 días desde jue 20 cruzando el lunes 24 (feriado): jue 20, vie 21, mar 25 = 25 mar
         self.assertEqual(calcular_fecha_fin(date(2025, 3, 20), 3), date(2025, 3, 25))
+
+
+class DiasNoHabilesAPITests(TestCase):
+    """Endpoint que alimenta el pintado de feriados en los datepickers."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("u_dnh", password="p")
+        self.client.force_login(self.user)
+
+    def test_incluye_feriados_y_no_laborables(self):
+        DiaNoLaborable.objects.create(
+            fecha=date(2025, 12, 24), descripcion="Cierre navideño", creado_por=self.user,
+        )
+        resp = self.client.get(
+            "/api/calendario/dias-no-habiles/",
+            {"desde": "2025-12-01", "hasta": "2025-12-31"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        por_fecha = {d["fecha"]: d for d in resp.json()}
+        # 25 dic = feriado Colombia; 24 dic = día no laborable de la empresa
+        self.assertEqual(por_fecha["2025-12-25"]["tipo"], "FERIADO")
+        self.assertEqual(por_fecha["2025-12-24"]["tipo"], "NO_LABORABLE")
+        self.assertEqual(por_fecha["2025-12-24"]["nombre"], "Cierre navideño")
+
+    def test_rango_invalido(self):
+        resp = self.client.get("/api/calendario/dias-no-habiles/", {"desde": "2025-01-01"})
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.get(
+            "/api/calendario/dias-no-habiles/",
+            {"desde": "2025-01-01", "hasta": "2030-01-01"},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_requiere_autenticacion(self):
+        self.client.logout()
+        resp = self.client.get(
+            "/api/calendario/dias-no-habiles/",
+            {"desde": "2025-01-01", "hasta": "2025-01-31"},
+        )
+        self.assertIn(resp.status_code, (401, 403))

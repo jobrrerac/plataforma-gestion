@@ -4,7 +4,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.shortcuts import redirect
-from apps.dashboard.views import OcupacionAPIView, OcupacionDashboardView, SolicitudView, SolicitudCrearView, RecursoDetalleView
+from apps.dashboard.views import (
+    OcupacionAPIView, OcupacionDashboardView, SolicitudView,
+    SolicitudCrearView, SolicitudRecurrenteView, RecursoDetalleView,
+)
 from apps.accounts.views import LoginRateLimitView
 
 urlpatterns = [
@@ -22,6 +25,7 @@ urlpatterns = [
     # Vistas UI
     path("solicitud/", SolicitudView.as_view(), name="solicitud"),
     path("solicitud/crear/", SolicitudCrearView.as_view(), name="solicitud-crear"),
+    path("solicitud/recurrente/", SolicitudRecurrenteView.as_view(), name="solicitud-recurrente"),
     path("dashboard/", OcupacionDashboardView.as_view(), name="dashboard"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
     path("login/", LoginRateLimitView.as_view(), name="login"),

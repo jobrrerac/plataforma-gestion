@@ -84,6 +84,12 @@
     <div class="bg-light rounded p-3 text-start mb-3" style="font-size:.9rem">
       <div class="resumen-item"><span class="text-muted">Recurso</span><strong>{{ asignacion_creada.recurso.nombre }}</strong></div>
       <div class="resumen-item"><span class="text-muted">Proyecto</span><strong>{{ asignacion_creada.proyecto }}</strong></div>
+      {% if asignacion_creada.proyecto.codigo_pep %}
+      <div class="resumen-item"><span class="text-muted">Código PEP</span><strong>{{ asignacion_creada.proyecto.codigo_pep }}</strong></div>
+      {% endif %}
+      {% if asignacion_creada.proyecto.grafo %}
+      <div class="resumen-item"><span class="text-muted">Grafo</span><strong>{{ asignacion_creada.proyecto.grafo }}</strong></div>
+      {% endif %}
       <div class="resumen-item"><span class="text-muted">Período</span><strong>{{ asignacion_creada.fecha_inicio }} → {{ asignacion_creada.fecha_fin }}</strong></div>
       <div class="resumen-item"><span class="text-muted">Días hábiles</span><strong>{{ asignacion_creada.dias_habiles }}</strong></div>
       <div class="resumen-item"><span class="text-muted">Horas totales</span><strong>{{ asignacion_creada.horas_totales }} h</strong></div>
@@ -254,6 +260,7 @@
       <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
       <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
       <input type="hidden" name="modo_crear" id="modo_crear" value="{{ modo_crear|default:'rango' }}">
+      {% if dias_flexibles %}<input type="hidden" name="dias_flexibles" value="on">{% endif %}
 
       <!-- Toggle modo -->
       <div class="d-flex gap-1 mb-4">
@@ -291,7 +298,7 @@
           {% for p in proyectos %}
           <option value="{{ p.pk }}"
             {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
-            {{ p.codigo }} — {{ p.nombre }} ({{ p.cliente }})
+            {{ p.codigo }}{% if p.codigo_pep %} · {{ p.codigo_pep }}{% endif %}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
           </option>
           {% endfor %}
         </select>
@@ -403,6 +410,7 @@
           <input type="hidden" name="proyecto" value="{{ post.proyecto }}">
           <input type="hidden" name="intensidad_diaria" value="{{ post.intensidad_diaria }}">
           {% if post.jornada_completa %}<input type="hidden" name="jornada_completa" value="on">{% endif %}
+          {% if dias_flexibles %}<input type="hidden" name="dias_flexibles" value="on">{% endif %}
           <input type="hidden" name="confirmado" value="1">
           <button type="submit" class="btn fw-semibold"
                   style="background:#fd7e14;color:#fff;border:none;border-radius:8px">

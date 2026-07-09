@@ -1,4 +1,4 @@
-codigo,codigo_pep,nombre,cliente,fecha_inicio,fecha_fin,estado,pm_username
-QA-001,P-2026-00123,Portal de Clientes,Banco Andes,2026-07-01,2026-12-31,ACTIVO,carmen.leon@inetum.com
-QA-002,P-2026-00124,Migracion SAP,Retail Sur,2026-08-01,,ACTIVO,carmen.leon@inetum.com
-QA-003,,Mantenimiento Legacy,Banco Andes,2026-01-01,2026-06-30,CERRADO,carmen.leon@inetum.com
+codigo,codigo_pep,grafo,nombre,cliente,fecha_inicio,fecha_fin,estado,pm_username
+QA-001,P-2026-00123,4000123456,Portal de Clientes,Banco Andes,2026-07-01,2026-12-31,ACTIVO,carmen.leon@inetum.com
+QA-002,P-2026-00124,4000123457,Migracion SAP,Retail Sur,2026-08-01,,ACTIVO,carmen.leon@inetum.com
+QA-003,,,Mantenimiento Legacy,Banco Andes,2026-01-01,2026-06-30,CERRADO,carmen.leon@inetum.com

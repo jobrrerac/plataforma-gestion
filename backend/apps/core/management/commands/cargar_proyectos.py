@@ -9,6 +9,7 @@ Uso:
   docker compose exec web python manage.py cargar_proyectos proyectos.csv
   docker compose exec web python manage.py cargar_proyectos proyectos.csv --dry-run
 """
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -16,6 +17,7 @@ from django.db import transaction
 from apps.accounts.roles import es_admin_o_pm
 from apps.core.carga_utils import leer_csv, parse_fecha
 from apps.core.models import Proyecto
+from apps.core.validators import avisos_formato_sap
 
 ESTADOS = {"ACTIVO", "EN_PAUSA", "CERRADO"}
 
@@ -25,7 +27,7 @@ class _Rollback(Exception):
 
 
 class Command(BaseCommand):
-    help = "Carga/actualiza proyectos (con código PEP) desde un CSV."
+    help = "Carga/actualiza proyectos (con código PEP y grafo) desde un CSV."
 
     def add_arguments(self, parser):
         parser.add_argument("archivo", help="Ruta del CSV a cargar.")
@@ -99,12 +101,22 @@ class Command(BaseCommand):
             ))
 
         codigo_pep = (fila.get("codigo_pep") or "").strip() or None
+        grafo = (fila.get("grafo") or "").strip() or None
+
+        # Máscaras SAP: en modo estricto la fila se rechaza; si no, solo se avisa
+        avisos = avisos_formato_sap(codigo=codigo, codigo_pep=codigo_pep, grafo=grafo)
+        if avisos:
+            if getattr(settings, "SAP_VALIDACION_ESTRICTA", False):
+                raise ValueError("; ".join(avisos))
+            for aviso in avisos:
+                self.stderr.write(self.style.WARNING(f"  · aviso: {aviso}"))
 
         proyecto = Proyecto.all_objects.filter(codigo=codigo).first()
         creado = proyecto is None
         if proyecto is None:
             proyecto = Proyecto(codigo=codigo)
         proyecto.codigo_pep = codigo_pep
+        proyecto.grafo = grafo
         proyecto.nombre = nombre
         proyecto.cliente = cliente
         proyecto.fecha_inicio = fecha_inicio

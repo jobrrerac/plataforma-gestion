@@ -1,3 +1,4 @@
+import uuid
 from math import ceil
 from decimal import Decimal
 from django import forms
@@ -71,6 +72,28 @@ class AsignacionAdminForm(forms.ModelForm):
         return cleaned
 
 
+class SerieFilter(admin.SimpleListFilter):
+    """Permite ?serie=<uuid> en el changelist (enlace de la columna Serie).
+    Solo se muestra en la barra lateral cuando el filtro está activo."""
+    title = "Serie"
+    parameter_name = "serie"
+
+    def lookups(self, request, model_admin):
+        valor = request.GET.get(self.parameter_name)
+        if not valor:
+            return []
+        try:
+            uuid.UUID(valor)
+        except ValueError:
+            return []
+        return [(valor, f"↻ {valor[:8]}")]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(serie=self.value())
+        return queryset
+
+
 class LogAuditoriaInline(admin.TabularInline):
     model = LogAuditoria
     extra = 0
@@ -84,10 +107,10 @@ class AsignacionAdmin(admin.ModelAdmin):
     form = AsignacionAdminForm
     list_display = [
         "recurso", "acciones_rapidas", "proyecto", "estado_badge", "modo_asignacion",
-        "horas_totales", "intensidad_diaria", "fecha_inicio", "fecha_fin",
+        "serie_corta", "horas_totales", "intensidad_diaria", "fecha_inicio", "fecha_fin",
     ]
     list_display_links = ["recurso"]
-    list_filter = ["estado", "modo_asignacion", "politica_ausencia", "proyecto"]
+    list_filter = ["estado", "modo_asignacion", "politica_ausencia", "proyecto", SerieFilter]
     search_fields = ["recurso__nombre", "proyecto__codigo"]
     readonly_fields = ["estado", "fecha_fin", "tarifa_aplicada", "costo_estimado", "solicitada_por", "created_at"]
     exclude = ["deleted_at", "updated_at"]
@@ -117,6 +140,18 @@ class AsignacionAdmin(admin.ModelAdmin):
                 level=messages.INFO,
             )
         return super().changelist_view(request, extra_context)
+
+    @admin.display(description="Serie", ordering="serie")
+    def serie_corta(self, obj):
+        """Identificador corto de la serie recurrente; filtra al hacer clic."""
+        if not obj.serie:
+            return format_html('<span style="color:#aaa">—</span>')
+        return format_html(
+            '<a href="?serie={}" title="Ver toda la serie" '
+            'style="font-family:monospace;font-size:.8em;background:#ede8f5;color:#4a1f7a;'
+            'padding:2px 6px;border-radius:4px;text-decoration:none">↻ {}</a>',
+            obj.serie, str(obj.serie)[:8],
+        )
 
     # ── Columna de estado con color ──────────────────────────────────────
     @admin.display(description="Estado", ordering="estado")

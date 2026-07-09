@@ -17,6 +17,7 @@ from math import ceil
 from apps.assignments.services import (
     disponibilidad_recursos, crear_solicitud, analizar_conflictos,
     capacidad_maxima_dia, carga_propia,
+    analizar_recurrencia, crear_solicitudes_recurrentes, SEMANAS_MAX_RECURRENCIA,
 )
 
 
@@ -129,6 +130,38 @@ class OcupacionAPIView(APIView):
         })
 
 
+def marcar_elegibilidad(resultados, dias_flexibles, modo_busqueda, horas_requeridas=None):
+    """
+    Marca cada resultado del buscador con `elegible` y `motivo_no_elegible`.
+
+    Sin "días flexibles" (default) el PM solo puede seleccionar recursos que
+    caben en lo pedido tal cual:
+      - modo horas: horas libres del recurso ≥ horas solicitadas.
+      - modo rango: ningún día del rango completamente lleno (la solicitud no
+        necesitaría recomputo para entrar).
+    Con "días flexibles" basta con que haya alguna hora libre: el sistema
+    ajusta saltando días llenos o extendiendo la fecha fin.
+    """
+    for r in resultados:
+        if dias_flexibles:
+            r["elegible"] = r["horas_libres"] > 0
+            r["motivo_no_elegible"] = "" if r["elegible"] else "Sin horas libres en el período."
+        elif modo_busqueda == "horas" and horas_requeridas:
+            r["elegible"] = r["horas_libres"] >= horas_requeridas
+            r["motivo_no_elegible"] = "" if r["elegible"] else (
+                f"Solo {r['horas_libres']} h libres de las {horas_requeridas} h solicitadas. "
+                "Activá 'Días flexibles' para extender la fecha fin."
+            )
+        else:
+            r["elegible"] = r["horas_libres"] > 0 and r["dias_sin_cupo"] == 0
+            r["motivo_no_elegible"] = "" if r["elegible"] else (
+                f"{r['dias_sin_cupo']} día(s) del rango sin cupo. "
+                "Activá 'Días flexibles' para saltarlos recomputando la fecha fin."
+                if r["horas_libres"] > 0 else "Sin horas libres en el período."
+            )
+    return resultados
+
+
 class SolicitudView(PMOAdminRequiredMixin, View):
     """Buscador de disponibilidad de recursos para crear solicitudes de asignación."""
 
@@ -139,10 +172,13 @@ class SolicitudView(PMOAdminRequiredMixin, View):
         intensidad_str   = request.GET.get("intensidad_busqueda", "")
         modo_busqueda    = request.GET.get("modo_busqueda", "rango")  # "rango" | "horas"
         skills_sel       = request.GET.getlist("skills")
+        nombre_busqueda  = request.GET.get("nombre", "").strip()
+        dias_flexibles   = request.GET.get("dias_flexibles") == "on"
 
         resultados = None
         error = None
         fi = ff = None
+        horas_total = None
 
         try:
             if fecha_inicio_str:
@@ -164,7 +200,7 @@ class SolicitudView(PMOAdminRequiredMixin, View):
                     else:
                         ff = _cal_ff(fi, dias_nec)
                         fecha_fin_str = ff.isoformat()
-                        resultados = disponibilidad_recursos(fi, ff, skills_sel or None)
+                        resultados = disponibilidad_recursos(fi, ff, skills_sel or None, nombre_busqueda or None)
 
             elif fecha_inicio_str and fecha_fin_str:
                 ff = date.fromisoformat(fecha_fin_str)
@@ -173,20 +209,25 @@ class SolicitudView(PMOAdminRequiredMixin, View):
                 elif (ff - fi).days > 180:
                     error = "El rango máximo de búsqueda es 180 días."
                 else:
-                    resultados = disponibilidad_recursos(fi, ff, skills_sel or None)
+                    resultados = disponibilidad_recursos(fi, ff, skills_sel or None, nombre_busqueda or None)
 
         except (ValueError, TypeError):
             error = "Valores inválidos en el formulario."
+
+        if resultados is not None:
+            marcar_elegibilidad(resultados, dias_flexibles, modo_busqueda, horas_total)
 
         return render(request, "dashboard/solicitud.html", {
             "resultados": resultados,
             "skills_disponibles": Skill.objects.all(),
             "skills_seleccionados": skills_sel,
+            "nombre_busqueda": nombre_busqueda,
             "fecha_inicio": fecha_inicio_str,
             "fecha_fin": fecha_fin_str,
             "horas_totales": horas_str,
             "intensidad_busqueda": intensidad_str,
             "modo_busqueda": modo_busqueda,
+            "dias_flexibles": dias_flexibles,
             "error": error,
             "puede_ver_costos": puede_ver_costos(request.user),
         })
@@ -202,6 +243,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         modo_crear = request.GET.get("modo_crear") or request.POST.get("modo_crear", "rango")
         horas_crear = request.GET.get("horas_crear") or request.POST.get("horas_crear", "")
         intensidad_crear = request.GET.get("intensidad_crear") or request.POST.get("intensidad_crear", "")
+        dias_flexibles = (request.GET.get("dias_flexibles") or request.POST.get("dias_flexibles")) == "on"
 
         try:
             recurso = recursos_asignables().prefetch_related("recurso_skills__skill").get(pk=recurso_id)
@@ -235,6 +277,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             "modo_crear": modo_crear,
             "horas_crear": horas_crear,
             "intensidad_crear": intensidad_crear,
+            "dias_flexibles": dias_flexibles,
         }
 
     def get(self, request):
@@ -272,7 +315,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
 
     def _post_horas(self, request, ctx, recurso, fi):
         """Crea la solicitud en modo 'Por horas totales', calculando fecha_fin real."""
-        from apps.assignments.services import crear_solicitud_por_horas
+        from apps.assignments.services import calcular_solicitud_horas, crear_solicitud_por_horas
 
         horas_raw = request.POST.get("horas_crear", "").strip()
         jornada_completa = request.POST.get("jornada_completa") == "on"
@@ -312,6 +355,21 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             ctx["errores"] = errores
             ctx["post"] = request.POST
             return render(request, "dashboard/solicitud_crear.html", ctx)
+
+        # Sin días flexibles el relleno no puede saltar días ocupados: si el
+        # cálculo detecta días bloqueados, el recurso no está disponible tal cual.
+        if not ctx["dias_flexibles"]:
+            _, _, _, dias_bloqueados_previos = calcular_solicitud_horas(
+                recurso, fi, float(horas_target), intensidad, jornada_completa,
+            )
+            if dias_bloqueados_previos:
+                ctx["errores"] = [
+                    f"El recurso tiene {len(dias_bloqueados_previos)} día(s) sin cupo en el período "
+                    "necesario para completar las horas. Activá 'Días flexibles' en la búsqueda "
+                    "para saltarlos extendiendo la fecha fin."
+                ]
+                ctx["post"] = request.POST
+                return render(request, "dashboard/solicitud_crear.html", ctx)
 
         asignacion, dias_bloqueados = crear_solicitud_por_horas(
             recurso=recurso,
@@ -380,6 +438,15 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         )
         conflict_dates, nueva_fecha_fin, nuevas_horas = analizar_conflictos(asig_temp)
 
+        # Sin días flexibles no se ofrece recomputo: el rango pedido debe entrar tal cual
+        if conflict_dates and not ctx["dias_flexibles"]:
+            ctx["errores"] = [
+                f"El recurso no está disponible en {len(conflict_dates)} día(s) del rango solicitado. "
+                "Activá 'Días flexibles' en la búsqueda si aceptás recomputar la fecha fin saltándolos."
+            ]
+            ctx["post"] = request.POST
+            return render(request, "dashboard/solicitud_crear.html", ctx)
+
         if conflict_dates and not confirmado:
             # Mostrar alerta de conflictos y pedir confirmación
             ctx.update({
@@ -412,6 +479,159 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             "fue_recomputada": bool(conflict_dates),
             "conflict_dates_orig": conflict_dates,
         })
+
+
+class SolicitudRecurrenteView(PMOAdminRequiredMixin, View):
+    """
+    Solicitud con patrón semanal, como repetir una sesión en Teams:
+    "próximos 4 lunes 4 h" o "2 semanas: lunes 2 h, miércoles 4 h, viernes 2 h".
+    Genera una asignación de un día por ocurrencia, agrupadas en una serie.
+    """
+
+    DIAS = [(0, "Lunes"), (1, "Martes"), (2, "Miércoles"), (3, "Jueves"), (4, "Viernes")]
+    template = "dashboard/solicitud_recurrente.html"
+
+    def _ctx_base(self, request, datos):
+        """El recurso es opcional al entrar: la pantalla ofrece un selector."""
+        ctx = {
+            "recurso": None,
+            "recursos": recursos_asignables().order_by("nombre"),
+            "proyectos": Proyecto.objects.filter(estado="ACTIVO").order_by("codigo"),
+            "semanas_max": SEMANAS_MAX_RECURRENCIA,
+        }
+        recurso_id = datos.get("recurso")
+        if recurso_id:
+            try:
+                ctx["recurso"] = recursos_asignables().get(pk=recurso_id)
+            except (Recurso.DoesNotExist, ValueError, TypeError):
+                pass
+        return ctx
+
+    def _dias_form(self, datos):
+        """Los 5 días hábiles con el valor de horas que trajo el formulario."""
+        return [
+            {"num": num, "nombre": nombre, "valor": (datos.get(f"h_{num}") or "").strip()}
+            for num, nombre in self.DIAS
+        ]
+
+    def _parse_patron(self, datos):
+        """Valida y convierte el formulario. Retorna (fi, semanas, horas_por_dia, errores)."""
+        errores = []
+        fi = None
+        try:
+            fi = date.fromisoformat(datos.get("fecha_inicio", ""))
+        except (ValueError, TypeError):
+            errores.append("Fecha de inicio inválida.")
+
+        semanas = 0
+        try:
+            semanas = int(datos.get("semanas", ""))
+            if not (1 <= semanas <= SEMANAS_MAX_RECURRENCIA):
+                errores.append(f"Semanas debe estar entre 1 y {SEMANAS_MAX_RECURRENCIA}.")
+        except (ValueError, TypeError):
+            errores.append("Número de semanas inválido.")
+
+        horas_por_dia = {}
+        for num, nombre in self.DIAS:
+            raw = (datos.get(f"h_{num}") or "").strip()
+            if not raw:
+                continue
+            try:
+                horas = float(raw.replace(",", "."))
+            except ValueError:
+                errores.append(f"{nombre}: horas inválidas.")
+                continue
+            if horas <= 0:
+                continue
+            if horas > 8.5:
+                errores.append(f"{nombre}: máximo 8.5 h/día.")
+                continue
+            horas_por_dia[num] = horas
+        if not horas_por_dia and not errores:
+            errores.append("Indicá las horas de al menos un día de la semana.")
+
+        return fi, semanas, horas_por_dia, errores
+
+    def get(self, request):
+        ctx = self._ctx_base(request, request.GET)
+        ctx.update({
+            "fecha_inicio": request.GET.get("fecha_inicio", ""),
+            "semanas": request.GET.get("semanas", "1"),
+            "dias_form": self._dias_form(request.GET),
+            "dias_flexibles": request.GET.get("dias_flexibles") == "on",
+        })
+        return render(request, self.template, ctx)
+
+    def post(self, request):
+        ctx = self._ctx_base(request, request.POST)
+        datos = request.POST
+        ctx.update({
+            "fecha_inicio": datos.get("fecha_inicio", ""),
+            "semanas": datos.get("semanas", ""),
+            "dias_form": self._dias_form(datos),
+            "proyecto_sel": datos.get("proyecto", ""),
+            "dias_flexibles": datos.get("dias_flexibles") == "on",
+        })
+
+        fi, semanas, horas_por_dia, errores = self._parse_patron(datos)
+
+        if ctx["recurso"] is None:
+            errores.insert(0, "Seleccioná un recurso.")
+
+        proyecto = None
+        if not datos.get("proyecto"):
+            errores.append("Debés seleccionar un proyecto.")
+        else:
+            try:
+                proyecto = Proyecto.objects.get(pk=datos["proyecto"], estado="ACTIVO")
+            except (Proyecto.DoesNotExist, ValueError):
+                errores.append("Proyecto inválido.")
+
+        if errores:
+            ctx["errores"] = errores
+            return render(request, self.template, ctx)
+
+        if datos.get("accion") == "confirmar":
+            # Sin días flexibles no se aceptan sesiones perdidas por falta de
+            # cupo (los feriados se omiten igual: no dependen de la ocupación).
+            if not ctx["dias_flexibles"]:
+                plan = analizar_recurrencia(ctx["recurso"], fi, semanas, horas_por_dia)
+                sin_cupo = [p for p in plan if p["estado"] == "SIN_CUPO"]
+                if sin_cupo:
+                    fechas = ", ".join(p["fecha"].strftime("%d/%m") for p in sin_cupo)
+                    ctx["errores"] = [
+                        f"El recurso no tiene cupo en {len(sin_cupo)} sesión(es) del patrón ({fechas}). "
+                        "Activá 'Días flexibles' si aceptás crear la serie omitiendo esos días."
+                    ]
+                    ctx.update({
+                        "plan": plan,
+                        "plan_ok": sum(1 for p in plan if p["estado"] == "OK"),
+                        "plan_horas": sum(p["horas"] for p in plan if p["estado"] == "OK"),
+                    })
+                    return render(request, self.template, ctx)
+            try:
+                serie, creadas, omitidas = crear_solicitudes_recurrentes(
+                    ctx["recurso"], proyecto, fi, semanas, horas_por_dia, request.user,
+                )
+            except ValueError as e:
+                ctx["errores"] = [str(e)]
+                return render(request, self.template, ctx)
+            ctx.update({
+                "serie": serie,
+                "creadas": creadas,
+                "omitidas": omitidas,
+                "total_horas": sum(float(a.intensidad_diaria) for a in creadas),
+            })
+            return render(request, self.template, ctx)
+
+        # Previsualización: mostrar el plan día a día antes de confirmar
+        plan = analizar_recurrencia(ctx["recurso"], fi, semanas, horas_por_dia)
+        ctx.update({
+            "plan": plan,
+            "plan_ok": sum(1 for p in plan if p["estado"] == "OK"),
+            "plan_horas": sum(p["horas"] for p in plan if p["estado"] == "OK"),
+        })
+        return render(request, self.template, ctx)
 
 
 @method_decorator(login_required(login_url="/login/"), name="dispatch")

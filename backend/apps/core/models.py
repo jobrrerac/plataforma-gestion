@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+from .validators import validar_codigo_pep, validar_codigo_proyecto, validar_grafo
+
 
 class SoftDeleteManager(models.Manager):
     def get_queryset(self):
@@ -184,11 +186,23 @@ class Proyecto(SoftDeleteModel):
         ("EN_PAUSA", "En Pausa"),
         ("CERRADO", "Cerrado"),
     ]
-    codigo = models.CharField(max_length=50, unique=True)
+    codigo = models.CharField(
+        max_length=50, unique=True,
+        validators=[validar_codigo_proyecto],
+        help_text="Código del proyecto en SAP (ej: V-00869252/D).",
+    )
     codigo_pep = models.CharField(
         max_length=50, unique=True, null=True, blank=True,
         verbose_name="Código PEP",
-        help_text="Elemento PEP del proyecto en SAP (ej: P-2026-00123). Único cuando se informa.",
+        validators=[validar_codigo_pep],
+        help_text="Elemento PEP del proyecto en SAP (ej: L-00869252/A). Único cuando se informa.",
+    )
+    # Jerarquía SAP plana (relación 1:1:1): Proyecto (codigo) → PEP → Grafo
+    grafo = models.CharField(
+        max_length=50, unique=True, null=True, blank=True,
+        verbose_name="Grafo",
+        validators=[validar_grafo],
+        help_text="Grafo (orden de red) del proyecto en SAP (ej: 2000269630). Único cuando se informa.",
     )
     nombre = models.CharField(max_length=200)
     cliente = models.CharField(max_length=200)

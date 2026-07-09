@@ -1,3 +1,4 @@
+import uuid
 from math import ceil
 from decimal import Decimal
 from datetime import date, timedelta
@@ -169,10 +170,14 @@ def detalle_dias_recurso(recurso, fecha_inicio: date, fecha_fin: date) -> list:
     return result
 
 
-def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | None = None) -> list:
+def disponibilidad_recursos(
+    fecha_inicio: date, fecha_fin: date,
+    skills: list | None = None, nombre: str | None = None,
+) -> list:
     """
     Devuelve la disponibilidad de cada recurso activo en el rango dado.
-    Filtra por skills si se pasa una lista de nombres.
+    Filtra por skills (lista de nombres) y/o por nombre del recurso
+    (búsqueda parcial, sin distinguir mayúsculas).
     Ordena de más a menos disponible.
     """
     from apps.core.models import recursos_asignables
@@ -180,6 +185,8 @@ def disponibilidad_recursos(fecha_inicio: date, fecha_fin: date, skills: list | 
     qs = recursos_asignables().prefetch_related("recurso_skills__skill").order_by("nombre")
     if skills:
         qs = qs.filter(skills__nombre__in=skills).distinct()
+    if nombre:
+        qs = qs.filter(nombre__icontains=nombre.strip())
 
     recursos = list(qs)
     cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
@@ -412,6 +419,96 @@ def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diari
         detalle={"modo": "RANGO", "dias_habiles": dias, "horas_totales": horas},
     )
     return asignacion
+
+
+# ── Solicitudes recurrentes (patrón semanal tipo "repetir sesión") ──────────
+
+SEMANAS_MAX_RECURRENCIA = 26
+
+
+def analizar_recurrencia(recurso, fecha_inicio: date, semanas: int, horas_por_dia: dict) -> list:
+    """
+    Expande un patrón semanal a sus fechas concretas dentro del horizonte.
+
+    horas_por_dia: {weekday 0–4: horas > 0} — ej: {0: 4.0} = "los lunes 4 h";
+    {0: 2.0, 2: 4.0, 4: 2.0} = "lunes 2 h, miércoles 4 h, viernes 2 h".
+
+    Retorna un plan por ocurrencia: {"fecha", "horas", "estado", "carga_existente",
+    "cap"} donde estado es "OK", "NO_HABIL" (feriado/indisponibilidad) o
+    "SIN_CUPO" (la carga aprobada existente + horas supera la jornada del día).
+    """
+    fin = fecha_inicio + timedelta(days=7 * semanas - 1)
+    cal = CalendarioRango(fecha_inicio, fin, [recurso])
+    carga_dias = mapa_carga([recurso.pk], fecha_inicio, fin)[recurso.pk]
+
+    plan = []
+    fecha = fecha_inicio
+    while fecha <= fin:
+        horas = horas_por_dia.get(fecha.weekday())
+        if horas:
+            cap = capacidad_maxima_dia(fecha)
+            carga = carga_dias.get(fecha, 0.0)
+            if not cal.es_habil(fecha, recurso):
+                estado = "NO_HABIL"
+            elif carga + horas > cap:
+                estado = "SIN_CUPO"
+            else:
+                estado = "OK"
+            plan.append({
+                "fecha": fecha,
+                "horas": horas,
+                "estado": estado,
+                "carga_existente": round(carga, 1),
+                "cap": cap,
+            })
+        fecha += timedelta(days=1)
+    return plan
+
+
+def crear_solicitudes_recurrentes(recurso, proyecto, fecha_inicio, semanas, horas_por_dia, solicitante):
+    """
+    Crea una asignación SOLICITADA de un día por cada ocurrencia viable del
+    patrón, agrupadas bajo una misma serie. Los días no hábiles o sin cupo se
+    omiten y se reportan. Retorna (serie, creadas, omitidas).
+
+    Cada día es una Asignacion normal: el motor de capacidad, la aprobación con
+    lock y la auditoría existentes aplican sin cambios.
+    """
+    plan = analizar_recurrencia(recurso, fecha_inicio, semanas, horas_por_dia)
+    viables = [p for p in plan if p["estado"] == "OK"]
+    omitidas = [p for p in plan if p["estado"] != "OK"]
+    if not viables:
+        raise ValueError("Ningún día del patrón tiene cupo disponible en el período indicado.")
+
+    serie = uuid.uuid4()
+    creadas = []
+    with transaction.atomic():
+        for p in viables:
+            asignacion = Asignacion.objects.create(
+                recurso=recurso,
+                proyecto=proyecto,
+                modo_asignacion="RANGO",
+                fecha_inicio=p["fecha"],
+                fecha_fin=p["fecha"],
+                dias_habiles=1,
+                horas_totales=ceil(p["horas"]),
+                intensidad_diaria=Decimal(str(p["horas"])),
+                jornada_completa=False,
+                estado="SOLICITADA",
+                solicitada_por=solicitante,
+                serie=serie,
+            )
+            LogAuditoria.objects.create(
+                asignacion=asignacion, accion="CREAR", actor=solicitante,
+                detalle={
+                    "modo": "RECURRENTE",
+                    "serie": str(serie),
+                    "horas": p["horas"],
+                    "semanas": semanas,
+                },
+            )
+            creadas.append(asignacion)
+    return serie, creadas, omitidas
 
 
 def rechazar_asignacion(asignacion, actor, motivo=""):

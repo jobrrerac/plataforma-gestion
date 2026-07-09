@@ -116,7 +116,7 @@ class RecursoAdmin(admin.ModelAdmin):
 
 @admin.register(Proyecto)
 class ProyectoAdmin(admin.ModelAdmin):
-    list_display = ["codigo", "codigo_pep", "nombre", "cliente", "estado", "pm", "fecha_inicio", "fecha_fin"]
+    list_display = ["codigo", "codigo_pep", "grafo", "nombre", "cliente", "estado", "pm", "fecha_inicio", "fecha_fin"]
     list_filter = ["estado"]
-    search_fields = ["codigo", "codigo_pep", "nombre", "cliente"]
+    search_fields = ["codigo", "codigo_pep", "grafo", "nombre", "cliente"]
     exclude = ["deleted_at", "created_at", "updated_at"]
