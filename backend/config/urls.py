@@ -8,7 +8,7 @@ from apps.dashboard.views import (
     OcupacionAPIView, OcupacionDashboardView, SolicitudView,
     SolicitudCrearView, SolicitudRecurrenteView, RecursoDetalleView,
 )
-from apps.accounts.views import LoginRateLimitView
+from apps.accounts.views import LoginRateLimitView, CambiarPasswordView
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
@@ -30,5 +30,6 @@ urlpatterns = [
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
     path("login/", LoginRateLimitView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(next_page="/login/"), name="logout"),
+    path("password/cambiar/", CambiarPasswordView.as_view(), name="password-cambiar"),
     path("", OcupacionDashboardView.as_view(), name="home"),
 ]

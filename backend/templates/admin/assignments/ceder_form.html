@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Ceder horas — Asignación #{{ asignacion.pk }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a> ›
+  <a href="{% url 'admin:assignments_asignacion_changelist' %}">Asignaciones</a> ›
+  Ceder horas #{{ asignacion.pk }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .info-row { display:flex; gap:40px; margin-bottom:8px; flex-wrap:wrap; }
+  .info-item label { display:block; font-size:.78rem; color:#6c757d; margin-bottom:2px; }
+  .info-item span { font-weight:600; }
+  .ceder-card { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:16px 20px; margin-bottom:20px; max-width:820px; }
+  .ceder-form label.campo { display:block; font-weight:600; margin:14px 0 4px; }
+  .ceder-form input, .ceder-form select { padding:6px 10px; border:1px solid #ced4da; border-radius:6px; }
+  .politica-opt { display:block; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:10px 14px; margin:6px 0; cursor:pointer; max-width:640px; }
+  .politica-opt small { color:#6c757d; display:block; margin-top:2px; }
+  .error-box { background:#f8d7da; border:1px solid #dc3545; color:#842029; border-radius:8px; padding:12px 16px; margin-bottom:16px; max-width:820px; }
+  .nota-tarifa { background:#e7f1ff; border:1px solid #9ec5fe; color:#084298; border-radius:8px; padding:10px 14px; font-size:.85rem; margin:14px 0; max-width:640px; }
+  .btn-ceder { background:#0d9488; color:#fff; border:none; padding:8px 24px; border-radius:6px; font-size:.95rem; cursor:pointer; font-weight:600; }
+  .btn-ceder:hover { background:#0b7c72; }
+  .btn-cancel { background:#6c757d; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:.95rem; cursor:pointer; }
+</style>
+
+<h1>⇄ Ceder horas a otro proyecto</h1>
+
+<div class="ceder-card">
+  <div class="info-row">
+    <div class="info-item"><label>Recurso</label><span>{{ asignacion.recurso.nombre }}</span></div>
+    <div class="info-item"><label>Proyecto original</label><span>{{ asignacion.proyecto }}</span></div>
+    <div class="info-item"><label>Período</label><span>{{ asignacion.fecha_inicio|date:"d/m/Y" }} → {{ asignacion.fecha_fin|date:"d/m/Y" }}</span></div>
+    <div class="info-item"><label>Dedicación</label>
+      <span>{% if asignacion.jornada_completa %}Jornada completa{% else %}{{ asignacion.intensidad_diaria }} h/día{% endif %}</span>
+    </div>
+    <div class="info-item"><label>Horas totales</label><span>{{ asignacion.horas_totales }} h</span></div>
+  </div>
+</div>
+
+{% if error %}<div class="error-box">⚠️ {{ error }}</div>{% endif %}
+
+<form method="post" class="ceder-form">
+  {% csrf_token %}
+
+  <label class="campo">Día a ceder <span style="color:#dc3545">*</span></label>
+  <input type="date" name="fecha" required
+         min="{{ asignacion.fecha_inicio|date:'Y-m-d' }}" max="{{ asignacion.fecha_fin|date:'Y-m-d' }}"
+         value="{{ post.fecha|default:'' }}">
+  <small style="color:#6c757d;display:block;margin-top:2px">Debe ser un día hábil dentro del período de la asignación.</small>
+
+  <label class="campo">Horas a ceder <span style="color:#dc3545">*</span></label>
+  <input type="number" name="horas" required min="0.5" max="8.5" step="0.5" style="width:110px"
+         value="{{ post.horas|default:'' }}">
+
+  <label class="campo">Proyecto receptor <span style="color:#dc3545">*</span></label>
+  <select name="proyecto" required style="min-width:420px">
+    <option value="">— Seleccioná el proyecto que recibe las horas —</option>
+    {% for p in proyectos %}
+    <option value="{{ p.pk }}" {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
+      {{ p.codigo }}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
+    </option>
+    {% endfor %}
+  </select>
+
+  <label class="campo">Efecto sobre la asignación original <span style="color:#dc3545">*</span></label>
+  <label class="politica-opt">
+    <input type="radio" name="politica" value="RECOMPUTAR"
+           {% if post.politica == "RECOMPUTAR" or not post.politica %}checked{% endif %}>
+    <strong>Recomputar fecha fin</strong> (preserva las horas totales)
+    <small>La fecha fin se extiende en los próximos días hábiles con cupo, para que el recurso recupere las horas cedidas.</small>
+  </label>
+  <label class="politica-opt">
+    <input type="radio" name="politica" value="REDUCIR" {% if post.politica == "REDUCIR" %}checked{% endif %}>
+    <strong>Reducir horas totales</strong> (preserva la ventana de fechas)
+    <small>La asignación original baja su total de horas; el descuento queda registrado en el log de auditoría.</small>
+  </label>
+
+  <div class="nota-tarifa">
+    💶 Las horas se cargan al proyecto receptor —y se descuentan del original— a la
+    <strong>tarifa vigente del recurso el día laborado</strong>. La operación crea una solicitud
+    de 1 día para el proyecto receptor que debe <strong>aprobarse</strong> por el flujo normal;
+    hasta entonces las horas quedan reservadas. Todo queda trazado en el log de auditoría.
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+    <button type="submit" class="btn-ceder">⇄ Ceder horas</button>
+    <a href="{% url 'admin:assignments_asignacion_changelist' %}"><button type="button" class="btn-cancel">✗ Cancelar</button></a>
+  </div>
+</form>
+{% endblock %}

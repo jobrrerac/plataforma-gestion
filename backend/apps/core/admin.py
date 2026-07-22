@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils.html import format_html, mark_safe, escape
 from .models import Recurso, Proyecto, Skill, RecursoSkill, Cluster, TarifaVigente
 
@@ -74,6 +74,18 @@ class RecursoAdmin(admin.ModelAdmin):
     list_per_page = 50
     exclude = ["deleted_at", "created_at", "updated_at", "skills"]
     filter_horizontal = ["clusters"]
+
+    def save_formset(self, request, form, formset, change):
+        super().save_formset(request, form, formset, change)
+        # La tarifa sigue el costo del recurso: al registrar una nueva vigencia,
+        # un signal recomputa el costo estimado de las asignaciones activas.
+        if formset.model is TarifaVigente and formset.new_objects:
+            messages.info(
+                request,
+                "Nueva tarifa registrada. El costo estimado de las asignaciones activas del "
+                "recurso se recomputó automáticamente con la tarifa vigente de cada día "
+                "(trazado en el log de auditoría como RECOMPUTO_TARIFA).",
+            )
 
     @admin.display(description="Clusters")
     def clusters_display(self, obj):

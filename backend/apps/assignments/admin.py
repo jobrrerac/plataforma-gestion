@@ -1,4 +1,5 @@
 import uuid
+from datetime import date as _date
 from math import ceil
 from decimal import Decimal
 from django import forms
@@ -6,11 +7,13 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 from apps.accounts.roles import es_admin
 from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles
-from .models import Asignacion, LogAuditoria
+from apps.core.models import Proyecto
+from .models import Asignacion, CesionHoras, LogAuditoria
 from django.shortcuts import render as dj_render
 from .services import (
     aprobar_asignacion, rechazar_asignacion, revocar_asignacion,
     calcular_horas_jornada_completa, analizar_conflictos, aprobar_recomputando,
+    ceder_horas,
 )
 
 
@@ -102,6 +105,23 @@ class LogAuditoriaInline(admin.TabularInline):
     show_change_link = False
 
 
+class CesionRealizadaInline(admin.TabularInline):
+    """Cesiones de horas hechas desde esta asignación (solo lectura;
+    se crean con el botón ⇄ Ceder del listado)."""
+    model = CesionHoras
+    fk_name = "asignacion_origen"
+    extra = 0
+    verbose_name_plural = "Cesiones de horas realizadas"
+    readonly_fields = [
+        "fecha", "horas", "politica", "tarifa_hora",
+        "asignacion_destino", "creado_por", "creado_en", "anulada_en",
+    ]
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Asignacion)
 class AsignacionAdmin(admin.ModelAdmin):
     form = AsignacionAdminForm
@@ -114,7 +134,7 @@ class AsignacionAdmin(admin.ModelAdmin):
     search_fields = ["recurso__nombre", "proyecto__codigo"]
     readonly_fields = ["estado", "fecha_fin", "tarifa_aplicada", "costo_estimado", "solicitada_por", "created_at"]
     exclude = ["deleted_at", "updated_at"]
-    inlines = [LogAuditoriaInline]
+    inlines = [LogAuditoriaInline, CesionRealizadaInline]
     actions = ["action_aprobar", "action_rechazar", "action_revocar"]
 
     class Media:
@@ -191,10 +211,11 @@ class AsignacionAdmin(admin.ModelAdmin):
                 editar, aprobar, rechazar,
             )
         if obj.estado == "APROBADA":
+            ceder = self._btn(f"ceder/{obj.pk}/", "⇄ Ceder", "#0d9488")
             revocar = self._btn(f"revocar/{obj.pk}/", "↩ Revocar", "#f97316")
             return format_html(
-                '<div style="display:flex;gap:4px;align-items:center">{}{}</div>',
-                editar, revocar,
+                '<div style="display:flex;gap:4px;align-items:center">{}{}{}</div>',
+                editar, ceder, revocar,
             )
         return format_html('<div>{}</div>', editar)
 
@@ -207,6 +228,7 @@ class AsignacionAdmin(admin.ModelAdmin):
             path("aprobar/<int:pk>/confirmar/", self.admin_site.admin_view(self.view_aprobar_confirmar), name="asignacion-aprobar-confirmar"),
             path("rechazar/<int:pk>/", self.admin_site.admin_view(self.view_rechazar), name="asignacion-rechazar"),
             path("revocar/<int:pk>/", self.admin_site.admin_view(self.view_revocar), name="asignacion-revocar"),
+            path("ceder/<int:pk>/", self.admin_site.admin_view(self.view_ceder), name="asignacion-ceder"),
         ]
         return custom + urls
 
@@ -276,6 +298,53 @@ class AsignacionAdmin(admin.ModelAdmin):
             "opts": self.model._meta,
         }
         return dj_render(request, "admin/assignments/recomputo_confirmar.html", ctx)
+
+    def view_ceder(self, request, pk):
+        """Formulario para ceder horas de un día de una asignación APROBADA a otro proyecto."""
+        if not self._es_admin(request):
+            self.message_user(request, "Se requiere rol Admin para ceder horas.", messages.ERROR)
+            return self._redirect_lista()
+        asig = Asignacion.objects.select_related("recurso", "proyecto").get(pk=pk)
+        if asig.estado != "APROBADA":
+            self.message_user(request, "Solo se pueden ceder horas de asignaciones APROBADAS.", messages.ERROR)
+            return self._redirect_lista()
+
+        ctx = {
+            **self.admin_site.each_context(request),
+            "title": f"Ceder horas — Asignación #{pk}",
+            "asignacion": asig,
+            "proyectos": Proyecto.objects.filter(estado="ACTIVO").exclude(pk=asig.proyecto_id).order_by("codigo"),
+            "opts": self.model._meta,
+            "post": request.POST if request.method == "POST" else {},
+        }
+
+        if request.method == "POST":
+            try:
+                fecha = _date.fromisoformat(request.POST.get("fecha", ""))
+                horas = float((request.POST.get("horas") or "").replace(",", "."))
+                proyecto = Proyecto.objects.get(pk=request.POST.get("proyecto"), estado="ACTIVO")
+                politica = request.POST.get("politica", "")
+            except (ValueError, TypeError, Proyecto.DoesNotExist):
+                ctx["error"] = "Formulario incompleto o con valores inválidos."
+                return dj_render(request, "admin/assignments/ceder_form.html", ctx)
+            try:
+                cesion = ceder_horas(asig, proyecto, fecha, horas, politica, request.user)
+            except ValueError as e:
+                ctx["error"] = str(e)
+                return dj_render(request, "admin/assignments/ceder_form.html", ctx)
+            self.message_user(
+                request,
+                format_html(
+                    "Cesión registrada: {} h del {} de {} → <b>{}</b>. "
+                    "Se creó la solicitud #{} para el proyecto receptor: apruébela para hacerla efectiva.",
+                    cesion.horas, fecha.strftime("%d/%m/%Y"), asig.recurso.nombre,
+                    proyecto.codigo, cesion.asignacion_destino_id,
+                ),
+                messages.SUCCESS,
+            )
+            return self._redirect_lista()
+
+        return dj_render(request, "admin/assignments/ceder_form.html", ctx)
 
     def view_rechazar(self, request, pk):
         if not self._es_admin(request):
@@ -379,6 +448,57 @@ class AsignacionAdmin(admin.ModelAdmin):
                 "classes": ["collapse"],
             }),
         ]
+
+
+@admin.register(CesionHoras)
+class CesionHorasAdmin(admin.ModelAdmin):
+    """Trazabilidad de cesiones: solo lectura (se crean con el botón ⇄ Ceder)."""
+    list_display = [
+        "id", "recurso_nombre", "fecha", "horas", "proyecto_origen", "proyecto_destino",
+        "politica", "tarifa_hora", "estado_cesion", "creado_por", "creado_en",
+    ]
+    list_filter = ["politica"]
+    date_hierarchy = "fecha"
+
+    @admin.display(description="Recurso")
+    def recurso_nombre(self, obj):
+        return obj.asignacion_origen.recurso.nombre
+
+    @admin.display(description="Proyecto origen")
+    def proyecto_origen(self, obj):
+        return obj.asignacion_origen.proyecto.codigo
+
+    @admin.display(description="Proyecto destino")
+    def proyecto_destino(self, obj):
+        return obj.asignacion_destino.proyecto.codigo
+
+    @admin.display(description="Estado")
+    def estado_cesion(self, obj):
+        if obj.anulada_en:
+            color, texto = "#9ca3af", "ANULADA"
+        elif obj.asignacion_destino.estado == "APROBADA":
+            color, texto = "#16a34a", "EFECTIVA"
+        else:
+            color, texto = "#6366f1", "RESERVADA"
+        return format_html(
+            '<span style="background:{};color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em">{}</span>',
+            color, texto,
+        )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "asignacion_origen__recurso", "asignacion_origen__proyecto",
+            "asignacion_destino__proyecto", "creado_por",
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(LogAuditoria)

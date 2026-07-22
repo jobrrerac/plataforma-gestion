@@ -324,11 +324,15 @@
 
               {% if puede_ver_costos %}
               <td class="text-end pe-2">
-                {% if r.tarifa_hora %}
+                {% if r.tarifa_hora != None %}
                 <span class="fw-semibold">{{ r.tarifa_hora }}</span>
                 <span class="text-muted small"> €/h</span>
                 {% else %}
                 <span class="text-muted">—</span>
+                {% endif %}
+                {% if r.tarifa_cambios %}
+                <i class="bi bi-graph-up-arrow ms-1" style="color:#b45309;cursor:help;font-size:.85rem"
+                   title="La tarifa cambia dentro del período: {% for c in r.tarifa_cambios %}desde {{ c.fecha|date:'d/m/Y' }} → {{ c.valor }} €/h{% if not forloop.last %} · {% endif %}{% endfor %}. El costo se calcula por día con la tarifa vigente de cada día y se recomputa si la tarifa cambia."></i>
                 {% endif %}
               </td>
               {% endif %}

@@ -1,6 +1,9 @@
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.cache import cache
 from django.http import HttpResponseForbidden
+from django.urls import reverse_lazy
+
+from apps.accounts.models import CambioPasswordPendiente
 
 _MAX_INTENTOS = 5
 _BLOQUEO_SEGUNDOS = 15 * 60  # 15 minutos
@@ -59,3 +62,21 @@ class LoginRateLimitView(LoginView):
         for key in _claves(self.request):
             cache.delete(key)
         return super().form_valid(form)
+
+
+class CambiarPasswordView(PasswordChangeView):
+    """
+    Cambio de contraseña obligatorio. Usa `PasswordChangeForm` estándar (valida
+    la actual y aplica los validadores de fortaleza de Django a la nueva). Al
+    completarse, elimina el `CambioPasswordPendiente` para levantar el bloqueo
+    del middleware.
+    """
+
+    template_name = "registration/password_change_form.html"
+    success_url = reverse_lazy("dashboard")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        CambioPasswordPendiente.objects.filter(usuario=self.request.user).delete()
+        return response
+

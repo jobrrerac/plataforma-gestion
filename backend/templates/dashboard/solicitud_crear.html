@@ -98,18 +98,15 @@
       {% else %}
       <div class="resumen-item"><span class="text-muted">Intensidad diaria</span><strong>{{ asignacion_creada.intensidad_diaria }} h/día</strong></div>
       {% endif %}
-      {% if puede_ver_costos and tarifa %}
-      <div class="resumen-item"><span class="text-muted">Tarifa aplicada</span><strong>{{ tarifa.valor_hora }} €/h</strong></div>
-      <div class="resumen-item"><span class="text-muted">Costo estimado</span>
-        <strong id="costo-final">—</strong>
-        <script>
-          (function(){
-            var h = {{ asignacion_creada.horas_totales|default:0 }};
-            var t = parseFloat('{{ tarifa.valor_hora|default:0 }}'.replace(',', '.'));
-            if (h && t) document.getElementById('costo-final').textContent =
-              (h * t).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
-          })();
-        </script>
+      {% if puede_ver_costos and hay_tarifa %}
+      <div class="resumen-item"><span class="text-muted">Tarifa (a fecha de inicio)</span>
+        <strong>{% if tarifa %}{{ tarifa.valor_hora }}{% else %}0.00{% endif %} €/h</strong></div>
+      {% for s in segmentos %}{% if not forloop.first and s.valor != None %}
+      <div class="resumen-item"><span class="text-muted">Tarifa desde {{ s.desde|date:"d/m/Y" }}</span>
+        <strong>{{ s.valor }} €/h</strong></div>
+      {% endif %}{% endfor %}
+      <div class="resumen-item"><span class="text-muted">Costo estimado (mixto por día)</span>
+        <strong>{{ costo_creada|default_if_none:"—" }}{% if costo_creada != None %} €{% endif %}</strong>
       </div>
       {% endif %}
       <div class="resumen-item"><span class="text-muted">Estado</span>
@@ -169,10 +166,15 @@
         </div>
         <div class="text-muted small">{{ info.horas_libres }}h disponibles</div>
         {% endif %}
-        {% if puede_ver_costos and tarifa %}
+        {% if puede_ver_costos and hay_tarifa %}
         <div class="mt-1 fw-semibold small" style="color:#4a1f7a">
-          {{ tarifa.valor_hora }} €/h
+          {% if tarifa %}{{ tarifa.valor_hora }}{% else %}0.00{% endif %} €/h
         </div>
+        {% for s in segmentos %}{% if not forloop.first and s.valor != None %}
+        <div class="small fw-semibold" style="color:#b45309" title="La tarifa del recurso cambia dentro del período">
+          <i class="bi bi-graph-up-arrow me-1"></i>desde {{ s.desde|date:"d/m/Y" }}: {{ s.valor }} €/h
+        </div>
+        {% endif %}{% endfor %}
         {% endif %}
       </div>
     </div>
@@ -331,7 +333,7 @@
       </div>
 
       <!-- Panel de estimación -->
-      {% if puede_ver_costos and tarifa %}
+      {% if puede_ver_costos and hay_tarifa %}
       <div class="border rounded px-3 py-2 mb-4" id="resumen-live"
            style="background:#f9f5ff;border-color:#e0d6f5!important;font-size:.85rem">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -350,9 +352,17 @@
           </div>
         </div>
         <div class="text-muted mt-1" style="font-size:.75rem">
-          Tarifa vigente: <strong>{{ tarifa.valor_hora }} €/h</strong>
+          Tarifa vigente: <strong>{% if tarifa %}{{ tarifa.valor_hora }}{% else %}0.00{% endif %} €/h</strong>
+          {% for s in segmentos %}{% if not forloop.first and s.valor != None %}
+          · <strong style="color:#b45309">desde {{ s.desde|date:"d/m" }}: {{ s.valor }} €/h</strong>
+          {% endif %}{% endfor %}
           <span id="hint-rango"> · ingresá las horas/día para calcular</span>
           <span id="hint-horas" style="display:none"> · la fecha fin se calcula saltando días ocupados</span>
+        </div>
+        <div class="text-muted mt-1" style="font-size:.72rem">
+          <i class="bi bi-info-circle me-1"></i>El costo se calcula por día con la tarifa vigente de cada día.
+          Si la tarifa del recurso cambia (sigue el costo del recurso), el costo estimado de las
+          asignaciones activas se <strong>recomputa automáticamente</strong> y queda trazado en auditoría.
         </div>
       </div>
       {% else %}
@@ -435,7 +445,28 @@
 <script>
 // ── Constantes del servidor ────────────────────────────────────────────────
 var _DIAS_HABILES = {{ dias_habiles|default:0 }};
-var _TARIFA_HORA  = {% if puede_ver_costos and tarifa %}parseFloat('{{ tarifa.valor_hora }}'.replace(',','.')){% else %}0{% endif %};
+// Tramos de tarifa del período: [{dias, horasMax, valor}] en orden cronológico.
+// El costo es MIXTO: cada día usa la tarifa vigente de ese día.
+var _SEGMENTOS = {{ segmentos_json|default:"[]"|safe }};
+var _HAY_TARIFA = _SEGMENTOS.some(function (s) { return s.valor !== null; });
+
+// Consume días/horas de cada tramo en orden y suma horas × tarifa del tramo.
+// Si las horas exceden los tramos conocidos, extiende con la última tarifa.
+function costoMixto(horasNecesarias, intens, completa) {
+  var restante = horasNecesarias, total = 0;
+  for (var i = 0; i < _SEGMENTOS.length && restante > 0; i++) {
+    var s = _SEGMENTOS[i];
+    var capSeg = completa ? s.horasMax : s.dias * intens;
+    var hSeg = Math.min(restante, capSeg);
+    if (s.valor !== null) total += hSeg * s.valor;
+    restante -= hSeg;
+  }
+  if (restante > 0 && _SEGMENTOS.length) {
+    var ult = _SEGMENTOS[_SEGMENTOS.length - 1];
+    if (ult.valor !== null) total += restante * ult.valor;
+  }
+  return total;
+}
 
 // ── Toggles de modo (globales — necesario para onclick en HTML) ───────────
 function setModoCrea(modo) {
@@ -544,8 +575,10 @@ function actualizarEstimado() {
 
   resumen.style.display = '';
   if (resCosto) {
-    resCosto.textContent = (_TARIFA_HORA > 0 && horas > 0)
-      ? (horas * _TARIFA_HORA).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2})
+    var intensCosto = completa ? 0 : leerNum(inp);
+    if (modo === 'horas') intensCosto = completa ? 8.25 : leerNum(inp);
+    resCosto.textContent = (_HAY_TARIFA && horas > 0)
+      ? costoMixto(horas, intensCosto, completa).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2})
       : '—';
   }
 }

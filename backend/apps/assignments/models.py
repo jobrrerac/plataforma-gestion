@@ -59,6 +59,57 @@ class Asignacion(SoftDeleteModel):
         return f"{self.recurso} → {self.proyecto} [{self.estado}]"
 
 
+class CesionHoras(models.Model):
+    """
+    Cesión de horas de un día concreto de una asignación APROBADA hacia otro
+    proyecto (acuerdo entre PMs). La asignación original NUNCA se edita a mano:
+    esta operación registra la excepción y sus efectos quedan en LogAuditoria.
+
+    Ciclo de vida: se crea junto con una asignación destino SOLICITADA. Mientras
+    el destino está pendiente, las horas cedidas quedan RESERVADAS (la carga del
+    día no baja para terceros). Si el destino se aprueba, él carga las horas; si
+    se rechaza/revoca, la cesión se anula (anulada_en) y todo vuelve atrás.
+    """
+    asignacion_origen = models.ForeignKey(
+        Asignacion, on_delete=models.PROTECT, related_name="cesiones_realizadas",
+    )
+    asignacion_destino = models.ForeignKey(
+        Asignacion, on_delete=models.PROTECT, related_name="cesiones_recibidas",
+    )
+    fecha = models.DateField(help_text="Día laborado cuyas horas se ceden.")
+    horas = models.DecimalField(max_digits=4, decimal_places=1)
+    politica = models.CharField(
+        max_length=20, choices=Asignacion.POLITICA_CHOICES,
+        help_text="RECOMPUTAR: la original extiende fecha_fin para recuperar las horas. "
+                  "REDUCIR: la original baja su total de horas.",
+    )
+    # Tarifa vigente del recurso el día laborado: es la que se carga al proyecto
+    # receptor y la que se descuenta del original (decisión de negocio 2026-07-09).
+    tarifa_hora = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fecha_fin_original = models.DateField(
+        null=True, blank=True,
+        help_text="fecha_fin de la asignación origen antes de recomputar (para poder anular).",
+    )
+    creado_por = models.ForeignKey(User, on_delete=models.PROTECT, related_name="cesiones_creadas")
+    creado_en = models.DateTimeField(auto_now_add=True)
+    anulada_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Cesión de horas"
+        verbose_name_plural = "Cesiones de horas"
+        ordering = ["-creado_en"]
+
+    def __str__(self):
+        return (
+            f"{self.asignacion_origen.recurso} cede {self.horas} h del {self.fecha} "
+            f"→ {self.asignacion_destino.proyecto}"
+        )
+
+    @property
+    def activa(self):
+        return self.anulada_en is None
+
+
 class LogAuditoria(models.Model):
     """Registro append-only de cambios de estado en asignaciones. No editar ni borrar."""
     ACCION_CHOICES = [
@@ -67,10 +118,14 @@ class LogAuditoria(models.Model):
         ("RECHAZAR", "Rechazar"),
         ("REVOCAR", "Revocar"),
         ("INVALIDAR", "Invalidar"),
+        ("CEDER", "Ceder horas"),
+        ("ANULAR_CESION", "Anular cesión"),
+        ("RECOMPUTO_TARIFA", "Recomputo por cambio de tarifa"),
     ]
     asignacion = models.ForeignKey(Asignacion, on_delete=models.PROTECT, related_name="log")
     accion = models.CharField(max_length=20, choices=ACCION_CHOICES)
-    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    # actor nulo = acción automática del sistema (ej: recomputo por cambio de tarifa)
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     detalle = models.JSONField(default=dict)
 

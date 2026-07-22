@@ -3,12 +3,13 @@ from math import ceil
 from decimal import Decimal
 from datetime import date, timedelta
 from django.db import transaction
+from django.utils import timezone
 from apps.calendar_engine.services import (
     CalendarioRango,
     calcular_fecha_fin as _cal_fecha_fin,
     contar_dias_habiles,
 )
-from .models import Asignacion, LogAuditoria
+from .models import Asignacion, CesionHoras, LogAuditoria
 from apps.core.models import TarifaVigente
 
 # Jornada real: lun–jue 8.5 h, vie 8 h → máximo semanal 42 h
@@ -59,42 +60,57 @@ def carga_propia(asignacion, fecha: date) -> float:
 
 
 def carga_en_fecha(recurso, fecha, excluir_id=None) -> float:
-    """Suma de carga de asignaciones APROBADAS del recurso en esa fecha."""
-    qs = Asignacion.objects.filter(
-        recurso=recurso,
-        estado="APROBADA",
-        fecha_inicio__lte=fecha,
-        fecha_fin__gte=fecha,
-    )
-    if excluir_id:
-        qs = qs.exclude(pk=excluir_id)
-    return sum(carga_propia(a, fecha) for a in qs)
+    """Carga del recurso en esa fecha (asignaciones APROBADAS netas de cesiones)."""
+    rid = recurso.pk if hasattr(recurso, "pk") else recurso
+    return mapa_carga([rid], fecha, fecha, excluir_id)[rid].get(fecha, 0.0)
 
 
 def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None) -> dict:
     """
-    Precalcula en una sola query la carga diaria (asignaciones APROBADAS)
-    de varios recursos en un rango. Retorna dict[recurso_id][fecha] -> horas.
-    Equivale a llamar carga_en_fecha() por cada día, sin el costo de una
-    query por día.
+    Precalcula la carga diaria (asignaciones APROBADAS) de varios recursos en
+    un rango. Retorna dict[recurso_id][fecha] -> horas.
+
+    Cesiones de horas: mientras la asignación destino de una cesión sigue
+    SOLICITADA, las horas cedidas quedan RESERVADAS (la carga bruta del día no
+    baja para terceros, así nadie más puede ocupar ese cupo). Se descuentan de
+    la original solo cuando el destino está APROBADA (él ya carga sus horas) o
+    cuando se está evaluando aprobar precisamente ese destino (excluir_id).
     """
+    ids = list(recurso_ids)
     qs = Asignacion.objects.filter(
-        recurso_id__in=list(recurso_ids),
+        recurso_id__in=ids,
         estado="APROBADA",
         fecha_inicio__lte=fecha_fin,
         fecha_fin__gte=fecha_inicio,
     )
     if excluir_id:
         qs = qs.exclude(pk=excluir_id)
+    asignaciones = list(qs)
 
-    carga: dict = {rid: {} for rid in recurso_ids}
-    for a in qs:
+    carga: dict = {rid: {} for rid in ids}
+    for a in asignaciones:
         por_dia = carga.setdefault(a.recurso_id, {})
         fecha = max(a.fecha_inicio, fecha_inicio)
         fin = min(a.fecha_fin, fecha_fin)
         while fecha <= fin:
             por_dia[fecha] = por_dia.get(fecha, 0.0) + carga_propia(a, fecha)
             fecha += timedelta(days=1)
+
+    if asignaciones:
+        recurso_de = {a.pk: a.recurso_id for a in asignaciones}
+        cesiones = CesionHoras.objects.filter(
+            asignacion_origen_id__in=recurso_de.keys(),
+            fecha__gte=fecha_inicio, fecha__lte=fecha_fin,
+            anulada_en__isnull=True,
+        ).select_related("asignacion_destino")
+        for c in cesiones:
+            descuenta = (
+                c.asignacion_destino_id == excluir_id
+                or c.asignacion_destino.estado == "APROBADA"
+            )
+            if descuenta:
+                por_dia = carga[recurso_de[c.asignacion_origen_id]]
+                por_dia[c.fecha] = max(0.0, por_dia.get(c.fecha, 0.0) - float(c.horas))
     return carga
 
 
@@ -136,12 +152,23 @@ def aprobar_asignacion(asignacion, actor):
                 f"Sobreasignación: {recurso.nombre} ya alcanza las {cap} h del {fecha_conflicto.strftime('%A %d/%m/%Y')}."
             )
         asignacion.estado = "APROBADA"
-        asignacion.save(update_fields=["estado", "updated_at"])
+        # Snapshot al aprobar: tarifa de referencia (la del día de inicio) y
+        # costo mixto por día. Si la tarifa cambia después, un recomputo
+        # automático actualiza el costo y lo deja trazado en el log.
+        tarifa_inicio = TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+        asignacion.tarifa_aplicada = tarifa_inicio.valor_hora if tarifa_inicio else None
+        asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
+        asignacion.save(update_fields=["estado", "tarifa_aplicada", "costo_estimado", "updated_at"])
         LogAuditoria.objects.create(
             asignacion=asignacion,
             accion="APROBAR",
             actor=actor,
-            detalle={"recurso_id": recurso.pk, "fecha_fin": str(asignacion.fecha_fin)},
+            detalle={
+                "recurso_id": recurso.pk,
+                "fecha_fin": str(asignacion.fecha_fin),
+                "tarifa_inicio": float(asignacion.tarifa_aplicada) if asignacion.tarifa_aplicada is not None else None,
+                "costo_estimado": float(asignacion.costo_estimado) if asignacion.costo_estimado is not None else None,
+            },
         )
 
 
@@ -192,14 +219,24 @@ def disponibilidad_recursos(
     cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
     cargas = mapa_carga([r.pk for r in recursos], fecha_inicio, fecha_fin)
 
+    # Vigencias de tarifa de todos los recursos en una query (costo mixto por día)
+    tarifas_por_recurso: dict = {}
+    for rid, fd, valor in TarifaVigente.objects.filter(
+        recurso__in=recursos, fecha_desde__lte=fecha_fin,
+    ).order_by("fecha_desde").values_list("recurso_id", "fecha_desde", "valor_hora"):
+        tarifas_por_recurso.setdefault(rid, []).append((fd, valor))
+
     resultados = []
     for recurso in recursos:
         carga_dias = cargas.get(recurso.pk, {})
+        tarifas = tarifas_por_recurso.get(recurso.pk, [])
         horas_cap = 0.0
         horas_ocupadas = 0.0
         dias_habiles = 0
         dias_sin_cupo = 0
         dias_con_carga = []
+        costo_libre = Decimal("0")
+        hay_tarifa = False
 
         fecha = fecha_inicio
         while fecha <= fecha_fin:
@@ -222,14 +259,24 @@ def disponibilidad_recursos(
                         "pct_ocupado": pct_ocu,
                         "lleno": carga >= cap,
                     })
+                # Costo mixto: horas libres del día × tarifa vigente ESE día
+                tarifa_dia = _tarifa_del_dia(tarifas, fecha)
+                if tarifa_dia is not None:
+                    hay_tarifa = True
+                    costo_libre += tarifa_dia * Decimal(str(libre))
             fecha += timedelta(days=1)
 
         horas_libres = max(0.0, horas_cap - horas_ocupadas)
         pct_libre = round(100.0 * horas_libres / horas_cap, 1) if horas_cap > 0 else 0.0
 
-        tarifa_obj = TarifaVigente.vigente_para(recurso, fecha_inicio)
-        tarifa_hora = float(tarifa_obj.valor_hora) if tarifa_obj else None
-        costo_estimado = round(tarifa_hora * horas_libres, 2) if tarifa_hora and horas_libres else None
+        tarifa_inicio = _tarifa_del_dia(tarifas, fecha_inicio)
+        tarifa_hora = float(tarifa_inicio) if tarifa_inicio is not None else None
+        costo_estimado = float(costo_libre.quantize(Decimal("0.01"))) if hay_tarifa else None
+        # Cambios de tarifa dentro del rango (para indicar "desde el X pasa a Y")
+        tarifa_cambios = [
+            {"fecha": fd, "valor": float(v)}
+            for fd, v in tarifas if fecha_inicio < fd <= fecha_fin
+        ]
 
         resultados.append({
             "recurso": recurso,
@@ -251,6 +298,7 @@ def disponibilidad_recursos(
             "dias_con_carga": dias_con_carga,
             "tarifa_hora": tarifa_hora,
             "costo_estimado": costo_estimado,
+            "tarifa_cambios": tarifa_cambios,
         })
 
     resultados.sort(key=lambda x: x["porcentaje_libre"], reverse=True)
@@ -381,7 +429,12 @@ def aprobar_recomputando(asignacion, actor, nueva_fecha_fin, nuevas_horas):
                 f"Sigue habiendo conflicto el {fecha_conflicto.strftime('%d/%m/%Y')} tras recomputar."
             )
         asignacion.estado = "APROBADA"
-        asignacion.save(update_fields=["estado", "fecha_fin", "horas_totales", "updated_at"])
+        tarifa_inicio = TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+        asignacion.tarifa_aplicada = tarifa_inicio.valor_hora if tarifa_inicio else None
+        asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
+        asignacion.save(update_fields=[
+            "estado", "fecha_fin", "horas_totales", "tarifa_aplicada", "costo_estimado", "updated_at",
+        ])
         LogAuditoria.objects.create(
             asignacion=asignacion, accion="APROBAR", actor=actor,
             detalle={
@@ -419,6 +472,281 @@ def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diari
         detalle={"modo": "RANGO", "dias_habiles": dias, "horas_totales": horas},
     )
     return asignacion
+
+
+# ── Tarifas: tramos de vigencia y costo mixto por día ───────────────────────
+# La tarifa sigue el costo del recurso: puede cambiar dentro del período de
+# una asignación. Todo costo se calcula por día con la tarifa vigente de ese
+# día, y se recomputa automáticamente cuando se registra una nueva vigencia.
+
+
+def _tarifa_del_dia(tarifas_ordenadas, fecha: date):
+    """Tarifa vigente en la fecha, dada la lista [(fecha_desde, valor)] ordenada."""
+    valor = None
+    for fd, v in tarifas_ordenadas:
+        if fd <= fecha:
+            valor = v
+        else:
+            break
+    return valor
+
+
+def segmentos_tarifa(recurso, fecha_inicio: date, fecha_fin: date) -> list:
+    """
+    Divide [fecha_inicio, fecha_fin] en tramos de tarifa constante según las
+    vigencias del recurso. Cada tramo: {"desde", "hasta", "valor" (None si no
+    hay tarifa aplicable), "dias_habiles", "horas_max"}. Sirve para mostrar
+    "la tarifa cambia el X" y para estimar costos mixtos en la UI.
+    """
+    tarifas = list(
+        TarifaVigente.objects.filter(recurso=recurso, fecha_desde__lte=fecha_fin)
+        .order_by("fecha_desde")
+        .values_list("fecha_desde", "valor_hora")
+    )
+    cortes = [fecha_inicio] + [fd for fd, _ in tarifas if fecha_inicio < fd <= fecha_fin]
+
+    cal = CalendarioRango(fecha_inicio, fecha_fin, [recurso])
+    segmentos = []
+    for i, desde in enumerate(cortes):
+        hasta = (cortes[i + 1] - timedelta(days=1)) if i + 1 < len(cortes) else fecha_fin
+        dias = 0
+        horas_max = 0.0
+        f = desde
+        while f <= hasta:
+            if cal.es_habil(f, recurso):
+                dias += 1
+                horas_max += capacidad_maxima_dia(f)
+            f += timedelta(days=1)
+        segmentos.append({
+            "desde": desde,
+            "hasta": hasta,
+            "valor": _tarifa_del_dia(tarifas, desde),
+            "dias_habiles": dias,
+            "horas_max": round(horas_max, 1),
+        })
+    return segmentos
+
+
+def costo_estimado_asignacion(asignacion):
+    """
+    Costo mixto de una asignación: por cada día hábil del rango, horas del día
+    × tarifa vigente ESE día. Retorna Decimal o None si el recurso no tiene
+    ninguna tarifa aplicable en el período.
+    """
+    tarifas = list(
+        TarifaVigente.objects.filter(
+            recurso_id=asignacion.recurso_id, fecha_desde__lte=asignacion.fecha_fin,
+        ).order_by("fecha_desde").values_list("fecha_desde", "valor_hora")
+    )
+    if not tarifas:
+        return None
+    cal = CalendarioRango(asignacion.fecha_inicio, asignacion.fecha_fin, [asignacion.recurso_id])
+    total = Decimal("0")
+    con_tarifa = False
+    f = asignacion.fecha_inicio
+    while f <= asignacion.fecha_fin:
+        if cal.es_habil(f, asignacion.recurso_id):
+            valor = _tarifa_del_dia(tarifas, f)
+            if valor is not None:
+                total += valor * Decimal(str(carga_propia(asignacion, f)))
+                con_tarifa = True
+        f += timedelta(days=1)
+    return total.quantize(Decimal("0.01")) if con_tarifa else None
+
+
+# ── Cesión de horas entre proyectos (acuerdo entre PMs) ─────────────────────
+
+
+def horas_cedibles(asignacion, fecha: date) -> float:
+    """Horas de ese día que la asignación aún puede ceder (carga propia bruta
+    menos lo ya cedido con cesiones activas)."""
+    bruto = carga_propia(asignacion, fecha)
+    cedidas = sum(
+        float(c.horas)
+        for c in CesionHoras.objects.filter(
+            asignacion_origen=asignacion, fecha=fecha, anulada_en__isnull=True,
+        )
+    )
+    return max(0.0, bruto - cedidas)
+
+
+def _extender_fecha_fin_con_cupo(asignacion, dias_extra: int) -> date:
+    """
+    Próxima fecha_fin que agrega `dias_extra` días hábiles CON CUPO después de
+    la fecha_fin actual (para recuperar horas cedidas con política RECOMPUTAR).
+    Lanza ValueError si no hay cupo en el próximo año.
+    """
+    recurso_id = asignacion.recurso_id
+    inicio = asignacion.fecha_fin + timedelta(days=1)
+    limite = inicio + timedelta(days=365)
+    cal = CalendarioRango(inicio, limite, [recurso_id])
+    carga_dias = mapa_carga([recurso_id], inicio, limite)[recurso_id]
+
+    encontrados = 0
+    fecha = inicio
+    while fecha <= limite:
+        if cal.es_habil(fecha, recurso_id):
+            necesita = carga_propia(asignacion, fecha)
+            if carga_dias.get(fecha, 0.0) + necesita <= capacidad_maxima_dia(fecha):
+                encontrados += 1
+                if encontrados == dias_extra:
+                    return fecha
+        fecha += timedelta(days=1)
+    raise ValueError("No hay días hábiles con cupo en el próximo año para recomputar la fecha fin.")
+
+
+def ceder_horas(asignacion_origen, proyecto_destino, fecha: date, horas, politica: str, actor):
+    """
+    Cede `horas` del día `fecha` de una asignación APROBADA a otro proyecto.
+
+    La original no se edita a mano: se crea una CesionHoras + una asignación
+    destino SOLICITADA de un día (que pasa por la aprobación normal), y la
+    política decide el efecto en la original:
+      - RECOMPUTAR: extiende fecha_fin en días hábiles con cupo (recupera horas).
+      - REDUCIR: baja horas_totales (y costo_estimado si está informado).
+
+    La tarifa cargada al receptor y descontada del original es la VIGENTE del
+    día laborado. Todo queda en LogAuditoria (CEDER en la original, CREAR en
+    la destino). Retorna la CesionHoras creada.
+    """
+    horas = float(horas)
+    with transaction.atomic():
+        recurso = asignacion_origen.recurso.__class__.all_objects.select_for_update().get(
+            pk=asignacion_origen.recurso_id
+        )
+        asignacion_origen.refresh_from_db()
+
+        if asignacion_origen.estado != "APROBADA":
+            raise ValueError("Solo se pueden ceder horas de asignaciones APROBADAS.")
+        if proyecto_destino.pk == asignacion_origen.proyecto_id:
+            raise ValueError("El proyecto destino debe ser distinto del proyecto original.")
+        if proyecto_destino.estado != "ACTIVO":
+            raise ValueError("El proyecto destino debe estar ACTIVO.")
+        if not (asignacion_origen.fecha_inicio <= fecha <= asignacion_origen.fecha_fin):
+            raise ValueError("La fecha no pertenece al período de la asignación.")
+        if not CalendarioRango(fecha, fecha, [recurso]).es_habil(fecha, recurso):
+            raise ValueError("La fecha indicada no es un día hábil para el recurso.")
+        if horas <= 0:
+            raise ValueError("Las horas a ceder deben ser mayores que 0.")
+        disponibles = horas_cedibles(asignacion_origen, fecha)
+        if horas > disponibles:
+            raise ValueError(f"Ese día la asignación solo tiene {disponibles:g} h cedibles.")
+        if politica not in dict(Asignacion.POLITICA_CHOICES):
+            raise ValueError("Política inválida (use RECOMPUTAR o REDUCIR).")
+
+        # Tarifa vigente del día laborado: se carga al receptor y se descuenta
+        # del original (decisión de negocio)
+        tarifa_obj = TarifaVigente.vigente_para(recurso, fecha)
+        tarifa = tarifa_obj.valor_hora if tarifa_obj else None
+        horas_dec = Decimal(str(horas))
+        monto = (tarifa * horas_dec).quantize(Decimal("0.01")) if tarifa is not None else None
+
+        destino = Asignacion.objects.create(
+            recurso=recurso,
+            proyecto=proyecto_destino,
+            modo_asignacion="RANGO",
+            fecha_inicio=fecha,
+            fecha_fin=fecha,
+            dias_habiles=1,
+            horas_totales=ceil(horas),
+            intensidad_diaria=horas_dec,
+            jornada_completa=False,
+            estado="SOLICITADA",
+            solicitada_por=actor,
+            tarifa_aplicada=tarifa,
+            costo_estimado=monto,
+        )
+        cesion = CesionHoras.objects.create(
+            asignacion_origen=asignacion_origen,
+            asignacion_destino=destino,
+            fecha=fecha,
+            horas=horas_dec,
+            politica=politica,
+            tarifa_hora=tarifa,
+            fecha_fin_original=asignacion_origen.fecha_fin,
+            creado_por=actor,
+        )
+
+        detalle = {
+            "cesion": cesion.pk,
+            "destino": destino.pk,
+            "proyecto_destino": proyecto_destino.codigo,
+            "fecha": fecha.isoformat(),
+            "horas": horas,
+            "politica": politica,
+            "tarifa_hora": float(tarifa) if tarifa is not None else None,
+            "monto_descontado": float(monto) if monto is not None else None,
+        }
+
+        if politica == "REDUCIR":
+            detalle["horas_totales_antes"] = asignacion_origen.horas_totales
+            asignacion_origen.horas_totales = max(0, (asignacion_origen.horas_totales or 0) - ceil(horas))
+            detalle["horas_totales_despues"] = asignacion_origen.horas_totales
+            if asignacion_origen.costo_estimado is not None and monto is not None:
+                detalle["costo_antes"] = float(asignacion_origen.costo_estimado)
+                asignacion_origen.costo_estimado -= monto
+                detalle["costo_despues"] = float(asignacion_origen.costo_estimado)
+            asignacion_origen.save(update_fields=["horas_totales", "costo_estimado", "updated_at"])
+        else:  # RECOMPUTAR
+            dias_extra = ceil(horas / float(asignacion_origen.intensidad_diaria or 8.0))
+            nueva_ff = _extender_fecha_fin_con_cupo(asignacion_origen, dias_extra)
+            detalle["fecha_fin_antes"] = asignacion_origen.fecha_fin.isoformat()
+            detalle["fecha_fin_despues"] = nueva_ff.isoformat()
+            asignacion_origen.fecha_fin = nueva_ff
+            asignacion_origen.dias_habiles = (asignacion_origen.dias_habiles or 0) + dias_extra
+            asignacion_origen.save(update_fields=["fecha_fin", "dias_habiles", "updated_at"])
+
+        LogAuditoria.objects.create(
+            asignacion=asignacion_origen, accion="CEDER", actor=actor, detalle=detalle,
+        )
+        LogAuditoria.objects.create(
+            asignacion=destino, accion="CREAR", actor=actor,
+            detalle={"modo": "CESION", "origen": asignacion_origen.pk, "cesion": cesion.pk},
+        )
+    return cesion
+
+
+def _anular_cesiones_recibidas(asignacion, actor):
+    """
+    Al rechazar/revocar una asignación nacida de una cesión, la cesión se anula
+    y la original recupera lo que la política le quitó. Las horas del día nunca
+    quedaron libres para terceros (estaban reservadas), así que no puede haber
+    sobreasignación al restaurar.
+    """
+    pendientes = asignacion.cesiones_recibidas.filter(
+        anulada_en__isnull=True
+    ).select_related("asignacion_origen")
+    for cesion in pendientes:
+        origen = cesion.asignacion_origen
+        cesion.anulada_en = timezone.now()
+        cesion.save(update_fields=["anulada_en"])
+
+        detalle = {
+            "cesion": cesion.pk,
+            "destino": asignacion.pk,
+            "fecha": cesion.fecha.isoformat(),
+            "horas": float(cesion.horas),
+            "politica": cesion.politica,
+        }
+        if cesion.politica == "REDUCIR":
+            detalle["horas_totales_antes"] = origen.horas_totales
+            origen.horas_totales = (origen.horas_totales or 0) + ceil(float(cesion.horas))
+            detalle["horas_totales_despues"] = origen.horas_totales
+            if origen.costo_estimado is not None and cesion.tarifa_hora is not None:
+                origen.costo_estimado += (cesion.tarifa_hora * cesion.horas).quantize(Decimal("0.01"))
+            origen.save(update_fields=["horas_totales", "costo_estimado", "updated_at"])
+        elif cesion.fecha_fin_original and origen.fecha_fin != cesion.fecha_fin_original:
+            detalle["fecha_fin_antes"] = origen.fecha_fin.isoformat()
+            detalle["fecha_fin_despues"] = cesion.fecha_fin_original.isoformat()
+            origen.fecha_fin = cesion.fecha_fin_original
+            origen.dias_habiles = contar_dias_habiles(
+                origen.fecha_inicio, origen.fecha_fin, origen.recurso
+            )
+            origen.save(update_fields=["fecha_fin", "dias_habiles", "updated_at"])
+
+        LogAuditoria.objects.create(
+            asignacion=origen, accion="ANULAR_CESION", actor=actor, detalle=detalle,
+        )
 
 
 # ── Solicitudes recurrentes (patrón semanal tipo "repetir sesión") ──────────
@@ -512,16 +840,20 @@ def crear_solicitudes_recurrentes(recurso, proyecto, fecha_inicio, semanas, hora
 
 
 def rechazar_asignacion(asignacion, actor, motivo=""):
-    asignacion.estado = "RECHAZADA"
-    asignacion.save(update_fields=["estado", "updated_at"])
-    LogAuditoria.objects.create(
-        asignacion=asignacion, accion="RECHAZAR", actor=actor, detalle={"motivo": motivo}
-    )
+    with transaction.atomic():
+        asignacion.estado = "RECHAZADA"
+        asignacion.save(update_fields=["estado", "updated_at"])
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="RECHAZAR", actor=actor, detalle={"motivo": motivo}
+        )
+        _anular_cesiones_recibidas(asignacion, actor)
 
 
 def revocar_asignacion(asignacion, actor, motivo=""):
-    asignacion.estado = "REVOCADA"
-    asignacion.save(update_fields=["estado", "updated_at"])
-    LogAuditoria.objects.create(
-        asignacion=asignacion, accion="REVOCAR", actor=actor, detalle={"motivo": motivo}
-    )
+    with transaction.atomic():
+        asignacion.estado = "REVOCADA"
+        asignacion.save(update_fields=["estado", "updated_at"])
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="REVOCAR", actor=actor, detalle={"motivo": motivo}
+        )
+        _anular_cesiones_recibidas(asignacion, actor)

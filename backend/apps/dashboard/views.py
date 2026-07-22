@@ -14,10 +14,13 @@ from apps.assignments.models import Asignacion
 from apps.calendar_engine.services import CalendarioRango
 from decimal import Decimal
 from math import ceil
+import json
+
 from apps.assignments.services import (
     disponibilidad_recursos, crear_solicitud, analizar_conflictos,
-    capacidad_maxima_dia, carga_propia,
+    capacidad_maxima_dia, mapa_carga,
     analizar_recurrencia, crear_solicitudes_recurrentes, SEMANAS_MAX_RECURRENCIA,
+    segmentos_tarifa, costo_estimado_asignacion,
 )
 
 
@@ -71,11 +74,15 @@ class OcupacionAPIView(APIView):
         # Calendario precargado (días no laborables + indisponibilidades) en 2 queries
         cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
 
+        # Carga diaria neta por recurso (incluye el efecto de cesiones de horas)
+        cargas = mapa_carga([r.pk for r in recursos], fecha_inicio, fecha_fin)
+
         ve_datos_personales = puede_ver_datos_personales(request.user)
 
         result = []
         for recurso in recursos:
             asig_recurso = [a for a in asignaciones if a.recurso_id == recurso.pk]
+            carga_dias = cargas.get(recurso.pk, {})
 
             detalle_por_dia = []
             cur = fecha_inicio
@@ -83,9 +90,7 @@ class OcupacionAPIView(APIView):
                 habil = cal.es_habil(cur, recurso)
                 if habil:
                     asig_hoy = [a for a in asig_recurso if a.fecha_inicio <= cur <= a.fecha_fin]
-                    # carga_propia: jornada completa cuenta como el tope del día
-                    # (8.5 lun–jue / 8 vie), no como su intensidad placeholder
-                    horas = sum(carga_propia(a, cur) for a in asig_hoy)
+                    horas = carga_dias.get(cur, 0.0)
                     detalle_por_dia.append({
                         "fecha": cur.isoformat(),
                         "horas_asignadas": round(horas, 2),
@@ -104,8 +109,7 @@ class OcupacionAPIView(APIView):
 
             # Estado del día de hoy
             if fecha_inicio <= hoy <= fecha_fin:
-                asig_hoy_list = [a for a in asig_recurso if a.fecha_inicio <= hoy <= a.fecha_fin]
-                horas_hoy = sum(carga_propia(a, hoy) for a in asig_hoy_list)
+                horas_hoy = carga_dias.get(hoy, 0.0)
             else:
                 horas_hoy = 0
 
@@ -262,6 +266,22 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         from apps.calendar_engine.services import contar_dias_habiles
         dias_habiles = contar_dias_habiles(fi, ff, recurso)
 
+        # Tramos de tarifa del período (costo mixto por día). En modo "por
+        # horas" la fecha fin real puede extenderse: ampliamos el horizonte
+        # para que el estimador tenga tarifa de los días adicionales.
+        hasta_seg = ff if modo_crear != "horas" else max(ff, fi + timedelta(days=180))
+        segmentos = segmentos_tarifa(recurso, fi, hasta_seg)
+        hay_tarifa = any(s["valor"] is not None for s in segmentos)
+        ve_costos = puede_ver_costos(request.user)
+        segmentos_json = json.dumps([
+            {
+                "dias": s["dias_habiles"],
+                "horasMax": s["horas_max"],
+                "valor": float(s["valor"]) if s["valor"] is not None else None,
+            }
+            for s in segmentos
+        ]) if ve_costos else "[]"
+
         return {
             "recurso": recurso,
             "proyectos": Proyecto.objects.filter(estado="ACTIVO").order_by("codigo"),
@@ -273,7 +293,10 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             "detalle_dias": detalle_dias,
             "dias_habiles": dias_habiles,
             "tarifa": tarifa,
-            "puede_ver_costos": puede_ver_costos(request.user),
+            "segmentos": segmentos,
+            "segmentos_json": segmentos_json,
+            "hay_tarifa": hay_tarifa,
+            "puede_ver_costos": ve_costos,
             "modo_crear": modo_crear,
             "horas_crear": horas_crear,
             "intensidad_crear": intensidad_crear,
@@ -384,6 +407,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         return render(request, "dashboard/solicitud_crear.html", {
             **ctx,
             "asignacion_creada": asignacion,
+            "costo_creada": costo_estimado_asignacion(asignacion),
             "dias_bloqueados": dias_bloqueados,
             "fue_recomputada": bool(dias_bloqueados),
             "conflict_dates_orig": dias_bloqueados,
@@ -476,6 +500,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         return render(request, "dashboard/solicitud_crear.html", {
             **ctx,
             "asignacion_creada": asignacion,
+            "costo_creada": costo_estimado_asignacion(asignacion),
             "fue_recomputada": bool(conflict_dates),
             "conflict_dates_orig": conflict_dates,
         })
