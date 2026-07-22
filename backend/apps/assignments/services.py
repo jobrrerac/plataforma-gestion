@@ -9,7 +9,7 @@ from apps.calendar_engine.services import (
     calcular_fecha_fin as _cal_fecha_fin,
     contar_dias_habiles,
 )
-from .models import Asignacion, CesionHoras, LogAuditoria
+from .models import Asignacion, CesionHoras, LiberacionRecurso, LogAuditoria
 from apps.core.models import TarifaVigente
 
 # Jornada real: lun–jue 8.5 h, vie 8 h → máximo semanal 42 h
@@ -65,6 +65,50 @@ def carga_en_fecha(recurso, fecha, excluir_id=None) -> float:
     return mapa_carga([rid], fecha, fecha, excluir_id)[rid].get(fecha, 0.0)
 
 
+def _ventanas_liberadas(asignacion_ids, fecha_inicio: date, fecha_fin: date) -> dict:
+    """
+    Ventanas de liberación APROBADAS de las asignaciones dadas que solapan el
+    rango. Retorna dict[asignacion_id] -> [(ini, fin), ...]. Los días dentro de
+    una ventana no consumen capacidad de esa asignación. Las solicitudes
+    pendientes (SOLICITADA) NO liberan cupo: solo lo hacen al aprobarse.
+    """
+    ventanas: dict = {}
+    if not asignacion_ids:
+        return ventanas
+    libs = LiberacionRecurso.objects.filter(
+        asignacion_id__in=list(asignacion_ids),
+        estado="APROBADA",
+        fecha_inicio__lte=fecha_fin,
+        fecha_fin__gte=fecha_inicio,
+    ).values_list("asignacion_id", "fecha_inicio", "fecha_fin")
+    for asig_id, ini, fin in libs:
+        ventanas.setdefault(asig_id, []).append((ini, fin))
+    return ventanas
+
+
+def _dias_habiles_liberables(asignacion, win_inicio: date, win_fin: date) -> tuple[int, float]:
+    """
+    Días hábiles del recurso con carga real dentro de la intersección de la
+    ventana [win_inicio, win_fin] con el período de la asignación, y la suma de
+    sus horas. Respeta fin de semana, feriados e indisponibilidades vía el
+    calendario. Retorna (dias, horas).
+    """
+    ini = max(win_inicio, asignacion.fecha_inicio)
+    fin = min(win_fin, asignacion.fecha_fin)
+    if ini > fin:
+        return 0, 0.0
+    cal = CalendarioRango(ini, fin, [asignacion.recurso_id])
+    dias = 0
+    horas = 0.0
+    fecha = ini
+    while fecha <= fin:
+        if cal.es_habil(fecha, asignacion.recurso_id):
+            dias += 1
+            horas += carga_propia(asignacion, fecha)
+        fecha += timedelta(days=1)
+    return dias, horas
+
+
 def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None) -> dict:
     """
     Precalcula la carga diaria (asignaciones APROBADAS) de varios recursos en
@@ -75,6 +119,10 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
     baja para terceros, así nadie más puede ocupar ese cupo). Se descuentan de
     la original solo cuando el destino está APROBADA (él ya carga sus horas) o
     cuando se está evaluando aprobar precisamente ese destino (excluir_id).
+
+    Liberaciones (congelamiento): mientras una liberación está activa, la
+    asignación no consume capacidad en los días de su ventana, así que esas
+    fechas se omiten al sumar la carga (el cupo queda libre para terceros).
     """
     ids = list(recurso_ids)
     qs = Asignacion.objects.filter(
@@ -87,13 +135,17 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
         qs = qs.exclude(pk=excluir_id)
     asignaciones = list(qs)
 
+    ventanas_liberadas = _ventanas_liberadas([a.pk for a in asignaciones], fecha_inicio, fecha_fin)
+
     carga: dict = {rid: {} for rid in ids}
     for a in asignaciones:
         por_dia = carga.setdefault(a.recurso_id, {})
+        ventanas = ventanas_liberadas.get(a.pk, ())
         fecha = max(a.fecha_inicio, fecha_inicio)
         fin = min(a.fecha_fin, fecha_fin)
         while fecha <= fin:
-            por_dia[fecha] = por_dia.get(fecha, 0.0) + carga_propia(a, fecha)
+            if not any(ini <= fecha <= f for ini, f in ventanas):
+                por_dia[fecha] = por_dia.get(fecha, 0.0) + carga_propia(a, fecha)
             fecha += timedelta(days=1)
 
     if asignaciones:
@@ -541,11 +593,15 @@ def costo_estimado_asignacion(asignacion):
     if not tarifas:
         return None
     cal = CalendarioRango(asignacion.fecha_inicio, asignacion.fecha_fin, [asignacion.recurso_id])
+    # Días congelados por una liberación activa no consumen horas → no cuestan.
+    ventanas = _ventanas_liberadas(
+        [asignacion.pk], asignacion.fecha_inicio, asignacion.fecha_fin
+    ).get(asignacion.pk, ())
     total = Decimal("0")
     con_tarifa = False
     f = asignacion.fecha_inicio
     while f <= asignacion.fecha_fin:
-        if cal.es_habil(f, asignacion.recurso_id):
+        if cal.es_habil(f, asignacion.recurso_id) and not any(ini <= f <= fin for ini, fin in ventanas):
             valor = _tarifa_del_dia(tarifas, f)
             if valor is not None:
                 total += valor * Decimal(str(carga_propia(asignacion, f)))
@@ -747,6 +803,212 @@ def _anular_cesiones_recibidas(asignacion, actor):
         LogAuditoria.objects.create(
             asignacion=origen, accion="ANULAR_CESION", actor=actor, detalle=detalle,
         )
+
+
+# ── Liberación temporal de recurso (congelamiento de horas) ─────────────────
+
+
+def solicitar_liberacion(asignacion, fecha_inicio: date, fecha_fin: date, politica: str, motivo: str, actor):
+    """
+    Crea una SOLICITUD de liberación (estado SOLICITADA) para una asignación
+    APROBADA durante [fecha_inicio, fecha_fin]. NO surte ningún efecto todavía:
+    ni congela la ventana ni toca la asignación — eso ocurre al aprobarla.
+
+    Valida lo que ya se puede validar en el momento de solicitar (estado,
+    ventana dentro del período, días hábiles con carga, sin otra liberación
+    viva ni cesiones activas en la ventana). Retorna la LiberacionRecurso.
+    """
+    if asignacion.estado != "APROBADA":
+        raise ValueError("Solo se pueden liberar asignaciones APROBADAS.")
+    if fecha_inicio > fecha_fin:
+        raise ValueError("La fecha de inicio no puede ser posterior a la fecha fin.")
+    if fecha_fin < asignacion.fecha_inicio or fecha_inicio > asignacion.fecha_fin:
+        raise ValueError("La ventana de liberación no se solapa con el período de la asignación.")
+    if politica not in dict(Asignacion.POLITICA_CHOICES):
+        raise ValueError("Política inválida (use RECOMPUTAR o REDUCIR).")
+    if LiberacionRecurso.objects.filter(
+        asignacion=asignacion, estado__in=["SOLICITADA", "APROBADA"],
+        fecha_inicio__lte=fecha_fin, fecha_fin__gte=fecha_inicio,
+    ).exists():
+        raise ValueError("Ya existe una liberación solicitada o aprobada que se solapa con esa ventana.")
+    if CesionHoras.objects.filter(
+        asignacion_origen=asignacion, anulada_en__isnull=True,
+        fecha__gte=fecha_inicio, fecha__lte=fecha_fin,
+    ).exists():
+        raise ValueError("Hay cesiones activas dentro de la ventana; anúlelas antes de liberar.")
+
+    dias, horas = _dias_habiles_liberables(asignacion, fecha_inicio, fecha_fin)
+    if dias == 0:
+        raise ValueError("La ventana no contiene días hábiles con carga para liberar.")
+
+    with transaction.atomic():
+        liberacion = LiberacionRecurso.objects.create(
+            asignacion=asignacion,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            politica=politica,
+            motivo=motivo or "",
+            estado="SOLICITADA",
+            dias_liberados=dias,
+            horas_liberadas=Decimal(str(round(horas, 1))),
+            solicitada_por=actor,
+        )
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="SOLICITAR_LIBERACION", actor=actor,
+            detalle={
+                "liberacion": liberacion.pk,
+                "ventana": [fecha_inicio.isoformat(), fecha_fin.isoformat()],
+                "dias_liberados": dias,
+                "horas_liberadas": round(horas, 1),
+                "politica": politica,
+                "motivo": motivo or "",
+            },
+        )
+    return liberacion
+
+
+def aprobar_liberacion(liberacion, actor):
+    """
+    Aprueba una solicitud de liberación SOLICITADA y aplica sus efectos: congela
+    la ventana (deja de consumir capacidad) y, según política, empuja fecha_fin
+    en días hábiles con cupo (RECOMPUTAR) o reduce horas_totales/días (REDUCIR).
+
+    Transaccional con select_for_update por recurso. Revalida en el momento de
+    aprobar (la asignación pudo cambiar desde la solicitud). Queda en LogAuditoria.
+    """
+    with transaction.atomic():
+        liberacion = LiberacionRecurso.objects.select_for_update().get(pk=liberacion.pk)
+        if liberacion.estado != "SOLICITADA":
+            raise ValueError("Solo se pueden aprobar liberaciones en estado SOLICITADA.")
+        asignacion = liberacion.asignacion
+        recurso = asignacion.recurso.__class__.all_objects.select_for_update().get(
+            pk=asignacion.recurso_id
+        )
+        asignacion.refresh_from_db()
+
+        if asignacion.estado != "APROBADA":
+            raise ValueError("La asignación ya no está APROBADA; no se puede liberar.")
+        if liberacion.fecha_fin < asignacion.fecha_inicio or liberacion.fecha_inicio > asignacion.fecha_fin:
+            raise ValueError("La ventana ya no se solapa con el período de la asignación.")
+
+        dias, horas = _dias_habiles_liberables(asignacion, liberacion.fecha_inicio, liberacion.fecha_fin)
+        if dias == 0:
+            raise ValueError("La ventana ya no contiene días hábiles con carga para liberar.")
+
+        # Aprobar primero (estado APROBADA) deja la ventana libre para el cálculo
+        # de capacidad de los pasos siguientes.
+        liberacion.estado = "APROBADA"
+        liberacion.dias_liberados = dias
+        liberacion.horas_liberadas = Decimal(str(round(horas, 1)))
+        liberacion.fecha_fin_original = asignacion.fecha_fin if liberacion.politica == "RECOMPUTAR" else None
+        liberacion.revisada_por = actor
+        liberacion.revisada_en = timezone.now()
+        liberacion.save(update_fields=[
+            "estado", "dias_liberados", "horas_liberadas", "fecha_fin_original",
+            "revisada_por", "revisada_en",
+        ])
+
+        detalle = {
+            "liberacion": liberacion.pk,
+            "ventana": [liberacion.fecha_inicio.isoformat(), liberacion.fecha_fin.isoformat()],
+            "dias_liberados": dias,
+            "horas_liberadas": round(horas, 1),
+            "politica": liberacion.politica,
+        }
+
+        if liberacion.politica == "RECOMPUTAR":
+            nueva_ff = _extender_fecha_fin_con_cupo(asignacion, dias)
+            detalle["fecha_fin_antes"] = asignacion.fecha_fin.isoformat()
+            detalle["fecha_fin_despues"] = nueva_ff.isoformat()
+            asignacion.fecha_fin = nueva_ff
+            asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
+            asignacion.save(update_fields=["fecha_fin", "costo_estimado", "updated_at"])
+        else:  # REDUCIR
+            detalle["horas_totales_antes"] = asignacion.horas_totales
+            asignacion.horas_totales = max(0, (asignacion.horas_totales or 0) - ceil(horas))
+            detalle["horas_totales_despues"] = asignacion.horas_totales
+            detalle["dias_habiles_antes"] = asignacion.dias_habiles
+            asignacion.dias_habiles = max(0, (asignacion.dias_habiles or 0) - dias)
+            detalle["dias_habiles_despues"] = asignacion.dias_habiles
+            asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
+            asignacion.save(update_fields=["horas_totales", "dias_habiles", "costo_estimado", "updated_at"])
+
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="LIBERAR", actor=actor, detalle=detalle,
+        )
+    return liberacion
+
+
+def rechazar_liberacion(liberacion, actor, motivo: str = ""):
+    """Rechaza una solicitud de liberación SOLICITADA (sin efecto sobre la asignación)."""
+    with transaction.atomic():
+        liberacion = LiberacionRecurso.objects.select_for_update().get(pk=liberacion.pk)
+        if liberacion.estado != "SOLICITADA":
+            raise ValueError("Solo se pueden rechazar liberaciones en estado SOLICITADA.")
+        liberacion.estado = "RECHAZADA"
+        liberacion.revisada_por = actor
+        liberacion.revisada_en = timezone.now()
+        liberacion.save(update_fields=["estado", "revisada_por", "revisada_en"])
+        LogAuditoria.objects.create(
+            asignacion=liberacion.asignacion, accion="RECHAZAR_LIBERACION", actor=actor,
+            detalle={"liberacion": liberacion.pk, "motivo": motivo or ""},
+        )
+    return liberacion
+
+
+def anular_liberacion(liberacion, actor):
+    """
+    Revierte una liberación APROBADA: la asignación vuelve a reclamar su carga en
+    la ventana. Restaura fecha_fin (RECOMPUTAR) u horas/días (REDUCIR) desde los
+    snapshots. Como el cupo de la ventana se reclama, se revalida capacidad: si
+    otro proyecto ya lo ocupó, se aborta con ValueError. Queda en LogAuditoria.
+    """
+    with transaction.atomic():
+        liberacion = LiberacionRecurso.objects.select_for_update().get(pk=liberacion.pk)
+        if liberacion.estado != "APROBADA":
+            raise ValueError("Solo se pueden anular liberaciones APROBADAS.")
+        asignacion = liberacion.asignacion
+        asignacion.recurso.__class__.all_objects.select_for_update().get(pk=asignacion.recurso_id)
+        asignacion.refresh_from_db()
+
+        # Marcarla anulada dentro de la transacción: a partir de aquí la ventana
+        # deja de estar liberada para el cálculo de capacidad.
+        liberacion.estado = "ANULADA"
+        liberacion.anulada_en = timezone.now()
+        liberacion.save(update_fields=["estado", "anulada_en"])
+
+        detalle = {
+            "liberacion": liberacion.pk,
+            "ventana": [liberacion.fecha_inicio.isoformat(), liberacion.fecha_fin.isoformat()],
+            "politica": liberacion.politica,
+        }
+
+        if liberacion.politica == "RECOMPUTAR":
+            detalle["fecha_fin_antes"] = asignacion.fecha_fin.isoformat()
+            if liberacion.fecha_fin_original:
+                asignacion.fecha_fin = liberacion.fecha_fin_original
+            detalle["fecha_fin_despues"] = asignacion.fecha_fin.isoformat()
+        else:  # REDUCIR
+            detalle["horas_totales_antes"] = asignacion.horas_totales
+            asignacion.horas_totales = (asignacion.horas_totales or 0) + ceil(float(liberacion.horas_liberadas))
+            detalle["horas_totales_despues"] = asignacion.horas_totales
+            asignacion.dias_habiles = (asignacion.dias_habiles or 0) + liberacion.dias_liberados
+
+        ok, fecha_conflicto = puede_asignar(asignacion)
+        if not ok:
+            raise ValueError(
+                f"No se puede anular: el recurso ya está ocupado el "
+                f"{fecha_conflicto.strftime('%d/%m/%Y')} dentro de la ventana liberada."
+            )
+
+        asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
+        asignacion.save(update_fields=[
+            "fecha_fin", "horas_totales", "dias_habiles", "costo_estimado", "updated_at",
+        ])
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="ANULAR_LIBERACION", actor=actor, detalle=detalle,
+        )
+    return liberacion
 
 
 # ── Solicitudes recurrentes (patrón semanal tipo "repetir sesión") ──────────

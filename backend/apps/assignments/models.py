@@ -110,6 +110,82 @@ class CesionHoras(models.Model):
         return self.anulada_en is None
 
 
+class LiberacionRecurso(models.Model):
+    """
+    Congelamiento temporal de una asignación APROBADA en una ventana de fechas:
+    durante ese tramo la asignación NO consume capacidad del recurso (se libera
+    el cupo para que pueda trabajar en otro proyecto). Según la política, las
+    horas no trabajadas se recuperan empujando fecha_fin (RECOMPUTAR) o se
+    descuentan del total (REDUCIR).
+
+    Ciclo de vida: la solicita un PM (SOLICITADA) y no surte ningún efecto hasta
+    que un Admin la aprueba (APROBADA) — solo entonces se congela la ventana y se
+    recomputa/reduce. Rechazarla (RECHAZADA) la descarta sin efecto; anular una
+    aprobada (ANULADA) revierte los efectos. La asignación NUNCA se edita a mano:
+    todo queda en LogAuditoria y es reversible con los snapshots guardados aquí.
+    """
+    ESTADO_CHOICES = [
+        ("SOLICITADA", "Solicitada"),
+        ("APROBADA", "Aprobada"),
+        ("RECHAZADA", "Rechazada"),
+        ("ANULADA", "Anulada"),
+    ]
+    asignacion = models.ForeignKey(
+        Asignacion, on_delete=models.PROTECT, related_name="liberaciones",
+    )
+    fecha_inicio = models.DateField(help_text="Primer día liberado (inclusive).")
+    fecha_fin = models.DateField(help_text="Último día liberado (inclusive).")
+    politica = models.CharField(
+        max_length=20, choices=Asignacion.POLITICA_CHOICES,
+        help_text="RECOMPUTAR: extiende fecha_fin para recuperar las horas. "
+                  "REDUCIR: baja el total de horas de la asignación.",
+    )
+    motivo = models.CharField(
+        max_length=200, blank=True,
+        help_text="Motivo de la liberación (ej: 'Cliente en vacaciones').",
+    )
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="SOLICITADA")
+    # Snapshots para poder anular (se completan al aprobar)
+    dias_liberados = models.PositiveIntegerField(
+        help_text="Días hábiles con carga que quedaron congelados en la ventana.",
+    )
+    horas_liberadas = models.DecimalField(
+        max_digits=6, decimal_places=1,
+        help_text="Suma de horas de los días congelados.",
+    )
+    fecha_fin_original = models.DateField(
+        null=True, blank=True,
+        help_text="fecha_fin de la asignación antes de recomputar (solo RECOMPUTAR).",
+    )
+    solicitada_por = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="liberaciones_solicitadas",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    revisada_por = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="liberaciones_revisadas",
+        help_text="Admin que aprobó o rechazó la solicitud.",
+    )
+    revisada_en = models.DateTimeField(null=True, blank=True)
+    anulada_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Liberación de recurso"
+        verbose_name_plural = "Liberaciones de recurso"
+        ordering = ["-creado_en"]
+
+    def __str__(self):
+        return (
+            f"{self.asignacion.recurso} liberado del {self.fecha_inicio} al "
+            f"{self.fecha_fin} ({self.get_politica_display()}) [{self.estado}]"
+        )
+
+    @property
+    def activa(self):
+        """Aprobada y vigente: es la que congela capacidad."""
+        return self.estado == "APROBADA"
+
+
 class LogAuditoria(models.Model):
     """Registro append-only de cambios de estado en asignaciones. No editar ni borrar."""
     ACCION_CHOICES = [
@@ -120,6 +196,10 @@ class LogAuditoria(models.Model):
         ("INVALIDAR", "Invalidar"),
         ("CEDER", "Ceder horas"),
         ("ANULAR_CESION", "Anular cesión"),
+        ("SOLICITAR_LIBERACION", "Solicitar liberación"),
+        ("LIBERAR", "Aprobar liberación"),
+        ("RECHAZAR_LIBERACION", "Rechazar liberación"),
+        ("ANULAR_LIBERACION", "Anular liberación"),
         ("RECOMPUTO_TARIFA", "Recomputo por cambio de tarifa"),
     ]
     asignacion = models.ForeignKey(Asignacion, on_delete=models.PROTECT, related_name="log")

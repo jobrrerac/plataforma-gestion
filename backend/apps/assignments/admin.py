@@ -8,12 +8,12 @@ from django.utils.html import format_html
 from apps.accounts.roles import es_admin
 from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles
 from apps.core.models import Proyecto
-from .models import Asignacion, CesionHoras, LogAuditoria
+from .models import Asignacion, CesionHoras, LiberacionRecurso, LogAuditoria
 from django.shortcuts import render as dj_render
 from .services import (
     aprobar_asignacion, rechazar_asignacion, revocar_asignacion,
     calcular_horas_jornada_completa, analizar_conflictos, aprobar_recomputando,
-    ceder_horas,
+    ceder_horas, aprobar_liberacion, rechazar_liberacion, anular_liberacion,
 )
 
 
@@ -122,6 +122,24 @@ class CesionRealizadaInline(admin.TabularInline):
         return False
 
 
+class LiberacionInline(admin.TabularInline):
+    """Liberaciones (congelamientos) de esta asignación (solo lectura;
+    se crean con el botón ❄ Liberar del listado)."""
+    model = LiberacionRecurso
+    fk_name = "asignacion"
+    extra = 0
+    verbose_name_plural = "Liberaciones de recurso"
+    readonly_fields = [
+        "estado", "fecha_inicio", "fecha_fin", "politica", "motivo", "dias_liberados",
+        "horas_liberadas", "fecha_fin_original", "solicitada_por", "creado_en",
+        "revisada_por", "revisada_en", "anulada_en",
+    ]
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Asignacion)
 class AsignacionAdmin(admin.ModelAdmin):
     form = AsignacionAdminForm
@@ -134,7 +152,7 @@ class AsignacionAdmin(admin.ModelAdmin):
     search_fields = ["recurso__nombre", "proyecto__codigo"]
     readonly_fields = ["estado", "fecha_fin", "tarifa_aplicada", "costo_estimado", "solicitada_por", "created_at"]
     exclude = ["deleted_at", "updated_at"]
-    inlines = [LogAuditoriaInline, CesionRealizadaInline]
+    inlines = [LogAuditoriaInline, CesionRealizadaInline, LiberacionInline]
     actions = ["action_aprobar", "action_rechazar", "action_revocar"]
 
     class Media:
@@ -489,6 +507,132 @@ class CesionHorasAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related(
             "asignacion_origen__recurso", "asignacion_origen__proyecto",
             "asignacion_destino__proyecto", "creado_por",
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(LiberacionRecurso)
+class LiberacionRecursoAdmin(admin.ModelAdmin):
+    """
+    Solicitudes de liberación: solo lectura de datos (las crea el PM desde
+    /liberacion/). Un Admin aprueba/rechaza las SOLICITADA y puede anular las
+    APROBADA desde la columna de acciones. Los efectos sobre la asignación solo
+    ocurren al aprobar.
+    """
+    list_display = [
+        "id", "recurso_nombre", "proyecto", "fecha_inicio", "fecha_fin",
+        "politica", "dias_liberados", "horas_liberadas", "estado_badge",
+        "acciones", "solicitada_por", "creado_en",
+    ]
+    list_filter = ["estado", "politica"]
+    date_hierarchy = "fecha_inicio"
+
+    @admin.display(description="Recurso")
+    def recurso_nombre(self, obj):
+        return obj.asignacion.recurso.nombre
+
+    @admin.display(description="Proyecto")
+    def proyecto(self, obj):
+        return obj.asignacion.proyecto.codigo
+
+    @admin.display(description="Estado", ordering="estado")
+    def estado_badge(self, obj):
+        colores = {
+            "SOLICITADA": "#6366f1",
+            "APROBADA": "#0ea5e9",
+            "RECHAZADA": "#dc2626",
+            "ANULADA": "#9ca3af",
+        }
+        color = colores.get(obj.estado, "#6b7280")
+        return format_html(
+            '<span style="background:{};color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em">{}</span>',
+            color, obj.get_estado_display(),
+        )
+
+    @staticmethod
+    def _btn(href, label, color):
+        style = (
+            f"background:{color};color:#fff;padding:2px 10px;border-radius:4px;"
+            "text-decoration:none;font-size:.75em;font-weight:600;white-space:nowrap"
+        )
+        return format_html('<a href="{}" style="{}">{}</a>', href, style, label)
+
+    @admin.display(description="Acciones")
+    def acciones(self, obj):
+        from django.urls import reverse
+        if obj.estado == "SOLICITADA":
+            aprobar = self._btn(reverse("admin:liberacion-aprobar", kwargs={"pk": obj.pk}), "✓ Aprobar", "#16a34a")
+            rechazar = self._btn(reverse("admin:liberacion-rechazar", kwargs={"pk": obj.pk}), "✗ Rechazar", "#dc2626")
+            return format_html('<div style="display:flex;gap:4px">{}{}</div>', aprobar, rechazar)
+        if obj.estado == "APROBADA":
+            return self._btn(reverse("admin:liberacion-anular", kwargs={"pk": obj.pk}), "↩ Anular", "#f97316")
+        return format_html('<span style="color:#aaa">—</span>')
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom = [
+            path("<int:pk>/aprobar/", self.admin_site.admin_view(self.view_aprobar), name="liberacion-aprobar"),
+            path("<int:pk>/rechazar/", self.admin_site.admin_view(self.view_rechazar), name="liberacion-rechazar"),
+            path("<int:pk>/anular/", self.admin_site.admin_view(self.view_anular), name="liberacion-anular"),
+        ]
+        return custom + urls
+
+    def _redirect_lista(self):
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        return HttpResponseRedirect(reverse("admin:assignments_liberacionrecurso_changelist"))
+
+    def _guard(self, request):
+        if not es_admin(request.user):
+            self.message_user(request, "Se requiere rol Admin para revisar liberaciones.", messages.ERROR)
+            return False
+        return True
+
+    def view_aprobar(self, request, pk):
+        if not self._guard(request):
+            return self._redirect_lista()
+        lib = LiberacionRecurso.objects.get(pk=pk)
+        try:
+            aprobar_liberacion(lib, request.user)
+            self.message_user(request, f"Liberación #{pk} aprobada y aplicada.", messages.SUCCESS)
+        except ValueError as e:
+            self.message_user(request, str(e), messages.ERROR)
+        return self._redirect_lista()
+
+    def view_rechazar(self, request, pk):
+        if not self._guard(request):
+            return self._redirect_lista()
+        lib = LiberacionRecurso.objects.get(pk=pk)
+        try:
+            rechazar_liberacion(lib, request.user)
+            self.message_user(request, f"Liberación #{pk} rechazada.", messages.WARNING)
+        except ValueError as e:
+            self.message_user(request, str(e), messages.ERROR)
+        return self._redirect_lista()
+
+    def view_anular(self, request, pk):
+        if not self._guard(request):
+            return self._redirect_lista()
+        lib = LiberacionRecurso.objects.get(pk=pk)
+        try:
+            anular_liberacion(lib, request.user)
+            self.message_user(request, f"Liberación #{pk} anulada; la asignación fue restaurada.", messages.SUCCESS)
+        except ValueError as e:
+            self.message_user(request, str(e), messages.ERROR)
+        return self._redirect_lista()
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "asignacion__recurso", "asignacion__proyecto", "solicitada_por",
         )
 
     def has_add_permission(self, request):

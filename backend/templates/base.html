@@ -213,6 +213,14 @@
          class="inet-nav-link {% block active_solicitud %}{% endblock %}">
         <i class="bi bi-people"></i> Solicitudes
       </a>
+      <a href="/cesion/"
+         class="inet-nav-link {% block active_cesion %}{% endblock %}">
+        <i class="bi bi-arrow-left-right"></i> Cesiones
+      </a>
+      <a href="/liberacion/"
+         class="inet-nav-link {% block active_liberacion %}{% endblock %}">
+        <i class="bi bi-snow"></i> Liberaciones
+      </a>
       {% if user.is_staff %}
       <a href="/admin/assignments/asignacion/"
          class="inet-nav-link {% block active_asignaciones %}{% endblock %}">

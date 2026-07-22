@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block page_title %}Solicitar liberación{% endblock %}
+{% block active_liberacion %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .asig-row { display:flex; justify-content:space-between; align-items:center; border:1px solid #eee; border-radius:10px; padding:12px 16px; margin-bottom:8px; }
+  .asig-row .meta { color:#6b7280; font-size:.85rem; }
+  .pol-opt { display:block; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:10px 14px; margin:6px 0; cursor:pointer; }
+  .pol-opt small { color:#6c757d; display:block; margin-top:2px; }
+  .btn-pink { background:#e0178a; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+  .badge-estado { padding:2px 8px; border-radius:4px; font-size:.72rem; color:#fff; font-weight:600; }
+  .snow { color:#0ea5e9; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><span class="snow">❄</span> Solicitar <span>liberación</span></h1>
+</div>
+
+<div class="container py-4" style="max-width:760px">
+
+  {% if exito %}
+  <div class="card p-4 text-center mb-4">
+    <div class="mb-2" style="font-size:2.6rem">🕗</div>
+    <h4 class="fw-bold mb-1" style="color:#6366f1;font-family:'Montserrat',sans-serif">Solicitud enviada</h4>
+    <p class="text-muted mb-3">
+      Liberación de <strong>{{ exito.asignacion.recurso.nombre }}</strong>
+      del {{ exito.fecha_inicio|date:"d/m/Y" }} al {{ exito.fecha_fin|date:"d/m/Y" }}
+      ({{ exito.dias_liberados }} día(s), {{ exito.horas_liberadas }} h).
+      Queda <strong>pendiente de aprobación</strong> por un Admin; no libera cupo hasta entonces.
+    </p>
+    <div>
+      <a href="/liberacion/" class="btn btn-outline-secondary btn-sm">Nueva solicitud</a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i> {{ error }}</div>
+  {% endif %}
+
+  {% if not asignacion_sel and not exito %}
+  <!-- Paso 1: elegir asignación aprobada -->
+  <div class="card p-4">
+    <h6 class="fw-bold mb-3">Eligela asignación a liberar</h6>
+    {% if asignaciones %}
+      {% for a in asignaciones %}
+      <div class="asig-row">
+        <div>
+          <div class="fw-semibold">{{ a.recurso.nombre }}</div>
+          <div class="meta">
+            {{ a.proyecto.codigo }} — {{ a.proyecto.nombre }} ·
+            {{ a.fecha_inicio|date:"d/m/Y" }} → {{ a.fecha_fin|date:"d/m/Y" }}
+            {% if a.jornada_completa %}· jornada completa{% else %}· {{ a.intensidad_diaria }} h/día{% endif %}
+          </div>
+        </div>
+        <a href="/liberacion/?asignacion={{ a.pk }}" class="btn btn-sm btn-pink">❄ Liberar</a>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted mb-0">No tenés asignaciones aprobadas para liberar.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if asignacion_sel %}
+  <!-- Paso 2: formulario de solicitud -->
+  <div class="card p-4 mb-3">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <div class="fw-bold">{{ asignacion_sel.recurso.nombre }}</div>
+        <div class="text-muted" style="font-size:.85rem">
+          {{ asignacion_sel.proyecto.codigo }} — {{ asignacion_sel.proyecto.nombre }} ·
+          {{ asignacion_sel.fecha_inicio|date:"d/m/Y" }} → {{ asignacion_sel.fecha_fin|date:"d/m/Y" }} ·
+          {{ asignacion_sel.horas_totales }} h
+        </div>
+      </div>
+      <a href="/liberacion/" style="color:#e0178a;text-decoration:none;font-size:.82rem">Cambiar</a>
+    </div>
+
+    <form method="post" action="/liberacion/">
+      {% csrf_token %}
+      <input type="hidden" name="asignacion" value="{{ asignacion_sel.pk }}">
+
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Desde <span class="text-danger">*</span></label>
+          <input type="date" name="fecha_inicio" class="form-control" required
+                 min="{{ asignacion_sel.fecha_inicio|date:'Y-m-d' }}" max="{{ asignacion_sel.fecha_fin|date:'Y-m-d' }}"
+                 value="{{ post.fecha_inicio|default:'' }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Hasta <span class="text-danger">*</span></label>
+          <input type="date" name="fecha_fin" class="form-control" required
+                 min="{{ asignacion_sel.fecha_inicio|date:'Y-m-d' }}" max="{{ asignacion_sel.fecha_fin|date:'Y-m-d' }}"
+                 value="{{ post.fecha_fin|default:'' }}">
+        </div>
+      </div>
+      <small class="text-muted">Solo cuentan los días hábiles con carga (fines de semana, feriados e indisponibilidades se ignoran).</small>
+
+      <label class="form-label fw-semibold mt-3">Motivo</label>
+      <input type="text" name="motivo" class="form-control" maxlength="200"
+             placeholder="Ej: Cliente en vacaciones" value="{{ post.motivo|default:'' }}">
+
+      <label class="form-label fw-semibold mt-3">Efecto solicitado <span class="text-danger">*</span></label>
+      <label class="pol-opt">
+        <input type="radio" name="politica" value="RECOMPUTAR"
+               {% if post.politica == "RECOMPUTAR" or not post.politica %}checked{% endif %}>
+        <strong>Recomputar fecha fin</strong> (preserva las horas)
+        <small>La fecha fin se extiende en los próximos días hábiles con cupo para recuperar los días liberados.</small>
+      </label>
+      <label class="pol-opt">
+        <input type="radio" name="politica" value="REDUCIR" {% if post.politica == "REDUCIR" %}checked{% endif %}>
+        <strong>Reducir horas totales</strong> (preserva la ventana)
+        <small>La asignación baja su total de horas por los días liberados.</small>
+      </label>
+
+      <div class="alert alert-info mt-3 mb-3" style="font-size:.85rem">
+        <i class="bi bi-info-circle me-1"></i>
+        La solicitud queda <strong>pendiente de aprobación</strong> por un Admin. No libera cupo ni cambia
+        la asignación hasta que se apruebe.
+      </div>
+
+      <button type="submit" class="btn btn-pink">Enviar solicitud</button>
+    </form>
+  </div>
+
+  {% if liberaciones %}
+  <div class="card p-4">
+    <h6 class="fw-bold mb-3">Liberaciones de esta asignación</h6>
+    {% for l in liberaciones %}
+    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #f0f0f0">
+      <div style="font-size:.85rem">
+        {{ l.fecha_inicio|date:"d/m/Y" }} → {{ l.fecha_fin|date:"d/m/Y" }} ·
+        {{ l.get_politica_display }} · {{ l.dias_liberados }} día(s)
+        {% if l.motivo %}· <span class="text-muted">{{ l.motivo }}</span>{% endif %}
+      </div>
+      <span class="badge-estado" style="background:
+        {% if l.estado == 'SOLICITADA' %}#6366f1{% elif l.estado == 'APROBADA' %}#0ea5e9{% elif l.estado == 'RECHAZADA' %}#dc2626{% else %}#9ca3af{% endif %}">
+        {{ l.get_estado_display }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+</div>
+{% endblock %}

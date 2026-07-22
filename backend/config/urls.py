@@ -7,6 +7,7 @@ from django.shortcuts import redirect
 from apps.dashboard.views import (
     OcupacionAPIView, OcupacionDashboardView, SolicitudView,
     SolicitudCrearView, SolicitudRecurrenteView, RecursoDetalleView,
+    LiberacionSolicitarView, CesionSolicitarView,
 )
 from apps.accounts.views import LoginRateLimitView, CambiarPasswordView
 
@@ -26,6 +27,8 @@ urlpatterns = [
     path("solicitud/", SolicitudView.as_view(), name="solicitud"),
     path("solicitud/crear/", SolicitudCrearView.as_view(), name="solicitud-crear"),
     path("solicitud/recurrente/", SolicitudRecurrenteView.as_view(), name="solicitud-recurrente"),
+    path("liberacion/", LiberacionSolicitarView.as_view(), name="liberacion-solicitar"),
+    path("cesion/", CesionSolicitarView.as_view(), name="cesion-solicitar"),
     path("dashboard/", OcupacionDashboardView.as_view(), name="dashboard"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
     path("login/", LoginRateLimitView.as_view(), name="login"),

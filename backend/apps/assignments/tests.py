@@ -3,11 +3,12 @@ from django.contrib.auth.models import User
 from datetime import date
 from decimal import Decimal
 from apps.core.models import Recurso, Proyecto, TarifaVigente
-from .models import Asignacion, LogAuditoria
+from .models import Asignacion, LiberacionRecurso, LogAuditoria
 from .services import (
     calcular_fecha_fin, puede_asignar, aprobar_asignacion,
     analizar_recurrencia, crear_solicitudes_recurrentes,
     ceder_horas, rechazar_asignacion, horas_cedibles, carga_en_fecha,
+    solicitar_liberacion, aprobar_liberacion, rechazar_liberacion, anular_liberacion,
 )
 
 
@@ -508,3 +509,304 @@ class CostoMixtoTests(TestCase):
         self.assertEqual(r["tarifa_cambios"][0]["valor"], 4.42)
         # Costo mixto de horas libres: solo los días desde el 6 valen dinero
         self.assertGreater(r["costo_estimado"], 0)
+
+
+class LiberacionTests(TestCase):
+    """
+    Congelamiento de horas vía solicitud + aprobación: el PM solicita liberar un
+    recurso en una ventana; la solicitud NO surte efecto hasta que un Admin la
+    aprueba. Al aprobar se congela la ventana (no consume capacidad) y, según
+    política, empuja fecha_fin (RECOMPUTAR) o reduce horas (REDUCIR). Reversible
+    y auditado.
+
+    Calendario de referencia: febrero 2026 no tiene feriados en Colombia.
+    Lun 2 → Vie 13 = 10 días hábiles.
+    """
+
+    def setUp(self):
+        self.pm = User.objects.create_user("pm_lib", password="x")
+        self.admin = User.objects.create_user("admin_lib", password="x")
+        self.recurso = Recurso.objects.create(nombre="LibDev", email="libdev@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-LIB", nombre="Astara", cliente="ASTARA",
+            fecha_inicio=date(2026, 2, 1), pm=self.pm,
+        )
+        self.proyecto2 = Proyecto.objects.create(
+            codigo="P-LIB2", nombre="Otro", cliente="OTRO",
+            fecha_inicio=date(2026, 2, 1), pm=self.pm,
+        )
+
+    def _aprobada(self, recurso=None, proyecto=None, horas=80, intensidad=8,
+                  inicio=date(2026, 2, 2)):
+        recurso = recurso or self.recurso
+        proyecto = proyecto or self.proyecto
+        from math import ceil
+        ff = calcular_fecha_fin(recurso, inicio, horas, intensidad)
+        return Asignacion.objects.create(
+            recurso=recurso, proyecto=proyecto,
+            horas_totales=horas, intensidad_diaria=intensidad,
+            dias_habiles=ceil(horas / intensidad),
+            fecha_inicio=inicio, fecha_fin=ff,
+            estado="APROBADA", solicitada_por=self.pm,
+        )
+
+    def _liberar(self, a, ini, fin, politica, motivo=""):
+        """Solicita (PM) y aprueba (Admin) en un paso — para los tests de efecto."""
+        lib = solicitar_liberacion(a, ini, fin, politica, motivo, self.pm)
+        return aprobar_liberacion(lib, self.admin)
+
+    # ── Solicitud (sin efecto hasta aprobar) ─────────────────────────────
+    def test_solicitud_no_libera_cupo_ni_toca_asignacion(self):
+        a = self._aprobada()
+        solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+        a.refresh_from_db()
+        # Nada cambia mientras esté SOLICITADA: la carga del día sigue completa.
+        self.assertEqual(a.fecha_fin, date(2026, 2, 13))
+        self.assertEqual(carga_en_fecha(self.recurso, date(2026, 2, 10)), 8.0)
+
+    def test_aprobar_aplica_los_efectos(self):
+        a = self._aprobada()
+        lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+        self.assertEqual(lib.estado, "SOLICITADA")
+        aprobar_liberacion(lib, self.admin)
+        a.refresh_from_db(); lib.refresh_from_db()
+        self.assertEqual(lib.estado, "APROBADA")
+        self.assertEqual(lib.revisada_por, self.admin)
+        self.assertEqual(a.fecha_fin, date(2026, 2, 20))
+
+    def test_rechazar_no_aplica_efecto(self):
+        a = self._aprobada()
+        lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "REDUCIR", "", self.pm)
+        rechazar_liberacion(lib, self.admin)
+        a.refresh_from_db(); lib.refresh_from_db()
+        self.assertEqual(lib.estado, "RECHAZADA")
+        self.assertEqual(a.horas_totales, 80)
+        self.assertEqual(a.fecha_fin, date(2026, 2, 13))
+
+    def test_no_se_aprueba_dos_veces(self):
+        a = self._aprobada()
+        lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
+        with self.assertRaises(ValueError):
+            aprobar_liberacion(lib, self.admin)
+
+    # ── RECOMPUTAR ───────────────────────────────────────────────────────
+    def test_recomputar_empuja_fecha_fin_y_preserva_horas(self):
+        a = self._aprobada()  # Feb 2 → Feb 13
+        lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "Cliente en vacaciones")
+        a.refresh_from_db()
+        # 5 días congelados (Feb 9–13) se recuperan en Feb 16–20
+        self.assertEqual(lib.dias_liberados, 5)
+        self.assertEqual(a.fecha_fin, date(2026, 2, 20))
+        self.assertEqual(a.horas_totales, 80)
+
+    def test_ventana_libera_cupo_para_otro_proyecto(self):
+        a = self._aprobada()
+        conflicto = Asignacion(
+            recurso=self.recurso, proyecto=self.proyecto2,
+            horas_totales=8, intensidad_diaria=8,
+            fecha_inicio=date(2026, 2, 10), fecha_fin=date(2026, 2, 10),
+            estado="SOLICITADA", solicitada_por=self.pm,
+        )
+        ok, _ = puede_asignar(conflicto)
+        self.assertFalse(ok)
+        self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
+        self.assertEqual(carga_en_fecha(self.recurso, date(2026, 2, 10)), 0.0)
+        ok, _ = puede_asignar(conflicto)
+        self.assertTrue(ok)
+
+    def test_recomputar_salta_dias_sin_cupo_al_extender(self):
+        a = self._aprobada()  # Feb 2 → Feb 13
+        self._aprobada(proyecto=self.proyecto2, horas=16, intensidad=8, inicio=date(2026, 2, 16))
+        self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
+        a.refresh_from_db()
+        # La extensión salta 16 y 17 (sin cupo) → 18,19,20,23,24 = 5 días
+        self.assertEqual(a.fecha_fin, date(2026, 2, 24))
+        self.assertEqual(a.horas_totales, 80)
+
+    # ── REDUCIR ──────────────────────────────────────────────────────────
+    def test_reducir_baja_horas_y_dias_conserva_ventana(self):
+        TarifaVigente.objects.create(recurso=self.recurso, valor_hora=Decimal("100.00"), fecha_desde=date(2026, 1, 1))
+        a = self._aprobada()  # 80h, 10 días, Feb 2 → 13
+        self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "REDUCIR")
+        a.refresh_from_db()
+        self.assertEqual(a.fecha_fin, date(2026, 2, 13))  # ventana intacta
+        self.assertEqual(a.horas_totales, 40)  # 80 − 5·8
+        self.assertEqual(a.dias_habiles, 5)
+        # Costo mixto: solo los 5 días no liberados (Feb 2–6) = 40h · 100
+        self.assertEqual(a.costo_estimado, Decimal("4000.00"))
+
+    # ── Bordes del calendario ────────────────────────────────────────────
+    def test_solo_cuenta_dias_habiles_en_la_ventana(self):
+        a = self._aprobada()
+        # Feb 5 (jue) a Feb 10 (mar) incluye fin de semana 7–8 → 4 días hábiles
+        lib = self._liberar(a, date(2026, 2, 5), date(2026, 2, 10), "RECOMPUTAR")
+        self.assertEqual(lib.dias_liberados, 4)
+        self.assertEqual(float(lib.horas_liberadas), 32.0)
+
+    # ── Anulación ────────────────────────────────────────────────────────
+    def test_anular_recomputar_restaura_fecha_fin(self):
+        a = self._aprobada()
+        lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
+        anular_liberacion(lib, self.admin)
+        a.refresh_from_db(); lib.refresh_from_db()
+        self.assertEqual(a.fecha_fin, date(2026, 2, 13))
+        self.assertEqual(lib.estado, "ANULADA")
+
+    def test_anular_reducir_restaura_horas(self):
+        a = self._aprobada()
+        lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "REDUCIR")
+        anular_liberacion(lib, self.admin)
+        a.refresh_from_db()
+        self.assertEqual(a.horas_totales, 80)
+        self.assertEqual(a.dias_habiles, 10)
+
+    def test_anular_falla_si_otro_proyecto_ocupo_la_ventana(self):
+        a = self._aprobada()
+        lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
+        # Otro proyecto ocupa la ventana ya liberada
+        self._aprobada(proyecto=self.proyecto2, horas=40, intensidad=8, inicio=date(2026, 2, 9))
+        with self.assertRaises(ValueError):
+            anular_liberacion(lib, self.admin)
+
+    def test_solo_se_anula_una_aprobada(self):
+        a = self._aprobada()
+        lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+        with self.assertRaises(ValueError):  # está SOLICITADA, no APROBADA
+            anular_liberacion(lib, self.admin)
+
+    # ── Auditoría ────────────────────────────────────────────────────────
+    def test_auditoria_registra_todo_el_ciclo(self):
+        a = self._aprobada()
+        lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "x", self.pm)
+        self.assertTrue(LogAuditoria.objects.filter(asignacion=a, accion="SOLICITAR_LIBERACION").exists())
+        aprobar_liberacion(lib, self.admin)
+        self.assertTrue(LogAuditoria.objects.filter(asignacion=a, accion="LIBERAR").exists())
+        anular_liberacion(lib, self.admin)
+        self.assertTrue(LogAuditoria.objects.filter(asignacion=a, accion="ANULAR_LIBERACION").exists())
+
+    # ── Guardas de la solicitud ──────────────────────────────────────────
+    def test_no_solicita_asignacion_no_aprobada(self):
+        a = self._aprobada()
+        a.estado = "SOLICITADA"
+        a.save(update_fields=["estado"])
+        with self.assertRaises(ValueError):
+            solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+
+    def test_ventana_fuera_de_periodo(self):
+        a = self._aprobada()  # termina Feb 13
+        with self.assertRaises(ValueError):
+            solicitar_liberacion(a, date(2026, 3, 2), date(2026, 3, 6), "RECOMPUTAR", "", self.pm)
+
+    def test_no_permite_solicitud_solapada(self):
+        a = self._aprobada()
+        solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+        with self.assertRaises(ValueError):
+            solicitar_liberacion(a, date(2026, 2, 12), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+
+    def test_bloquea_si_hay_cesion_activa_en_la_ventana(self):
+        a = self._aprobada()
+        ceder_horas(a, self.proyecto2, date(2026, 2, 10), 4, "RECOMPUTAR", self.admin)
+        a.refresh_from_db()
+        with self.assertRaises(ValueError):
+            solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
+
+
+class LiberacionViewTests(TestCase):
+    """La página /liberacion/ (PM/Admin): lista asignaciones y crea solicitudes."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.pm_group, _ = Group.objects.get_or_create(name="PM")
+        self.pm = User.objects.create_user("pm_view", password="x")
+        self.pm.groups.add(self.pm_group)
+        self.otro_pm = User.objects.create_user("pm_otro", password="x")
+        self.otro_pm.groups.add(self.pm_group)
+        self.ing = User.objects.create_user("ing_view", password="x")
+        self.recurso = Recurso.objects.create(nombre="ViewDev", email="viewdev@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-VW", nombre="P", cliente="C", fecha_inicio=date(2026, 2, 1), pm=self.pm,
+        )
+        from math import ceil
+        ff = calcular_fecha_fin(self.recurso, date(2026, 2, 2), 80, 8)
+        self.asig = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto, horas_totales=80,
+            intensidad_diaria=8, dias_habiles=10, fecha_inicio=date(2026, 2, 2),
+            fecha_fin=ff, estado="APROBADA", solicitada_por=self.pm,
+        )
+
+    def test_ingeniero_no_accede(self):
+        self.client.force_login(self.ing)
+        self.assertEqual(self.client.get("/liberacion/").status_code, 403)
+
+    def test_pm_ve_solo_sus_proyectos(self):
+        self.client.force_login(self.otro_pm)  # no es PM de P-VW
+        r = self.client.get("/liberacion/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, "ViewDev")
+
+    def test_pm_crea_solicitud(self):
+        from apps.assignments.models import LiberacionRecurso
+        self.client.force_login(self.pm)
+        r = self.client.post("/liberacion/", {
+            "asignacion": self.asig.pk,
+            "fecha_inicio": "2026-02-09", "fecha_fin": "2026-02-13",
+            "politica": "RECOMPUTAR", "motivo": "Cliente en vacaciones",
+        })
+        self.assertEqual(r.status_code, 200)
+        lib = LiberacionRecurso.objects.get(asignacion=self.asig)
+        self.assertEqual(lib.estado, "SOLICITADA")
+        self.assertEqual(lib.solicitada_por, self.pm)
+        # No aplicó efecto: sigue pendiente
+        self.asig.refresh_from_db()
+        self.assertEqual(self.asig.fecha_fin, date(2026, 2, 13))
+
+
+class CesionViewTests(TestCase):
+    """La página /cesion/ (PM/Admin): lista asignaciones y crea cesiones."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.pm_group, _ = Group.objects.get_or_create(name="PM")
+        self.pm = User.objects.create_user("pm_ces", password="x")
+        self.pm.groups.add(self.pm_group)
+        self.otro_pm = User.objects.create_user("pm_ces_otro", password="x")
+        self.otro_pm.groups.add(self.pm_group)
+        self.ing = User.objects.create_user("ing_ces", password="x")
+        self.recurso = Recurso.objects.create(nombre="CesDev", email="cesdev@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-CES", nombre="P", cliente="C", fecha_inicio=date(2026, 2, 1), pm=self.pm,
+        )
+        self.destino = Proyecto.objects.create(
+            codigo="P-CES-D", nombre="D", cliente="C", fecha_inicio=date(2026, 2, 1), pm=self.pm,
+        )
+        from math import ceil
+        ff = calcular_fecha_fin(self.recurso, date(2026, 2, 2), 80, 8)
+        self.asig = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto, horas_totales=80,
+            intensidad_diaria=8, dias_habiles=10, fecha_inicio=date(2026, 2, 2),
+            fecha_fin=ff, estado="APROBADA", solicitada_por=self.pm,
+        )
+
+    def test_ingeniero_no_accede(self):
+        self.client.force_login(self.ing)
+        self.assertEqual(self.client.get("/cesion/").status_code, 403)
+
+    def test_pm_ve_solo_sus_proyectos(self):
+        self.client.force_login(self.otro_pm)
+        r = self.client.get("/cesion/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, "CesDev")
+
+    def test_pm_crea_cesion(self):
+        from apps.assignments.models import CesionHoras
+        self.client.force_login(self.pm)
+        r = self.client.post("/cesion/", {
+            "asignacion": self.asig.pk, "fecha": "2026-02-10", "horas": "4",
+            "proyecto": self.destino.pk, "politica": "RECOMPUTAR",
+        })
+        self.assertEqual(r.status_code, 200)
+        cesion = CesionHoras.objects.get(asignacion_origen=self.asig)
+        self.assertEqual(float(cesion.horas), 4.0)
+        # Se creó una asignación destino SOLICITADA (gate de aprobación del Admin)
+        self.assertEqual(cesion.asignacion_destino.estado, "SOLICITADA")
+        self.assertEqual(cesion.asignacion_destino.proyecto, self.destino)

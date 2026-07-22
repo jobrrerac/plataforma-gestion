@@ -684,3 +684,159 @@ class RecursoDetalleView(View):
             "proximas": proximas,
             "hoy": hoy,
         })
+
+
+class LiberacionSolicitarView(PMOAdminRequiredMixin, View):
+    """
+    Página del PM para solicitar la liberación temporal de un recurso en una
+    ventana. La solicitud queda PENDIENTE (no libera cupo) hasta que un Admin la
+    aprueba. El PM solo ve las asignaciones aprobadas de SUS proyectos; el Admin
+    las ve todas.
+    """
+    template = "dashboard/liberacion_solicitar.html"
+
+    def _asignaciones_visibles(self, request):
+        from apps.accounts.roles import es_admin
+        qs = (
+            Asignacion.objects.filter(estado="APROBADA")
+            .select_related("recurso", "proyecto").order_by("recurso__nombre", "fecha_inicio")
+        )
+        if not es_admin(request.user):
+            qs = qs.filter(proyecto__pm=request.user)
+        return qs
+
+    def _base_ctx(self, request, asignacion=None):
+        from apps.assignments.models import LiberacionRecurso
+        ctx = {
+            "asignaciones": self._asignaciones_visibles(request),
+            "asignacion_sel": asignacion,
+            "hoy": date.today(),
+        }
+        if asignacion is not None:
+            ctx["liberaciones"] = LiberacionRecurso.objects.filter(
+                asignacion=asignacion
+            ).select_related("solicitada_por", "revisada_por").order_by("-creado_en")
+        return ctx
+
+    def _get_asignacion(self, request, pk):
+        if not pk:
+            return None
+        try:
+            return self._asignaciones_visibles(request).get(pk=pk)
+        except Asignacion.DoesNotExist:
+            return None
+
+    def get(self, request):
+        asignacion = self._get_asignacion(request, request.GET.get("asignacion"))
+        return render(request, self.template, self._base_ctx(request, asignacion))
+
+    def post(self, request):
+        from apps.assignments.services import solicitar_liberacion
+
+        asignacion = self._get_asignacion(request, request.POST.get("asignacion"))
+        ctx = self._base_ctx(request, asignacion)
+        if asignacion is None:
+            ctx["error"] = "Asignación inválida o fuera de tu alcance."
+            return render(request, self.template, ctx)
+
+        try:
+            fecha_inicio = date.fromisoformat(request.POST.get("fecha_inicio", ""))
+            fecha_fin = date.fromisoformat(request.POST.get("fecha_fin", ""))
+            politica = request.POST.get("politica", "")
+            motivo = (request.POST.get("motivo") or "").strip()
+        except (ValueError, TypeError):
+            ctx["error"] = "Formulario incompleto o con fechas inválidas."
+            ctx["post"] = request.POST
+            return render(request, self.template, ctx)
+
+        try:
+            liberacion = solicitar_liberacion(asignacion, fecha_inicio, fecha_fin, politica, motivo, request.user)
+        except ValueError as e:
+            ctx["error"] = str(e)
+            ctx["post"] = request.POST
+            return render(request, self.template, ctx)
+
+        ctx = self._base_ctx(request, asignacion)
+        ctx["exito"] = liberacion
+        return render(request, self.template, ctx)
+
+
+class CesionSolicitarView(PMOAdminRequiredMixin, View):
+    """
+    Página del PM para ceder horas de un día de una asignación aprobada a otro
+    proyecto. Al crear la cesión se genera una asignación destino SOLICITADA que
+    un Admin debe aprobar (ese es el gate); hasta entonces las horas quedan
+    RESERVADAS. El PM solo ve las asignaciones aprobadas de SUS proyectos.
+    """
+    template = "dashboard/cesion_solicitar.html"
+
+    def _asignaciones_visibles(self, request):
+        from apps.accounts.roles import es_admin
+        qs = (
+            Asignacion.objects.filter(estado="APROBADA")
+            .select_related("recurso", "proyecto").order_by("recurso__nombre", "fecha_inicio")
+        )
+        if not es_admin(request.user):
+            qs = qs.filter(proyecto__pm=request.user)
+        return qs
+
+    def _base_ctx(self, request, asignacion=None):
+        from apps.assignments.models import CesionHoras
+        ctx = {
+            "asignaciones": self._asignaciones_visibles(request),
+            "asignacion_sel": asignacion,
+            "hoy": date.today(),
+        }
+        if asignacion is not None:
+            ctx["proyectos"] = (
+                Proyecto.objects.filter(estado="ACTIVO")
+                .exclude(pk=asignacion.proyecto_id).order_by("codigo")
+            )
+            ctx["cesiones"] = (
+                CesionHoras.objects.filter(asignacion_origen=asignacion)
+                .select_related("asignacion_destino__proyecto", "creado_por")
+                .order_by("-creado_en")
+            )
+        return ctx
+
+    def _get_asignacion(self, request, pk):
+        if not pk:
+            return None
+        try:
+            return self._asignaciones_visibles(request).get(pk=pk)
+        except Asignacion.DoesNotExist:
+            return None
+
+    def get(self, request):
+        asignacion = self._get_asignacion(request, request.GET.get("asignacion"))
+        return render(request, self.template, self._base_ctx(request, asignacion))
+
+    def post(self, request):
+        from apps.assignments.services import ceder_horas
+
+        asignacion = self._get_asignacion(request, request.POST.get("asignacion"))
+        ctx = self._base_ctx(request, asignacion)
+        if asignacion is None:
+            ctx["error"] = "Asignación inválida o fuera de tu alcance."
+            return render(request, self.template, ctx)
+
+        try:
+            fecha = date.fromisoformat(request.POST.get("fecha", ""))
+            horas = float((request.POST.get("horas") or "").replace(",", "."))
+            proyecto = Proyecto.objects.get(pk=request.POST.get("proyecto"), estado="ACTIVO")
+            politica = request.POST.get("politica", "")
+        except (ValueError, TypeError, Proyecto.DoesNotExist):
+            ctx["error"] = "Formulario incompleto o con valores inválidos."
+            ctx["post"] = request.POST
+            return render(request, self.template, ctx)
+
+        try:
+            cesion = ceder_horas(asignacion, proyecto, fecha, horas, politica, request.user)
+        except ValueError as e:
+            ctx["error"] = str(e)
+            ctx["post"] = request.POST
+            return render(request, self.template, ctx)
+
+        ctx = self._base_ctx(request, asignacion)
+        ctx["exito"] = cesion
+        return render(request, self.template, ctx)

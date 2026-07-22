@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block page_title %}Ceder horas{% endblock %}
+{% block active_cesion %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#0d9488; box-shadow:0 0 0 .2rem rgba(13,148,136,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#0d9488; }
+  .asig-row { display:flex; justify-content:space-between; align-items:center; border:1px solid #eee; border-radius:10px; padding:12px 16px; margin-bottom:8px; }
+  .asig-row .meta { color:#6b7280; font-size:.85rem; }
+  .pol-opt { display:block; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:10px 14px; margin:6px 0; cursor:pointer; }
+  .pol-opt small { color:#6c757d; display:block; margin-top:2px; }
+  .btn-teal { background:#0d9488; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .btn-teal:hover { background:#0b7c72; color:#fff; }
+  .btn-teal-sm { background:#0d9488; color:#fff; border:none; font-weight:600; border-radius:6px; }
+  .btn-teal-sm:hover { background:#0b7c72; color:#fff; }
+  .badge-estado { padding:2px 8px; border-radius:4px; font-size:.72rem; color:#fff; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#0d9488;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi bi-arrow-left-right"></i> Ceder <span>horas</span></h1>
+</div>
+
+<div class="container py-4" style="max-width:760px">
+
+  {% if exito %}
+  <div class="card p-4 text-center mb-4">
+    <div class="mb-2" style="font-size:2.6rem">🕗</div>
+    <h4 class="fw-bold mb-1" style="color:#0d9488;font-family:'Montserrat',sans-serif">Cesión registrada</h4>
+    <p class="text-muted mb-3">
+      {{ exito.horas }} h del {{ exito.fecha|date:"d/m/Y" }} de
+      <strong>{{ exito.asignacion_origen.recurso.nombre }}</strong>
+      → <strong>{{ exito.asignacion_destino.proyecto.codigo }}</strong>.
+      Se creó una solicitud de 1 día para el proyecto receptor: queda
+      <strong>reservada</strong> hasta que un Admin la apruebe.
+    </p>
+    <a href="/cesion/" class="btn btn-outline-secondary btn-sm">Nueva cesión</a>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i> {{ error }}</div>
+  {% endif %}
+
+  {% if not asignacion_sel and not exito %}
+  <!-- Paso 1: elegir asignación aprobada -->
+  <div class="card p-4">
+    <h6 class="fw-bold mb-3">Eligela asignación desde la que ceder</h6>
+    {% if asignaciones %}
+      {% for a in asignaciones %}
+      <div class="asig-row">
+        <div>
+          <div class="fw-semibold">{{ a.recurso.nombre }}</div>
+          <div class="meta">
+            {{ a.proyecto.codigo }} — {{ a.proyecto.nombre }} ·
+            {{ a.fecha_inicio|date:"d/m/Y" }} → {{ a.fecha_fin|date:"d/m/Y" }}
+            {% if a.jornada_completa %}· jornada completa{% else %}· {{ a.intensidad_diaria }} h/día{% endif %}
+          </div>
+        </div>
+        <a href="/cesion/?asignacion={{ a.pk }}" class="btn btn-sm btn-teal-sm">⇄ Ceder</a>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted mb-0">No tenés asignaciones aprobadas para ceder.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if asignacion_sel %}
+  <!-- Paso 2: formulario de cesión -->
+  <div class="card p-4 mb-3">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <div class="fw-bold">{{ asignacion_sel.recurso.nombre }}</div>
+        <div class="text-muted" style="font-size:.85rem">
+          {{ asignacion_sel.proyecto.codigo }} — {{ asignacion_sel.proyecto.nombre }} ·
+          {{ asignacion_sel.fecha_inicio|date:"d/m/Y" }} → {{ asignacion_sel.fecha_fin|date:"d/m/Y" }} ·
+          {{ asignacion_sel.horas_totales }} h
+        </div>
+      </div>
+      <a href="/cesion/" style="color:#0d9488;text-decoration:none;font-size:.82rem">Cambiar</a>
+    </div>
+
+    <form method="post" action="/cesion/">
+      {% csrf_token %}
+      <input type="hidden" name="asignacion" value="{{ asignacion_sel.pk }}">
+
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Día a ceder <span class="text-danger">*</span></label>
+          <input type="date" name="fecha" class="form-control" required
+                 min="{{ asignacion_sel.fecha_inicio|date:'Y-m-d' }}" max="{{ asignacion_sel.fecha_fin|date:'Y-m-d' }}"
+                 value="{{ post.fecha|default:'' }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Horas a ceder <span class="text-danger">*</span></label>
+          <input type="number" name="horas" class="form-control" required min="0.5" max="8.5" step="0.5"
+                 value="{{ post.horas|default:'' }}">
+        </div>
+      </div>
+      <small class="text-muted">El día debe ser hábil y estar dentro del período de la asignación.</small>
+
+      <label class="form-label fw-semibold mt-3">Proyecto receptor <span class="text-danger">*</span></label>
+      <select name="proyecto" class="form-select" required>
+        <option value="">— Seleccioná el proyecto que recibe las horas —</option>
+        {% for p in proyectos %}
+        <option value="{{ p.pk }}" {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
+          {{ p.codigo }}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
+        </option>
+        {% endfor %}
+      </select>
+
+      <label class="form-label fw-semibold mt-3">Efecto sobre la asignación original <span class="text-danger">*</span></label>
+      <label class="pol-opt">
+        <input type="radio" name="politica" value="RECOMPUTAR"
+               {% if post.politica == "RECOMPUTAR" or not post.politica %}checked{% endif %}>
+        <strong>Recomputar fecha fin</strong> (preserva las horas)
+        <small>La fecha fin se extiende en los próximos días hábiles con cupo para recuperar las horas cedidas.</small>
+      </label>
+      <label class="pol-opt">
+        <input type="radio" name="politica" value="REDUCIR" {% if post.politica == "REDUCIR" %}checked{% endif %}>
+        <strong>Reducir horas totales</strong> (preserva la ventana)
+        <small>La asignación original baja su total de horas.</small>
+      </label>
+
+      <div class="alert alert-info mt-3 mb-3" style="font-size:.85rem">
+        <i class="bi bi-info-circle me-1"></i>
+        Las horas se cargan al proyecto receptor a la <strong>tarifa vigente del día laborado</strong>.
+        Se crea una solicitud de 1 día que un <strong>Admin debe aprobar</strong>; hasta entonces quedan reservadas.
+      </div>
+
+      <button type="submit" class="btn btn-teal">Ceder horas</button>
+    </form>
+  </div>
+
+  {% if cesiones %}
+  <div class="card p-4">
+    <h6 class="fw-bold mb-3">Cesiones de esta asignación</h6>
+    {% for c in cesiones %}
+    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #f0f0f0">
+      <div style="font-size:.85rem">
+        {{ c.horas }} h del {{ c.fecha|date:"d/m/Y" }} → {{ c.asignacion_destino.proyecto.codigo }} ·
+        {{ c.get_politica_display }}
+      </div>
+      {% if c.anulada_en %}
+        <span class="badge-estado" style="background:#9ca3af">ANULADA</span>
+      {% elif c.asignacion_destino.estado == "APROBADA" %}
+        <span class="badge-estado" style="background:#16a34a">EFECTIVA</span>
+      {% else %}
+        <span class="badge-estado" style="background:#6366f1">RESERVADA</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+</div>
+{% endblock %}
