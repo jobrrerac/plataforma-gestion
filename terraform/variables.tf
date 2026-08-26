@@ -322,6 +322,7 @@ variable "roles_entra" {
     "test.ingeniero" = "Ingeniero"
 
     "erika.castiblanco-monroy"  = "Ingeniero"
+    "sandra.chavarria-romero"   = "Ingeniero"
     "gustavo.villazon-gonzalez" = "Ingeniero"
     "ingrid.cespedes-diaz"      = "Ingeniero"
     "ivan.rodriguez-parra"      = "Ingeniero"
