@@ -1,0 +1,15 @@
+# Estado de Terraform: contiene la contrasena de PostgreSQL, el SECRET_KEY de
+# Django y el client secret de Entra EN CLARO. Nunca a git.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.bak
+
+# Valores concretos del entorno (pueden llevar IPs y overrides).
+*.tfvars
+!*.tfvars.example
+
+# Planes guardados: incluyen los valores de los secretos.
+*.tfplan
+crash.log
+crash.*.log
