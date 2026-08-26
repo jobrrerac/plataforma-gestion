@@ -20,6 +20,7 @@ class Command(BaseCommand):
             ("calendar_engine", "indisponibilidad",  ["add", "change", "delete", "view"]),
             ("auth",        "user",          ["add", "change", "delete", "view"]),
             ("auth",        "group",         ["add", "change", "delete", "view"]),
+            ("legalizacion", "tipoactividad", ["add", "change", "delete", "view"]),
         ])
 
         perms_pm = self._perms([
@@ -42,6 +43,8 @@ class Command(BaseCommand):
             # vinculado a la cuenta. Sin `delete`: cancelar una novedad pendiente
             # es un soft-delete que pasa por el servicio, no un borrado directo.
             ("calendar_engine", "indisponibilidad", ["add", "view"]),
+            # Catalogo de actividades: lo consulta al legalizar sus horas.
+            ("legalizacion", "tipoactividad", ["view"]),
         ])
 
         grupos = {

@@ -215,8 +215,16 @@ resource "azurerm_container_app_job" "migraciones" {
       memory = var.memoria
 
       command = ["/bin/sh", "-c"]
+      # Todos los comandos son idempotentes, por eso pueden correr en cada
+      # despliegue: migrate no reaplica lo aplicado, createcachetable no
+      # recrea la tabla, y los dos setup_ usan get_or_create / update_or_create.
       args = [
-        "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py setup_grupos"
+        join(" && ", [
+          "python manage.py migrate --noinput",
+          "python manage.py createcachetable",
+          "python manage.py setup_grupos",
+          "python manage.py setup_actividades",
+        ])
       ]
 
       dynamic "env" {

@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.assignments",
     "apps.accounts",
     "apps.dashboard",
+    "apps.legalizacion",
 ]
 
 MIDDLEWARE = [
