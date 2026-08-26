@@ -259,6 +259,34 @@
 </header>
 
 
+{% comment %}
+  Aviso de caducidad del secreto del SSO. Solo lo ven los Admin.
+
+  Existe porque Azure no avisa por ningún canal: el día que caduca, el botón
+  "Iniciar sesión con Microsoft" deja de funcionar sin mensaje ni correo, y hay
+  que saber que esa fecha existe para entender qué pasó. Quien herede esto no
+  tiene por qué saberlo, así que lo dice la propia aplicación.
+{% endcomment %}
+{% if sso_dias_para_caducar is not None %}
+<div style="background:{% if sso_secreto_caducado %}#fee2e2{% else %}#fef3c7{% endif %};
+            border-bottom:1px solid {% if sso_secreto_caducado %}#fca5a5{% else %}#fde68a{% endif %};
+            color:{% if sso_secreto_caducado %}#991b1b{% else %}#92400e{% endif %};
+            padding:10px 2rem;font-size:.84rem">
+  <i class="bi bi-{% if sso_secreto_caducado %}x-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>
+  {% if sso_secreto_caducado %}
+    <strong>El acceso con Microsoft está caído.</strong>
+    El secreto de cliente del SSO caducó hace {{ sso_dias_desde_caducidad }} día{{ sso_dias_desde_caducidad|pluralize }}.
+    Se sigue pudiendo entrar con usuario y contraseña mientras se rota.
+  {% else %}
+    <strong>El acceso con Microsoft dejará de funcionar en {{ sso_dias_para_caducar }} día{{ sso_dias_para_caducar|pluralize }}.</strong>
+    Hay que rotar el secreto de cliente antes de esa fecha.
+  {% endif %}
+  Se rota con <code style="background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px">terraform apply -replace=azuread_application_password.sso</code>
+  — ver <em>Rotar el secreto del SSO</em> en <code>docs/DESPLIEGUE_AZURE.md</code>.
+</div>
+{% endif %}
+
+
 <!-- ══════════════════════════════════════════════════════════════
      CONTENIDO
 ══════════════════════════════════════════════════════════════ -->

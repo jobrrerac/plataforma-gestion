@@ -59,6 +59,7 @@ TEMPLATES = [
                 # Roles del proyecto en plantillas. `user.is_staff` no equivale
                 # al rol: el RBAC vive en los grupos Admin/PM/Ingeniero.
                 "apps.accounts.context_processors.roles_usuario",
+                "apps.accounts.context_processors.aviso_caducidad_sso",
             ],
         },
     },
@@ -200,6 +201,17 @@ OIDC_DOMINIO_ALIAS = env.dict("OIDC_DOMINIO_ALIAS", default={})
 #
 # Formato: upn_de_entra=username_de_django[,otro=otro]
 OIDC_USUARIO_ALIAS = env.dict("OIDC_USUARIO_ALIAS", default={})
+
+# Fecha ISO en la que caduca el secreto de cliente del SSO, inyectada por
+# Terraform. Azure no avisa de esto por ningún canal: el día que ocurre, el
+# botón de Microsoft deja de funcionar sin mensaje ni correo, y hay que saber
+# dónde mirar para entender por qué. La aplicación lo avisa por su cuenta a los
+# Admin con antelación, porque para entonces es probable que quien montó el
+# despliegue ya no esté.
+#
+# Vacío = sin aviso (desarrollo local, o SSO desactivado).
+OIDC_SECRETO_CADUCA = env("OIDC_SECRETO_CADUCA", default="")
+OIDC_DIAS_AVISO_CADUCIDAD = env.int("OIDC_DIAS_AVISO_CADUCIDAD", default=60)
 
 # Cierra la sesión de Django al salir; no cierra la sesión del navegador con
 # Microsoft (eso obligaría a volver a poner la contraseña en otras apps).

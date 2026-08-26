@@ -130,13 +130,19 @@ resource "azuread_app_role_assignment" "admin_inicial" {
 resource "azuread_application_password" "sso" {
   application_id = azuread_application.sso.id
   display_name   = "terraform-${var.entorno}"
-  end_date       = timeadd(timestamp(), "8760h") # 1 ano
+  end_date       = timeadd(timestamp(), "${var.meses_vigencia_secreto * 730}h")
 
   lifecycle {
     # timestamp() cambia en cada plan. Sin esto, Terraform querria recrear el
     # secreto en cada apply y el SSO se caeria hasta el siguiente despliegue.
     # Para rotarlo a proposito: terraform apply -replace=azuread_application_password.sso
     ignore_changes = [end_date]
+
+    # Al rotar, el secreto nuevo se crea ANTES de borrar el viejo. Sin esto
+    # habria una ventana en la que el secreto ya no existe en Entra pero la
+    # Container App todavia usa el anterior, y el SSO se caeria a mitad del
+    # apply.
+    create_before_destroy = true
   }
 }
 

@@ -424,14 +424,40 @@ terraform output -raw entra_client_secret
 
 ### Rotar el secreto del SSO
 
-Caduca al año. `terraform output entra_caducidad_secreto` da la fecha exacta.
+**Azure no avisa de esto por ningún canal.** No manda correo, no genera alerta,
+y en el portal solo se ve si alguien va a mirarlo a propósito. El día que
+caduca, el botón "Iniciar sesión con Microsoft" deja de funcionar sin ningún
+mensaje que explique por qué.
+
+Por eso avisa la propia aplicación: a los **Admin** les aparece una franja en
+la cabecera desde 60 días antes, con el comando de rotación. Está pensada para
+quien herede esto y no sepa que esa fecha existe.
+
+Vigencia: **24 meses** (el máximo que admite Azure para un secreto de cliente).
+La fecha exacta:
 
 ```bash
-terraform apply -replace=azuread_application_password.sso
-az containerapp revision restart -n "$APP" -g "$RG" --revision <ultima>
+terraform -chdir=terraform output entra_caducidad_secreto
 ```
 
-Mientras tanto el login local sigue funcionando.
+Rotarlo:
+
+```bash
+cd terraform
+terraform apply -replace=azuread_application_password.sso
+```
+
+El secreto nuevo se crea **antes** de borrar el viejo (`create_before_destroy`),
+así que no hay ventana sin servicio, y el mismo apply actualiza el secreto de la
+Container App.
+
+Mientras se rota, el login local sigue funcionando: es la razón de que no se
+haya eliminado nunca.
+
+> **Para eliminar la caducidad del todo** haría falta sustituir el secreto por
+> una credencial federada contra la managed identity de la Container App. Es
+> viable, pero `mozilla-django-oidc` envía `client_secret` al token endpoint, así
+> que habría que implementar el intercambio con *client assertion* a mano.
 
 ### Apagar todo temporalmente
 

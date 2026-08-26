@@ -417,3 +417,31 @@ variable "presupuesto_inicio" {
   type        = string
   default     = "2026-08-01T00:00:00Z"
 }
+
+variable "meses_vigencia_secreto" {
+  description = <<-EOT
+    Vigencia del secreto de cliente del SSO, en meses. Azure admite hasta 24.
+
+    24 y no 12 por una razon concreta: cuando caduque, es probable que quien
+    monto esto ya no este. Azure NO avisa de la caducidad — ni correo, ni
+    alerta, ni nada: el boton de Microsoft simplemente deja de funcionar. El
+    aviso lo da la propia aplicacion (ver OIDC_SECRETO_CADUCA), y el login
+    local sigue siendo la via de entrada mientras se rota.
+
+    Rotarlo a proposito:
+      terraform apply -replace=azuread_application_password.sso
+  EOT
+  type        = number
+  default     = 24
+
+  validation {
+    condition     = var.meses_vigencia_secreto >= 1 && var.meses_vigencia_secreto <= 24
+    error_message = "Azure admite entre 1 y 24 meses."
+  }
+}
+
+variable "dias_aviso_caducidad_secreto" {
+  description = "Con cuantos dias de antelacion la aplicacion empieza a avisar a los Admin de que el secreto caduca."
+  type        = number
+  default     = 60
+}

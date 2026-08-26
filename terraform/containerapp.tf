@@ -68,6 +68,13 @@ locals {
     { name = "OIDC_DOMINIO_ALIAS", value = "${var.dominio_tenant}=${var.dominio_corporativo}" },
     # Identidades de Entra que apuntan a una cuenta concreta de Django.
     { name = "OIDC_USUARIO_ALIAS", value = join(",", [for upn, u in var.usuario_alias : "${upn}=${u}"]) },
+
+    # Cuando caduca el secreto de cliente. Azure NO avisa de esto: el dia que
+    # ocurra, el boton de Microsoft deja de funcionar sin ningun mensaje. La
+    # aplicacion lo avisa a los Admin con antelacion para que no se descubra
+    # por sorpresa, probablemente ya sin quien monto esto.
+    { name = "OIDC_SECRETO_CADUCA", value = azuread_application_password.sso.end_date },
+    { name = "OIDC_DIAS_AVISO_CADUCIDAD", value = tostring(var.dias_aviso_caducidad_secreto) },
   ]
 }
 
