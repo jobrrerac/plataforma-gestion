@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block page_title %}Revisar novedades{% endblock %}
+{% block active_novedades_revisar %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .nov-card { border:1px solid #eee; border-radius:12px; padding:18px; margin-bottom:14px; background:#fff; }
+  .nov-card .meta { color:#6b7280; font-size:.84rem; }
+  .tipo-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
+  .btn-aprobar { background:#059669; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.45rem 1.3rem; font-size:.85rem; }
+  .btn-aprobar:hover { background:#047857; color:#fff; }
+  .btn-rechazar { background:#fff; color:#991b1b; border:1px solid #fca5a5; font-weight:600; border-radius:8px; padding:.45rem 1.3rem; font-size:.85rem; }
+  .btn-rechazar:hover { background:#fee2e2; color:#991b1b; }
+  .aviso { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; margin-top:12px; font-size:.83rem; color:#92400e; }
+  .aviso ul { margin:6px 0 0; padding-left:18px; }
+  .vacio { text-align:center; color:#9ca3af; padding:44px 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi bi-check2-square" style="color:#e0178a"></i> Revisar <span>novedades</span></h1>
+</div>
+
+<div class="container py-4" style="max-width:860px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-success py-2 px-3" style="font-size:.87rem;border-radius:10px">
+      <i class="bi bi-check-circle me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger py-2 px-3" style="font-size:.87rem;border-radius:10px">
+    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  {% for n in pendientes %}
+  <div class="nov-card">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div>
+        <div class="fw-bold" style="font-family:'Montserrat',sans-serif">{{ n.recurso.nombre }}</div>
+        <div class="mt-1">
+          <span class="tipo-chip">{{ n.get_tipo_display }}</span>
+          <span class="ms-2 fw-semibold">{{ n.fecha_inicio|date:"d/m/Y" }} → {{ n.fecha_fin|date:"d/m/Y" }}</span>
+          <span class="meta ms-2">({{ n.dias_calendario }} día{{ n.dias_calendario|pluralize }})</span>
+        </div>
+        {% if n.motivo %}<div class="meta mt-1">{{ n.motivo }}</div>{% endif %}
+        <div class="meta mt-1">
+          Solicitada por
+          {% if n.solicitada_por %}{{ n.solicitada_por.get_full_name|default:n.solicitada_por.username }}{% else %}—{% endif %}
+          el {{ n.created_at|date:"d/m/Y H:i" }}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 align-items-start">
+        <form method="post" onsubmit="return confirm('¿Aprobar esta novedad? Pasará a descontar capacidad.')">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="aprobar">
+          <input type="hidden" name="novedad" value="{{ n.pk }}">
+          <button type="submit" class="btn-aprobar"><i class="bi bi-check-lg me-1"></i>Aprobar</button>
+        </form>
+        <button type="button" class="btn-rechazar" data-bs-toggle="collapse"
+                data-bs-target="#rechazo-{{ n.pk }}">
+          Rechazar
+        </button>
+      </div>
+    </div>
+
+    {% if n.afectadas %}
+    {# Aprobar no recalcula las asignaciones: sus fechas se computaron contando
+       estos días como hábiles. Se muestra para que la decisión sea informada. #}
+    <div class="aviso">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>Se cruza con {{ n.afectadas|length }} asignación{{ n.afectadas|pluralize:"es" }} aprobada{{ n.afectadas|pluralize }}.</strong>
+      Aprobar la novedad no recalcula sus fechas: habrá que revisarlas a mano.
+      <ul>
+        {% for a in n.afectadas %}
+        <li>{{ a.proyecto.codigo }} — {{ a.proyecto.nombre }} ({{ a.fecha_inicio|date:"d/m/Y" }} → {{ a.fecha_fin|date:"d/m/Y" }})</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="collapse mt-3" id="rechazo-{{ n.pk }}">
+      <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="rechazar">
+        <input type="hidden" name="novedad" value="{{ n.pk }}">
+        <input type="text" name="motivo_rechazo" class="form-control form-control-sm"
+               maxlength="200" placeholder="Motivo del rechazo (lo verá el solicitante)">
+        <button type="submit" class="btn-rechazar" style="white-space:nowrap">Confirmar rechazo</button>
+      </form>
+    </div>
+  </div>
+  {% empty %}
+  <div class="card vacio">
+    <div style="font-size:2.2rem">✅</div>
+    <div class="mt-2">No hay novedades pendientes de revisión.</div>
+  </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

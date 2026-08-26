@@ -11,6 +11,7 @@ from apps.dashboard.views import (
     LiberacionSolicitarView, CesionSolicitarView,
 )
 from apps.accounts.views import LoginRateLimitView, CambiarPasswordView, salud, listo
+from apps.calendar_engine.views_novedades import NovedadesView, NovedadesRevisarView
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
@@ -31,6 +32,10 @@ urlpatterns = [
     path("liberacion/", LiberacionSolicitarView.as_view(), name="liberacion-solicitar"),
     path("cesion/", CesionSolicitarView.as_view(), name="cesion-solicitar"),
     path("dashboard/", OcupacionDashboardView.as_view(), name="dashboard"),
+    # Novedades: el panel propio es para cualquier usuario autenticado; la cola
+    # de revisión, solo para Admin.
+    path("novedades/", NovedadesView.as_view(), name="novedades"),
+    path("novedades/revisar/", NovedadesRevisarView.as_view(), name="novedades-revisar"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
     # Sondas de la plataforma. Van sin autenticar y sin redirección a HTTPS.
     path("healthz/", salud, name="healthz"),

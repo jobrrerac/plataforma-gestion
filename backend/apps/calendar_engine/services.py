@@ -24,7 +24,12 @@ class CalendarioRango:
         from .models import DiaNoLaborable, Indisponibilidad
 
         dnl = DiaNoLaborable.objects.filter(fecha__gte=fecha_inicio)
-        indisp = Indisponibilidad.objects.filter(fecha_fin__gte=fecha_inicio)
+        # Solo las APROBADAS descuentan capacidad. Una novedad que nadie ha
+        # revisado todavía no puede bloquear la planificación: el recurso sigue
+        # contando como disponible hasta que un Admin la apruebe.
+        indisp = Indisponibilidad.objects.filter(
+            fecha_fin__gte=fecha_inicio, estado="APROBADA",
+        )
         if fecha_fin is not None:
             dnl = dnl.filter(fecha__lte=fecha_fin)
             indisp = indisp.filter(fecha_inicio__lte=fecha_fin)
@@ -55,7 +60,8 @@ class CalendarioRango:
 def es_habil(fecha: date, recurso=None) -> bool:
     """
     Devuelve True si la fecha es un día hábil para el recurso dado.
-    Orden de verificación: fin de semana → feriado Colombia → día no laborable global → indisponibilidad.
+    Orden de verificación: fin de semana → feriado Colombia → día no laborable
+    global → indisponibilidad APROBADA (las pendientes no cuentan).
 
     Consulta la BD en cada llamada: para evaluar muchos días en bucle,
     usar CalendarioRango.
@@ -72,10 +78,12 @@ def es_habil(fecha: date, recurso=None) -> bool:
         return False
 
     if recurso is not None:
+        # Igual que en CalendarioRango: solo las APROBADAS cuentan.
         if Indisponibilidad.objects.filter(
             recurso=recurso,
             fecha_inicio__lte=fecha,
             fecha_fin__gte=fecha,
+            estado="APROBADA",
         ).exists():
             return False
 

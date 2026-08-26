@@ -56,6 +56,9 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # Roles del proyecto en plantillas. `user.is_staff` no equivale
+                # al rol: el RBAC vive en los grupos Admin/PM/Ingeniero.
+                "apps.accounts.context_processors.roles_usuario",
             ],
         },
     },

@@ -209,6 +209,11 @@
          class="inet-nav-link {% block active_dashboard %}{% endblock %}">
         <i class="bi bi-grid-3x3-gap"></i> Dashboard
       </a>
+      {% comment %}
+        Solicitudes, cesiones y liberaciones exigen rol PM o Admin en la vista.
+        Mostrarlas a un ingeniero solo le ofrece cuatro enlaces que devuelven 403.
+      {% endcomment %}
+      {% if es_admin_o_pm %}
       <a href="/solicitud/"
          class="inet-nav-link {% block active_solicitud %}{% endblock %}">
         <i class="bi bi-people"></i> Solicitudes
@@ -221,6 +226,18 @@
          class="inet-nav-link {% block active_liberacion %}{% endblock %}">
         <i class="bi bi-snow"></i> Liberaciones
       </a>
+      {% endif %}
+      {# Novedades es para todo el mundo: un PM o un Admin también tiene vacaciones. #}
+      <a href="/novedades/"
+         class="inet-nav-link {% block active_novedades %}{% endblock %}">
+        <i class="bi bi-calendar-heart"></i> Novedades
+      </a>
+      {% if es_admin %}
+      <a href="/novedades/revisar/"
+         class="inet-nav-link {% block active_novedades_revisar %}{% endblock %}">
+        <i class="bi bi-check2-square"></i> Revisar
+      </a>
+      {% endif %}
       {% if user.is_staff %}
       <a href="/admin/assignments/asignacion/"
          class="inet-nav-link {% block active_asignaciones %}{% endblock %}">

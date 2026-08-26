@@ -316,6 +316,11 @@ variable "roles_entra" {
     # PM (Leon-Rangel Carmen). Mismo rol que ya tiene en la plataforma.
     "carmen.leon" = "PM"
 
+    # Cuenta de pruebas para validar el flujo de novedades con rol Ingeniero.
+    # Su Recurso esta marcado como inactivo para no aparecer en la planificacion;
+    # las novedades funcionan igual, no dependen de `activo`.
+    "test.ingeniero" = "Ingeniero"
+
     "erika.castiblanco-monroy"  = "Ingeniero"
     "gustavo.villazon-gonzalez" = "Ingeniero"
     "ingrid.cespedes-diaz"      = "Ingeniero"
