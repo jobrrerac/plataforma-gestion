@@ -80,7 +80,7 @@
       <div class="row g-3">
         <div class="col-md-3">
           <label class="form-label" style="font-size:.82rem;font-weight:600">Tipo</label>
-          <select name="tipo" class="form-select" required>
+          <select name="tipo" id="tipo" class="form-select" required>
             {% for valor, etiqueta in tipos %}
             <option value="{{ valor }}">{{ etiqueta }}</option>
             {% endfor %}
@@ -99,14 +99,36 @@
             <i class="bi bi-plus-lg me-1"></i>Registrar
           </button>
         </div>
-        <div class="col-12">
+        {# Solo tiene sentido en un permiso: unas vacaciones no necesitan explicarse. #}
+        <div class="col-12" id="campo-motivo" hidden>
           <label class="form-label" style="font-size:.82rem;font-weight:600">Motivo <span class="text-muted fw-normal">(opcional)</span></label>
-          <input type="text" name="motivo" class="form-control" maxlength="200"
-                 placeholder="Ej: vacaciones programadas, cita médica...">
+          <input type="text" name="motivo" id="motivo" class="form-control" maxlength="200"
+                 placeholder="Ej: cita médica, trámite personal..." disabled>
         </div>
       </div>
     </form>
   </div>
+
+  <script>
+    // El motivo solo aplica a los permisos. Se deshabilita además de ocultarse:
+    // un input deshabilitado no se envía, así que no se cuela un motivo escrito
+    // antes de cambiar el tipo a vacaciones.
+    (function () {
+      var tipo = document.getElementById('tipo');
+      var campo = document.getElementById('campo-motivo');
+      var input = document.getElementById('motivo');
+
+      function sincronizar() {
+        var esPermiso = tipo.value === 'PERMISO';
+        campo.hidden = !esPermiso;
+        input.disabled = !esPermiso;
+        if (!esPermiso) { input.value = ''; }
+      }
+
+      tipo.addEventListener('change', sincronizar);
+      sincronizar();
+    })();
+  </script>
 
   <!-- Historial -->
   <h6 class="fw-bold mb-3" style="font-family:'Montserrat',sans-serif;font-size:.92rem;color:#110d26">

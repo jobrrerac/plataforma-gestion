@@ -36,7 +36,10 @@ class Indisponibilidad(SoftDeleteModel):
     proyecto: la fila se conserva para auditoría.
     """
     TIPO_CHOICES = [
-        ("VACACION", "Vacación"),
+        # El valor almacenado sigue siendo VACACION: cambiarlo obligaría a
+        # migrar los datos y a tocar todo lo que filtre por él, sin ganar nada.
+        # Lo que ve la gente es la etiqueta.
+        ("VACACION", "Vacaciones"),
         ("PERMISO", "Permiso"),
     ]
     ORIGEN_CHOICES = [

@@ -881,7 +881,11 @@ def aprobar_liberacion(liberacion, actor):
         if liberacion.estado != "SOLICITADA":
             raise ValueError("Solo se pueden aprobar liberaciones en estado SOLICITADA.")
         asignacion = liberacion.asignacion
-        recurso = asignacion.recurso.__class__.all_objects.select_for_update().get(
+        # No se usa el objeto: la llamada está aquí por el bloqueo de fila que
+        # deja select_for_update sobre el recurso, que es lo que serializa las
+        # aprobaciones concurrentes ("primero en aprobar gana"). Borrarla por
+        # parecer código muerto reabriría la carrera.
+        asignacion.recurso.__class__.all_objects.select_for_update().get(
             pk=asignacion.recurso_id
         )
         asignacion.refresh_from_db()
