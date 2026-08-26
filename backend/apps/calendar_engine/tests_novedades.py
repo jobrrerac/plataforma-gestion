@@ -18,6 +18,7 @@ from apps.accounts import roles
 from apps.calendar_engine import novedades as svc
 from apps.calendar_engine.models import Indisponibilidad
 from apps.calendar_engine.services import CalendarioRango, es_habil
+from apps.assignments.models import Asignacion
 from apps.core.models import Recurso
 
 
@@ -356,3 +357,166 @@ class MigracionTests(TestCase):
             recurso=recurso, fecha_inicio=un_lunes(), fecha_fin=un_lunes(), tipo="VACACION"
         )
         self.assertEqual(n.estado, "PENDIENTE")
+
+
+class AusenciaEnDiaLibreTests(BaseNovedades):
+    """Requisito 1: un día libre con ausencia aprobada sale al 100%, no al 0%.
+
+    Pintarlo como un fin de semana lo haría leerse como hueco disponible, que es
+    justo lo contrario de lo que significa.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # El recurso debe ser asignable para aparecer en el heatmap.
+        self.recurso.activo = True
+        self.recurso.save(update_fields=["activo"])
+        self.client.force_login(self.admin)
+
+    def _ocupacion(self, hasta=None):
+        resp = self.client.get(
+            "/api/dashboard/ocupacion/",
+            {
+                "fecha_inicio": self.inicio.isoformat(),
+                "fecha_fin": (hasta or self.fin).isoformat(),
+            },
+        )
+        return resp.json()
+
+    def _dia(self, payload, fecha):
+        recurso = next(r for r in payload["recursos"] if r["id"] == self.recurso.pk)
+        return next(d for d in recurso["detalle_por_dia"] if d["fecha"] == fecha.isoformat())
+
+    def test_dia_sin_ausencia_sale_como_bench(self):
+        dia = self._dia(self._ocupacion(), self.inicio)
+        self.assertFalse(dia["no_habil"])
+        self.assertEqual(dia["porcentaje"], 0)
+
+    def test_ausencia_aprobada_sale_al_100_por_ciento(self):
+        n = svc.registrar_novedad(self.ing, self.inicio, self.fin, "VACACION")
+        svc.aprobar_novedad(n, self.admin)
+
+        dia = self._dia(self._ocupacion(), self.inicio)
+        self.assertTrue(dia["no_habil"])
+        self.assertTrue(dia["ausencia"])
+        self.assertEqual(dia["porcentaje"], 100)
+        self.assertEqual(dia["tipo_ausencia"], "VACACION")
+
+    def test_una_ausencia_pendiente_no_altera_el_dashboard(self):
+        svc.registrar_novedad(self.ing, self.inicio, self.fin, "PERMISO")
+        dia = self._dia(self._ocupacion(), self.inicio)
+        self.assertFalse(dia["no_habil"])
+        self.assertEqual(dia["porcentaje"], 0)
+
+    def test_un_finde_no_se_marca_como_ausencia(self):
+        # El fin de semana sigue en 0%: no hay nadie ausente, simplemente no se
+        # trabaja. Si saliera al 100% se confundirían dos cosas distintas.
+        sabado = self.inicio + timedelta(days=5)
+        dia = self._dia(self._ocupacion(hasta=self.fin + timedelta(days=3)), sabado)
+        self.assertTrue(dia["no_habil"])
+        self.assertFalse(dia["ausencia"])
+        self.assertEqual(dia["porcentaje"], 0)
+        self.assertEqual(dia["motivo_no_habil"], "FINDE")
+
+
+class AusenciaSobreAsignacionTests(BaseNovedades):
+    """Requisito 2: si esos días están ocupados, el aprobador elige política."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.assignments.services import calcular_fecha_fin
+        from apps.core.models import Proyecto
+
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-NOV", nombre="Proyecto Novedades", cliente="ACME",
+            fecha_inicio=self.inicio, pm=self.pm,
+        )
+        fin = calcular_fecha_fin(self.recurso, self.inicio, 40, 8)
+        self.asig = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=self.inicio, fecha_fin=fin,
+            horas_totales=40, intensidad_diaria=8, estado="APROBADA",
+            solicitada_por=self.pm,
+        )
+        self.dos_dias = (self.inicio, self.inicio + timedelta(days=1))
+
+    def test_sin_politica_no_se_aprueba(self):
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        with self.assertRaises(ValidationError):
+            svc.aprobar_novedad(n, self.admin)
+        n.refresh_from_db()
+        self.assertEqual(n.estado, "PENDIENTE")
+
+    def test_una_politica_invalida_tampoco_sirve(self):
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        with self.assertRaises(ValidationError):
+            svc.aprobar_novedad(n, self.admin, politicas={self.asig.pk: "INVENTADA"})
+
+    def test_recomputar_empuja_la_fecha_fin_y_conserva_horas(self):
+        fin_original = self.asig.fecha_fin
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+
+        svc.aprobar_novedad(n, self.admin, politicas={self.asig.pk: "RECOMPUTAR"})
+
+        self.asig.refresh_from_db()
+        self.assertGreater(self.asig.fecha_fin, fin_original)
+        self.assertEqual(self.asig.horas_totales, 40)
+
+    def test_reducir_recorta_horas_y_conserva_la_ventana(self):
+        fin_original = self.asig.fecha_fin
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+
+        svc.aprobar_novedad(n, self.admin, politicas={self.asig.pk: "REDUCIR"})
+
+        self.asig.refresh_from_db()
+        self.assertEqual(self.asig.fecha_fin, fin_original)
+        self.assertLess(self.asig.horas_totales, 40)
+
+    def test_la_novedad_queda_aprobada_y_el_dia_deja_de_ser_habil(self):
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        svc.aprobar_novedad(n, self.admin, politicas={self.asig.pk: "RECOMPUTAR"})
+
+        n.refresh_from_db()
+        self.assertEqual(n.estado, "APROBADA")
+        self.assertFalse(es_habil(self.inicio, self.recurso))
+
+    def test_queda_rastro_en_la_auditoria(self):
+        from apps.assignments.models import LogAuditoria
+
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        svc.aprobar_novedad(n, self.admin, politicas={self.asig.pk: "RECOMPUTAR"})
+
+        acciones = set(
+            LogAuditoria.objects.filter(asignacion=self.asig).values_list("accion", flat=True)
+        )
+        self.assertIn("SOLICITAR_LIBERACION", acciones)
+        self.assertIn("LIBERAR", acciones)
+
+    def test_sin_asignaciones_cruzadas_no_hace_falta_politica(self):
+        lejos = self.asig.fecha_fin + timedelta(days=14)
+        n = svc.registrar_novedad(self.ing, lejos, lejos + timedelta(days=1), "PERMISO")
+        svc.aprobar_novedad(n, self.admin)
+        n.refresh_from_db()
+        self.assertEqual(n.estado, "APROBADA")
+
+    def test_la_cola_del_admin_ofrece_las_dos_politicas(self):
+        svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("novedades-revisar")).content.decode()
+        self.assertIn("P-NOV", html)
+        self.assertIn("Mover el trabajo al final", html)
+        self.assertIn("Reducir las horas", html)
+
+    def test_aprobar_desde_la_cola_con_politica(self):
+        n = svc.registrar_novedad(self.ing, *self.dos_dias, "VACACION")
+        self.client.force_login(self.admin)
+        resp = self.client.post(reverse("novedades-revisar"), {
+            "accion": "aprobar",
+            "novedad": n.pk,
+            f"politica_{self.asig.pk}": "REDUCIR",
+        })
+        self.assertRedirects(resp, reverse("novedades-revisar"), fetch_redirect_response=False)
+        n.refresh_from_db()
+        self.assertEqual(n.estado, "APROBADA")
+        self.asig.refresh_from_db()
+        self.assertLess(self.asig.horas_totales, 40)

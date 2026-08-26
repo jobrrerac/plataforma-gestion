@@ -131,10 +131,23 @@ class NovedadesRevisarView(AdminRequiredMixin, View):
         accion = request.POST.get("accion")
         try:
             if accion == "aprobar":
-                svc.aprobar_novedad(novedad, request.user)
+                # Una política por asignación afectada: el formulario manda
+                # `politica_<id>` para cada una. Si el aprobador no eligió alguna,
+                # el servicio rechaza la aprobación entera.
+                politicas = {}
+                for clave, valor in request.POST.items():
+                    if clave.startswith("politica_"):
+                        try:
+                            politicas[int(clave.removeprefix("politica_"))] = valor
+                        except ValueError:
+                            continue
+
+                svc.aprobar_novedad(novedad, request.user, politicas=politicas)
+                ajustadas = len(politicas)
                 messages.success(
                     request,
-                    f"Novedad de {novedad.recurso.nombre} aprobada. Ya descuenta capacidad.",
+                    f"Novedad de {novedad.recurso.nombre} aprobada. Ya descuenta capacidad."
+                    + (f" Se ajustaron {ajustadas} asignación(es)." if ajustadas else ""),
                 )
             elif accion == "rechazar":
                 svc.rechazar_novedad(

@@ -17,6 +17,16 @@
     .heatmap .col-recurso small { display: block; color: #6c757d; font-weight: 400; }
     .heatmap .col-recurso a:hover { color: #e0178a !important; text-decoration: underline !important; }
     .cell-nohabil { background: #d4d4d4; }
+    /* Ausencia (vacaciones o permiso aprobado): la persona no está disponible.
+       Se distingue de un fin de semana a propósito — el gris se lee como
+       "nadie trabaja", y esto es "esta persona concreta no está". */
+    .cell-ausencia {
+      background: repeating-linear-gradient(
+        45deg, #7c3aed, #7c3aed 4px, #8b5cf6 4px, #8b5cf6 8px
+      );
+      color: #fff;
+      cursor: not-allowed;
+    }
     .cell-bench   { background: #fff; }
     .cell-low     { background: #d1fae5; }
     .cell-mid     { background: #fef08a; }
@@ -139,7 +149,14 @@
   flatpickr("#fecha-inicio", { ...fpOpts, defaultDate: primerDia });
   flatpickr("#fecha-fin",    { ...fpOpts, defaultDate: ultimoDia });
 
-  function cellClass(pct, noHabil) {
+  const MOTIVOS = {
+    FINDE: "Fin de semana",
+    FERIADO: "Feriado",
+    NO_LABORABLE: "Día no laborable",
+  };
+
+  function cellClass(pct, noHabil, esAusencia) {
+    if (esAusencia) return "cell-ausencia";
     if (noHabil) return "cell-nohabil";
     if (pct === 0)  return "cell-bench";
     if (pct <= 25)  return "cell-low";
@@ -207,11 +224,20 @@
           </small>
         </td>`;
       r.detalle_por_dia.forEach(d => {
-        const cls     = cellClass(d.porcentaje, d.no_habil);
-        const label   = d.no_habil ? "" : fmtPct(d.porcentaje);
-        const tooltip = d.no_habil
-          ? "No hábil"
-          : (d.porcentaje > 0 ? `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}` : "Bench");
+        const cls   = cellClass(d.porcentaje, d.no_habil, d.ausencia);
+        // La ausencia sí lleva etiqueta: es 100% de no disponibilidad, no un
+        // hueco. Los fines de semana y feriados siguen en blanco.
+        const label = d.ausencia ? "100%" : (d.no_habil ? "" : fmtPct(d.porcentaje));
+        let tooltip;
+        if (d.ausencia) {
+          tooltip = (d.tipo_ausencia === "VACACION" ? "Vacaciones" : "Permiso") + " · no disponible";
+        } else if (d.no_habil) {
+          tooltip = MOTIVOS[d.motivo_no_habil] || "No hábil";
+        } else {
+          tooltip = d.porcentaje > 0
+            ? `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}`
+            : "Bench";
+        }
         cells += `<td class="day-cell ${cls}" title="${tooltip}">${label}</td>`;
       });
       rows += `<tr>${cells}</tr>`;

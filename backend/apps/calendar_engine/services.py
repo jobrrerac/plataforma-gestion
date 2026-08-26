@@ -38,23 +38,48 @@ class CalendarioRango:
             indisp = indisp.filter(recurso_id__in=ids)
 
         self.no_laborables = set(dnl.values_list("fecha", flat=True))
-        self._indisp: dict[int, list[tuple[date, date]]] = {}
-        for rec_id, ini, fin in indisp.values_list("recurso_id", "fecha_inicio", "fecha_fin"):
-            self._indisp.setdefault(rec_id, []).append((ini, fin))
+        self._indisp: dict[int, list[tuple[date, date, str]]] = {}
+        for rec_id, ini, fin, tipo in indisp.values_list(
+            "recurso_id", "fecha_inicio", "fecha_fin", "tipo"
+        ):
+            self._indisp.setdefault(rec_id, []).append((ini, fin, tipo))
 
     def es_habil(self, fecha: date, recurso=None) -> bool:
+        return self.motivo_no_habil(fecha, recurso) is None
+
+    def motivo_no_habil(self, fecha: date, recurso=None):
+        """Por qué el día no es hábil, o None si sí lo es.
+
+        Distinguir el motivo importa para el dashboard: un fin de semana o un
+        feriado es un día en el que nadie trabaja, mientras que una ausencia
+        (vacaciones o permiso aprobado) es una persona concreta no disponible.
+        Pintarlos igual haría que un recurso de vacaciones se leyera como
+        "libre", que es justo lo contrario.
+
+        Valores: FINDE, FERIADO, NO_LABORABLE, AUSENCIA.
+        """
         if fecha.weekday() >= 5:
-            return False
+            return "FINDE"
         if fecha in _feriados_colombia(fecha.year):
-            return False
+            return "FERIADO"
         if fecha in self.no_laborables:
-            return False
+            return "NO_LABORABLE"
         if recurso is not None:
             rec_id = recurso.pk if hasattr(recurso, "pk") else recurso
-            for ini, fin in self._indisp.get(rec_id, ()):
+            for ini, fin, _tipo in self._indisp.get(rec_id, ()):
                 if ini <= fecha <= fin:
-                    return False
-        return True
+                    return "AUSENCIA"
+        return None
+
+    def tipo_ausencia(self, fecha: date, recurso=None):
+        """VACACION o PERMISO si ese día el recurso está ausente; None si no."""
+        if recurso is None:
+            return None
+        rec_id = recurso.pk if hasattr(recurso, "pk") else recurso
+        for ini, fin, tipo in self._indisp.get(rec_id, ()):
+            if ini <= fecha <= fin:
+                return tipo
+        return None
 
 
 def es_habil(fecha: date, recurso=None) -> bool:

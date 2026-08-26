@@ -25,6 +25,11 @@ from .models import Indisponibilidad
 # lejano: los meses cerrados ya se usaron para planificar y facturar.
 DIAS_RETROACTIVIDAD_MAX = 60
 
+# Qué hacer con una asignación cuyo período se cruza con la ausencia. Son las
+# mismas dos políticas de `Asignacion.POLITICA_CHOICES`, y se aplican con la
+# maquinaria de `LiberacionRecurso`.
+POLITICAS_VALIDAS = ("RECOMPUTAR", "REDUCIR")
+
 
 def recurso_de(usuario):
     """Recurso asociado a la cuenta, o None.
@@ -153,13 +158,66 @@ def _exigir_pendiente(novedad):
 
 
 @transaction.atomic
-def aprobar_novedad(novedad, admin):
-    """Aprueba la novedad. A partir de aquí sí descuenta capacidad."""
+def aprobar_novedad(novedad, admin, politicas=None):
+    """Aprueba la novedad. A partir de aquí sí descuenta capacidad.
+
+    Si las fechas se cruzan con asignaciones APROBADAS, hay que decidir qué pasa
+    con cada una — no se puede aprobar una ausencia y dejar el compromiso como
+    estaba, porque su `fecha_fin` se calculó contando esos días como hábiles:
+
+        RECOMPUTAR  el trabajo se empuja al final, se conservan las horas
+        REDUCIR     se recortan las horas, se conserva la ventana
+
+    `politicas` es {asignacion_id: "RECOMPUTAR"|"REDUCIR"}. Falta alguna y la
+    aprobación se rechaza entera: aprobar "a medias" dejaría unos proyectos
+    ajustados y otros con fechas silenciosamente falsas.
+
+    Se reutiliza la maquinaria de `LiberacionRecurso`, que ya tiene resueltos el
+    recomputo, la reducción, los snapshots para poder anular y el rastro en
+    LogAuditoria. Escribir aquí una segunda implementación de lo mismo sería
+    duplicar la parte más delicada del sistema.
+    """
+    from apps.assignments.services import aprobar_liberacion, solicitar_liberacion
+
     _exigir_admin(admin)
     # Bloquea la fila: dos administradores aprobando a la vez podrían pisarse y
     # dejar revisada_por con el que perdió la carrera.
     novedad = Indisponibilidad.objects.select_for_update().get(pk=novedad.pk)
     _exigir_pendiente(novedad)
+
+    afectadas = list(asignaciones_afectadas(novedad))
+    politicas = politicas or {}
+
+    faltantes = [a for a in afectadas if politicas.get(a.pk) not in POLITICAS_VALIDAS]
+    if faltantes:
+        raise ValidationError(
+            "Hay que decidir qué hacer con "
+            + ", ".join(a.proyecto.codigo for a in faltantes)
+            + ": mover el trabajo al final (RECOMPUTAR) o reducir las horas (REDUCIR)."
+        )
+
+    # ORDEN CRÍTICO: las liberaciones van ANTES de marcar la novedad como
+    # aprobada. `solicitar_liberacion` cuenta los días hábiles con carga de la
+    # ventana, y en cuanto la novedad está APROBADA esos días dejan de ser
+    # hábiles: contaría cero y fallaría con "la ventana no contiene días hábiles
+    # con carga para liberar".
+    for asignacion in afectadas:
+        try:
+            liberacion = solicitar_liberacion(
+                asignacion=asignacion,
+                fecha_inicio=max(novedad.fecha_inicio, asignacion.fecha_inicio),
+                fecha_fin=min(novedad.fecha_fin, asignacion.fecha_fin),
+                politica=politicas[asignacion.pk],
+                motivo=f"{novedad.get_tipo_display()} de {novedad.recurso.nombre}",
+                actor=admin,
+            )
+            aprobar_liberacion(liberacion, admin)
+        except ValueError as exc:
+            # La transacción entera se deshace: o se ajustan todos los
+            # compromisos afectados, o no se aprueba nada.
+            raise ValidationError(
+                f"No se pudo ajustar {asignacion.proyecto.codigo}: {exc}"
+            ) from exc
 
     novedad.estado = "APROBADA"
     novedad.revisada_por = admin
