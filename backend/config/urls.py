@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
@@ -9,7 +10,7 @@ from apps.dashboard.views import (
     SolicitudCrearView, SolicitudRecurrenteView, RecursoDetalleView,
     LiberacionSolicitarView, CesionSolicitarView,
 )
-from apps.accounts.views import LoginRateLimitView, CambiarPasswordView
+from apps.accounts.views import LoginRateLimitView, CambiarPasswordView, salud, listo
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
@@ -31,8 +32,19 @@ urlpatterns = [
     path("cesion/", CesionSolicitarView.as_view(), name="cesion-solicitar"),
     path("dashboard/", OcupacionDashboardView.as_view(), name="dashboard"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
+    # Sondas de la plataforma. Van sin autenticar y sin redirección a HTTPS.
+    path("healthz/", salud, name="healthz"),
+    path("readyz/", listo, name="readyz"),
     path("login/", LoginRateLimitView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(next_page="/login/"), name="logout"),
     path("password/cambiar/", CambiarPasswordView.as_view(), name="password-cambiar"),
     path("", OcupacionDashboardView.as_view(), name="home"),
 ]
+
+# SSO con Entra ID. Las rutas solo existen si está configurado: sin client_id no
+# hay a dónde redirigir, y dejarlas montadas daría un error 500 a quien las
+# alcance por accidente. El login local funciona con o sin esto.
+if getattr(settings, "OIDC_HABILITADO", False) and getattr(settings, "OIDC_RP_CLIENT_ID", ""):
+    urlpatterns += [
+        path("oidc/", include("mozilla_django_oidc.urls")),
+    ]

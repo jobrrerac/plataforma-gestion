@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "mozilla_django_oidc",
     "apps.core",
     "apps.calendar_engine",
     "apps.assignments",
@@ -74,6 +75,13 @@ DATABASES = {
         # conexión nueva (caro con una BD gestionada en Azure).
         "CONN_MAX_AGE": 60,
         "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {
+            # Azure Database for PostgreSQL rechaza las conexiones sin TLS
+            # (require_secure_transport = ON). En local el postgres de
+            # desarrollo no tiene certificado, por eso el default es "prefer":
+            # usa TLS si está disponible y no falla si no lo está.
+            "sslmode": env("POSTGRES_SSLMODE", default="prefer"),
+        },
     }
 }
 
@@ -91,6 +99,11 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# En desarrollo y en los tests los estáticos los sirve la app `staticfiles` de
+# Django directamente desde las carpetas de cada app. WhiteNoise y el
+# almacenamiento con manifiesto se activan solo en producción
+# (ver settings/production.py): exigen un `collectstatic` previo.
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -112,3 +125,82 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,
 }
+
+# ---------------------------------------------------------------------------
+# Autenticación: login local + SSO de Microsoft Entra ID
+# ---------------------------------------------------------------------------
+# Los dos backends conviven y se prueban en orden. ModelBackend va primero para
+# que el superusuario de emergencia y las cuentas locales sigan entrando aunque
+# Entra esté caído o el secreto de cliente haya caducado.
+#
+# OIDC_HABILITADO=False deja la app funcionando solo con usuario/contraseña: es
+# el interruptor de emergencia si el SSO falla en producción.
+
+OIDC_HABILITADO = env.bool("OIDC_HABILITADO", default=False)
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "apps.accounts.oidc.EntraOIDCBackend",
+]
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
+
+_OIDC_TENANT = env("OIDC_TENANT_ID", default="")
+_OIDC_AUTORIDAD = f"https://login.microsoftonline.com/{_OIDC_TENANT}"
+
+OIDC_RP_CLIENT_ID = env("OIDC_RP_CLIENT_ID", default="")
+OIDC_RP_CLIENT_SECRET = env("OIDC_RP_CLIENT_SECRET", default="")
+
+# Entra firma los tokens con RS256 y publica sus claves en el endpoint JWKS.
+OIDC_RP_SIGN_ALGO = "RS256"
+OIDC_OP_JWKS_ENDPOINT = f"{_OIDC_AUTORIDAD}/discovery/v2.0/keys"
+OIDC_OP_AUTHORIZATION_ENDPOINT = f"{_OIDC_AUTORIDAD}/oauth2/v2.0/authorize"
+OIDC_OP_TOKEN_ENDPOINT = f"{_OIDC_AUTORIDAD}/oauth2/v2.0/token"
+OIDC_OP_USER_ENDPOINT = "https://graph.microsoft.com/oidc/userinfo"
+
+# Solo lo necesario para identificar a la persona. Sin permisos de directorio:
+# los roles llegan dentro del propio id_token.
+OIDC_RP_SCOPES = "openid email profile"
+
+# Sin MFA ni acceso condicional por decisión de producto: el objetivo es no
+# memorizar varias contraseñas. Eso se configura en Entra (requiere licencia
+# P1), no aquí, pero se deja anotado para que nadie lo dé por supuesto.
+
+# true  = a quien entre por SSO y no exista en Django se le crea la cuenta.
+# false = solo entran usuarios ya existentes (hay que precrearlos).
+OIDC_CREAR_USUARIOS = env.bool("OIDC_CREAR_USUARIOS", default=True)
+
+# Equivalencias de dominio entre Entra y la identidad de negocio.
+#
+# El tenant `inetumoffshore.onmicrosoft.com` no tiene verificado el dominio
+# corporativo, así que los UPN son `nombre@inetumoffshore.onmicrosoft.com`
+# mientras que en la plataforma (y en `Recurso.email`) las personas son
+# `nombre@inetum.com`. Sin esta traducción el SSO no reconocería a nadie y
+# crearía cuentas duplicadas, dejando huérfano todo el historial de
+# asignaciones.
+#
+# Formato: dominio_del_token=dominio_canonico[,otro=otro]
+OIDC_DOMINIO_ALIAS = env.dict("OIDC_DOMINIO_ALIAS", default={})
+
+# Equivalencias explícitas entre una identidad de Entra y una cuenta concreta
+# de Django, para los casos en que el UPN no deriva de ningún email de negocio.
+#
+# El caso que motiva esto: `admin@inetumoffshore.onmicrosoft.com` es la cuenta
+# administrativa del tenant, y debe entrar como el superusuario `inetum_admin`
+# que ya existe en la plataforma, no como una cuenta nueva llamada "admin".
+#
+# Una cuenta enlazada así conserva su identidad de negocio: el SSO NO le
+# sobreescribe email ni nombre, porque el alias significa "esta identidad de
+# Entra ES esta cuenta", no "cópiale los datos del token".
+#
+# Formato: upn_de_entra=username_de_django[,otro=otro]
+OIDC_USUARIO_ALIAS = env.dict("OIDC_USUARIO_ALIAS", default={})
+
+# Cierra la sesión de Django al salir; no cierra la sesión del navegador con
+# Microsoft (eso obligaría a volver a poner la contraseña en otras apps).
+OIDC_STORE_ID_TOKEN = True
+
+# Tras un login correcto, adónde va el usuario.
+OIDC_REDIRECT_REQUIRE_HTTPS = not DEBUG
