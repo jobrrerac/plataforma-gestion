@@ -201,8 +201,10 @@
                   data-ayuda="{{ a.descripcion }}">{{ a.nombre }}</option>
           {% endfor %}
         </select>
-        {# Siempre visible, no en un popup: si hay que hacer clic para saber
-           cual elegir, nadie hace clic y se rellena a ojo. #}
+        {% comment %}
+          Siempre visible, no en un popup: si hay que hacer clic para saber
+          cual elegir, nadie hace clic y se rellena a ojo.
+        {% endcomment %}
         <div class="ayuda-actividad" id="ayuda-actividad"></div>
       </div>
 

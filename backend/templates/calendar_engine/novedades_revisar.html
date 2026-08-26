@@ -73,8 +73,10 @@
 
       <div class="d-flex gap-2 align-items-start">
         {% if not n.afectadas %}
-        {# Sin asignaciones que se crucen no hay nada que decidir: el día está
-           libre y aprobar solo lo marca como no disponible. #}
+        {% comment %}
+          Sin asignaciones que se crucen no hay nada que decidir: el día está
+          libre y aprobar solo lo marca como no disponible.
+        {% endcomment %}
         <form method="post" onsubmit="return confirm('¿Aprobar esta novedad? Pasará a descontar capacidad.')">
           {% csrf_token %}
           <input type="hidden" name="accion" value="aprobar">
@@ -90,9 +92,11 @@
     </div>
 
     {% if n.afectadas %}
-    {# Estos días dejan de ser hábiles, pero la fecha_fin de estas asignaciones
-       se calculó contándolos. Hay que decidir qué pasa con cada compromiso
-       antes de poder aprobar. #}
+    {% comment %}
+      Estos días dejan de ser hábiles, pero la fecha_fin de estas asignaciones
+      se calculó contándolos. Hay que decidir qué pasa con cada compromiso
+      antes de poder aprobar.
+    {% endcomment %}
     <div class="aviso">
       <i class="bi bi-exclamation-triangle me-1"></i>
       <strong>Se cruza con {{ n.afectadas|length }} asignación{{ n.afectadas|pluralize:"es" }} aprobada{{ n.afectadas|pluralize }}.</strong>

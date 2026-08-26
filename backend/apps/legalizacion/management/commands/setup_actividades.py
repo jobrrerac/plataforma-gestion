@@ -10,13 +10,16 @@ from apps.legalizacion.models import TipoActividad
 # proyectos, para que la clave foranea garantice que siempre signifiquen lo
 # mismo en vez de convertirse en variantes escritas a mano.
 #
-# La descripcion no es decorativa: tres categorias parecidas sin una frase que
-# las separe se rellenan al azar, y entonces el informe de en que se va el
-# tiempo deja de significar nada. Cada una responde a una pregunta distinta:
+# Solo dos actividades sin proyecto, y la linea que las separa es una sola
+# pregunta: ¿habia alguien ensenandote?
 #
-#   Formacion      ¿hay temario y alguien que lo imparte?
-#   Estudio        ¿lo hiciste por tu cuenta, sin programa?
-#   Entrenamiento  ¿fue practica en el puesto, con acompanamiento?
+#   Entrenamiento  si — curso, certificacion, taller o acompanamiento
+#   Estudio        no — lo sacaste por tu cuenta
+#
+# "Formacion" se retiro: se solapaba tanto con "Entrenamiento" que la gente
+# habria elegido entre las dos al azar, y dos cajones que se rellenan al azar
+# no permiten responder en que se fue el tiempo. Entrenamiento absorbe lo que
+# antes era formacion.
 ACTIVIDADES = [
     (
         "Proyecto", True, 10,
@@ -24,21 +27,22 @@ ACTIVIDADES = [
         "Indica cual y que hiciste ese dia.",
     ),
     (
-        "Formacion", False, 20,
-        "Curso, certificacion o taller con temario definido, dentro o fuera de "
-        "Inetum. Hay un programa y alguien que lo imparte.",
+        "Entrenamiento", False, 20,
+        "Alguien te formo: curso, certificacion, taller, o acompanamiento de un "
+        "companero para ponerte a punto.",
     ),
     (
         "Estudio", False, 30,
-        "Aprendizaje por tu cuenta, sin programa: leer documentacion, investigar "
-        "una tecnologia o preparar una prueba de concepto.",
-    ),
-    (
-        "Entrenamiento", False, 40,
-        "Practica en el puesto con acompanamiento: transferencia de conocimiento "
-        "de un companero, o puesta a punto en las herramientas de un proyecto.",
+        "Lo sacaste por tu cuenta, sin nadie ensenando: leer documentacion, "
+        "investigar una tecnologia o preparar una prueba de concepto.",
     ),
 ]
+
+# Actividades retiradas del catalogo. Se DESACTIVAN en vez de borrarse, para no
+# perder las horas que ya se imputaron a ellas. Se listan aqui explicitamente y
+# no se deduce "todo lo que no este en ACTIVIDADES", porque eso desactivaria
+# tambien las que un Admin haya creado a mano.
+RETIRADAS = ["Formacion"]
 
 
 class Command(BaseCommand):
@@ -57,6 +61,14 @@ class Command(BaseCommand):
             estado = "creado" if creado else "actualizado"
             marca = "con proyecto" if requiere_proyecto else "sin proyecto"
             self.stdout.write(self.style.SUCCESS(f"  ✓ {nombre} {estado} ({marca})"))
+
+        retiradas = TipoActividad.objects.filter(nombre__in=RETIRADAS, activo=True)
+        for actividad in retiradas:
+            actividad.activo = False
+            actividad.save(update_fields=["activo"])
+            self.stdout.write(
+                self.style.WARNING(f"  – {actividad.nombre} retirada (se conserva el historico)")
+            )
 
         self.stdout.write(
             self.style.SUCCESS(

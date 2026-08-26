@@ -32,9 +32,22 @@ class CatalogoActividadesTests(TestCase):
 
     def test_las_demas_no_piden_nada_mas(self):
         sin_proyecto = set(
-            TipoActividad.objects.filter(requiere_proyecto=False).values_list("nombre", flat=True)
+            TipoActividad.objects.filter(requiere_proyecto=False, activo=True)
+            .values_list("nombre", flat=True)
         )
-        self.assertEqual(sin_proyecto, {"Formacion", "Estudio", "Entrenamiento"})
+        self.assertEqual(sin_proyecto, {"Estudio", "Entrenamiento"})
+
+    def test_formacion_queda_retirada_pero_no_borrada(self):
+        # Se solapaba tanto con Entrenamiento que se habria elegido al azar.
+        # Se desactiva en vez de borrarse: si algun dia hubiera horas imputadas
+        # a ella, borrarla se las llevaria por delante.
+        formacion = TipoActividad.objects.filter(nombre="Formacion").first()
+        if formacion is not None:
+            self.assertFalse(formacion.activo)
+        self.assertNotIn(
+            "Formacion",
+            TipoActividad.objects.filter(activo=True).values_list("nombre", flat=True),
+        )
 
     def test_departamentales_y_management_no_son_actividades(self):
         # Son proyectos internos: van como Proyecto para que la clave foránea
@@ -48,16 +61,32 @@ class CatalogoActividadesTests(TestCase):
     def test_el_comando_es_idempotente(self):
         call_command("setup_actividades", verbosity=0)
         call_command("setup_actividades", verbosity=0)
-        self.assertEqual(TipoActividad.objects.count(), 4)
+        self.assertEqual(TipoActividad.objects.filter(activo=True).count(), 3)
+
+    def test_no_desactiva_las_que_anada_un_admin(self):
+        # El comando corre en cada despliegue: si retirara todo lo que no
+        # conoce, borraria del desplegable las actividades creadas a mano.
+        propia = TipoActividad.objects.create(nombre="Preventa", orden=90)
+        call_command("setup_actividades", verbosity=0)
+        propia.refresh_from_db()
+        self.assertTrue(propia.activo)
 
     def test_se_ordenan_para_el_desplegable(self):
         primero = TipoActividad.objects.first()
         self.assertEqual(primero.nombre, "Proyecto")
 
+    def test_entrenamiento_y_estudio_se_distinguen_por_quien_ensena(self):
+        # Es la unica linea que las separa, y tiene que estar en el texto o la
+        # gente elegira a ojo.
+        entrenamiento = TipoActividad.objects.get(nombre="Entrenamiento")
+        estudio = TipoActividad.objects.get(nombre="Estudio")
+        self.assertIn("Alguien te formo", entrenamiento.descripcion)
+        self.assertIn("por tu cuenta", estudio.descripcion)
+
     def test_todas_explican_cuando_usarlas(self):
         # Tres categorías parecidas sin una frase que las separe se rellenan al
         # azar, y entonces el informe de en qué se va el tiempo no dice nada.
-        for actividad in TipoActividad.objects.all():
+        for actividad in TipoActividad.objects.filter(activo=True):
             self.assertTrue(
                 actividad.descripcion.strip(),
                 f"«{actividad.nombre}» no explica cuándo usarla",
@@ -65,7 +94,9 @@ class CatalogoActividadesTests(TestCase):
 
     def test_cada_descripcion_es_distinta(self):
         # Si dos se pudieran describir igual, sobraría una.
-        descripciones = list(TipoActividad.objects.values_list("descripcion", flat=True))
+        descripciones = list(
+            TipoActividad.objects.filter(activo=True).values_list("descripcion", flat=True)
+        )
         self.assertEqual(len(descripciones), len(set(descripciones)))
 
     def test_desactivar_no_borra_el_historico(self):

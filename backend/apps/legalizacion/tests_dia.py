@@ -345,7 +345,7 @@ class PantallaTests(BaseLegalizacion):
 
         self.assertIn("data-ayuda=", html)
         # La de Estudio, para comprobar que llega el texto y no el atributo vacío.
-        self.assertIn("Aprendizaje por tu cuenta", html)
+        self.assertIn("Lo sacaste por tu cuenta", html)
 
     def test_el_viernes_tambien_llega_bien_a_javascript(self):
         self.client.force_login(self.ing)
