@@ -269,21 +269,60 @@ class PantallaTests(BaseLegalizacion):
         self.client.force_login(self.pm)
         self.assertEqual(self.client.get(reverse("horas")).status_code, 200)
 
-    def test_agregar_y_cerrar_desde_la_pantalla(self):
+    def test_guardar_y_aceptar_desde_la_pantalla(self):
         self.client.force_login(self.ing)
         url = reverse("horas")
 
+        # Paso 1: el día entero llega en un solo POST.
         self.client.post(url, {
-            "accion": "agregar", "fecha": self.fecha.isoformat(),
-            "tipo_actividad": self.t_proyecto.pk, "proyecto": self.cliente.pk,
-            "horas": "8.5", "detalle": "Desarrollo del modulo",
+            "accion": "guardar", "fecha": self.fecha.isoformat(),
+            "renglon_tipo": [str(self.t_proyecto.pk), str(self.t_estudio.pk)],
+            "renglon_proyecto": [str(self.interno.pk), ""],
+            "renglon_horas": ["6.5", "2"],
+            "renglon_detalle": ["Gestion del area", "Curso de Django"],
         })
         dia = DiaLegalizado.objects.get(recurso=self.recurso, fecha=self.fecha)
-        self.assertEqual(dia.registros.count(), 1)
+        self.assertEqual(dia.registros.count(), 2)
+        self.assertEqual(dia.estado, DiaLegalizado.ABIERTO, "guardar no cierra el día")
 
+        # Paso 2: aceptar.
         self.client.post(url, {"accion": "registrar", "fecha": self.fecha.isoformat()})
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)
+
+    def test_guardar_reemplaza_lo_anterior(self):
+        # Lo que llega es el día completo, no un añadido.
+        self.client.force_login(self.ing)
+        url = reverse("horas")
+        base = {"accion": "guardar", "fecha": self.fecha.isoformat()}
+
+        self.client.post(url, dict(base, **{
+            "renglon_tipo": [str(self.t_estudio.pk)],
+            "renglon_proyecto": [""], "renglon_horas": ["3"],
+            "renglon_detalle": ["Primera version"],
+        }))
+        self.client.post(url, dict(base, **{
+            "renglon_tipo": [str(self.t_estudio.pk)],
+            "renglon_proyecto": [""], "renglon_horas": ["5"],
+            "renglon_detalle": ["Segunda version"],
+        }))
+
+        dia = DiaLegalizado.objects.get(recurso=self.recurso, fecha=self.fecha)
+        self.assertEqual(dia.registros.count(), 1)
+        self.assertEqual(dia.registros.first().detalle, "Segunda version")
+
+    def test_no_se_puede_imputar_a_un_proyecto_no_asignado(self):
+        # El formulario ya no lo ofrece, pero un POST a mano sí podría.
+        self.client.force_login(self.ing)
+        resp = self.client.post(reverse("horas"), {
+            "accion": "guardar", "fecha": self.fecha.isoformat(),
+            "renglon_tipo": [str(self.t_proyecto.pk)],
+            "renglon_proyecto": [str(self.cliente.pk)],
+            "renglon_horas": ["8.5"],
+            "renglon_detalle": ["Trabajo inventado"],
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(RegistroHoras.objects.count(), 0)
 
     def test_un_dia_de_vacaciones_no_ofrece_formulario(self):
         n = novedades_svc.registrar_novedad(self.ing, self.fecha, self.fecha, "VACACION")
@@ -316,3 +355,88 @@ class DashboardAcotadoTests(BaseLegalizacion):
 
     def test_el_pm_ve_a_todo_el_mundo(self):
         self.assertIn("Otro Recurso", self._recursos_visibles(self.pm))
+
+
+class ProyectosDisponiblesTests(BaseLegalizacion):
+    """Cada quien ve los proyectos que tenía asignados ESE día."""
+
+    def _asignar(self, proyecto, inicio, fin, estado="APROBADA"):
+        from apps.assignments.models import Asignacion
+
+        return Asignacion.objects.create(
+            recurso=self.recurso, proyecto=proyecto,
+            fecha_inicio=inicio, fecha_fin=fin,
+            horas_totales=34, intensidad_diaria=8.5,
+            estado=estado, solicitada_por=self.pm,
+        )
+
+    def _codigos(self, fecha=None):
+        return {p.codigo for p in svc.proyectos_disponibles(self.recurso, fecha or self.fecha)}
+
+    def test_sin_asignacion_no_aparece_el_de_cliente(self):
+        # Ofrecer la lista completa invitaría a imputar horas a proyectos en
+        # los que nunca se estuvo, que es lo que el módulo viene a evitar.
+        self.assertNotIn(self.cliente.codigo, self._codigos())
+
+    def test_con_asignacion_que_cubre_el_dia_si_aparece(self):
+        self._asignar(self.cliente, self.fecha, self.fecha)
+        self.assertIn(self.cliente.codigo, self._codigos())
+
+    def test_una_asignacion_de_otras_fechas_no_cuenta(self):
+        futuro = self.fecha + timedelta(days=20)
+        self._asignar(self.cliente, futuro, futuro)
+        self.assertNotIn(self.cliente.codigo, self._codigos())
+
+    def test_una_asignacion_sin_aprobar_no_habilita_el_proyecto(self):
+        self._asignar(self.cliente, self.fecha, self.fecha, estado="SOLICITADA")
+        self.assertNotIn(self.cliente.codigo, self._codigos())
+
+    def test_los_internos_estan_siempre(self):
+        # Nadie recibe una asignación a «Departamentales», y sin ellos alguien
+        # en bench no podría completar la jornada — y como el día no cierra si
+        # no cuadra, se quedaría bloqueado sin salida.
+        self.assertIn(self.interno.codigo, self._codigos())
+
+    def test_alguien_sin_ninguna_asignacion_puede_cerrar_su_dia(self):
+        self.assertTrue(
+            svc.proyectos_disponibles(self.recurso, self.fecha).exists(),
+            "siempre debe quedar algo con lo que cuadrar el día",
+        )
+
+
+class GuardadoEnLoteTests(BaseLegalizacion):
+    def test_se_valida_todo_antes_de_escribir_nada(self):
+        # Un día medio guardado es peor que uno sin guardar: parece completo.
+        dia = self._dia()
+        with self.assertRaises(ValidationError):
+            svc.guardar_renglones(dia, [
+                {"tipo_actividad": self.t_estudio, "proyecto": None,
+                 "horas": "2", "detalle": "Curso"},
+                {"tipo_actividad": self.t_proyecto, "proyecto": None,
+                 "horas": "3", "detalle": "Sin proyecto"},
+            ])
+        self.assertEqual(dia.registros.count(), 0)
+
+    def test_no_se_admite_una_lista_vacia(self):
+        dia = self._dia()
+        with self.assertRaises(ValidationError):
+            svc.guardar_renglones(dia, [])
+
+    def test_no_se_puede_pasar_de_la_jornada(self):
+        dia = self._dia()
+        with self.assertRaises(ValidationError):
+            svc.guardar_renglones(dia, [
+                {"tipo_actividad": self.t_estudio, "proyecto": None,
+                 "horas": "9", "detalle": "Curso larguisimo"},
+            ])
+
+    def test_guardar_no_es_aceptar(self):
+        # Guardar deja el día abierto: primero se ve el resumen.
+        dia = self._dia()
+        svc.guardar_renglones(dia, [
+            {"tipo_actividad": self.t_estudio, "proyecto": None,
+             "horas": "8.5", "detalle": "Curso"},
+        ])
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)
+        self.assertTrue(dia.editable)

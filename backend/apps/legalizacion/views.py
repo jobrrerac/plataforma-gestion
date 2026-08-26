@@ -1,6 +1,6 @@
 """Pantalla donde el ingeniero legaliza su día."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,10 +8,16 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
 from django.views import View
 
-from apps.core.models import Proyecto
-
 from . import services as svc
-from .models import DiaLegalizado, RegistroHoras
+from .models import DiaLegalizado
+
+
+def _entero(valor):
+    """Convierte a int lo que llega del formulario, o None si viene vacío."""
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
 
 
 class LegalizarDiaView(LoginRequiredMixin, View):
@@ -42,19 +48,35 @@ class LegalizarDiaView(LoginRequiredMixin, View):
             "recurso": recurso,
             "fecha": fecha,
             "hoy": date.today(),
+            # Flechas de navegación: moverse de día es lo que más se hace en
+            # esta pantalla, y obligar a abrir el calendario para cada salto
+            # convierte rellenar la semana en una tarea tediosa.
+            "dia_anterior": fecha - timedelta(days=1) if fecha else None,
+            "dia_siguiente": fecha + timedelta(days=1) if fecha else None,
             "actividades": svc.actividades_disponibles(),
-            "proyectos": Proyecto.objects.filter(estado="ACTIVO").order_by("-facturable", "codigo"),
+            "proyectos": [],
         }
 
         if recurso and fecha:
             estado = svc.estado_del_dia(recurso, fecha)
             ctx["estado_dia"] = estado
             ctx["pendientes"] = svc.dias_pendientes(recurso)[:10]
+            # Los proyectos dependen del día: valen los que esa persona tenía
+            # asignados esa fecha, no los de hoy.
+            ctx["proyectos"] = svc.proyectos_disponibles(recurso, fecha)
 
             if estado["habil"]:
                 dia = DiaLegalizado.objects.filter(recurso=recurso, fecha=fecha).first()
                 ctx["dia"] = dia
                 ctx["resumen"] = svc.resumen(dia) if dia else None
+
+                # Se muestra el formulario cuando aún no hay nada guardado, o
+                # cuando la persona pidió volver atrás para corregir. Si ya hay
+                # renglones guardados, lo que toca ver es el resumen.
+                hay_guardado = bool(dia and dia.registros.exists())
+                ctx["modo_edicion"] = (
+                    not hay_guardado or request.GET.get("editar") == "1"
+                ) and (dia is None or dia.editable)
 
         ctx.update(extra)
         return ctx
@@ -81,8 +103,8 @@ class LegalizarDiaView(LoginRequiredMixin, View):
 
         accion = request.POST.get("accion")
         manejadores = {
-            "agregar": self._agregar,
-            "quitar": self._quitar,
+            "guardar": self._guardar,
+            "reabrir": self._reabrir,
             "registrar": self._registrar,
         }
         manejador = manejadores.get(accion)
@@ -95,41 +117,57 @@ class LegalizarDiaView(LoginRequiredMixin, View):
             mensaje = "; ".join(getattr(exc, "messages", [str(exc)]))
             return render(request, self.template, self._ctx(request, fecha, error=mensaje))
 
-    def _agregar(self, request, recurso, fecha):
+    def _guardar(self, request, recurso, fecha):
+        """Guarda de golpe el día completo que se armó en el navegador."""
         dia = svc.obtener_o_crear_dia(recurso, fecha)
 
-        actividad = svc.actividades_disponibles().filter(pk=request.POST.get("tipo_actividad")).first()
-        if actividad is None:
-            raise ValidationError("Elige una actividad.")
+        # Los proyectos se validan contra los que esa persona podía usar ese
+        # día: el formulario los filtra, pero un POST a mano no.
+        permitidos = {p.pk: p for p in svc.proyectos_disponibles(recurso, fecha)}
+        actividades = {a.pk: a for a in svc.actividades_disponibles()}
 
-        proyecto = None
-        if actividad.requiere_proyecto:
-            proyecto = Proyecto.objects.filter(pk=request.POST.get("proyecto")).first()
+        tipos = request.POST.getlist("renglon_tipo")
+        proyectos = request.POST.getlist("renglon_proyecto")
+        horas = request.POST.getlist("renglon_horas")
+        detalles = request.POST.getlist("renglon_detalle")
 
-        try:
-            horas = request.POST.get("horas", "").replace(",", ".")
-            horas = float(horas)
-        except ValueError:
-            raise ValidationError("Las horas tienen que ser un número.") from None
+        renglones = []
+        for indice, tipo_id in enumerate(tipos):
+            actividad = actividades.get(_entero(tipo_id))
+            proyecto_id = _entero(proyectos[indice]) if indice < len(proyectos) else None
 
-        svc.agregar_renglon(
-            dia=dia,
-            tipo_actividad=actividad,
-            horas=horas,
-            detalle=request.POST.get("detalle", ""),
-            proyecto=proyecto,
-        )
+            proyecto = None
+            if proyecto_id is not None:
+                proyecto = permitidos.get(proyecto_id)
+                if proyecto is None:
+                    raise ValidationError(
+                        f"Actividad {indice + 1}: no tenías ese proyecto asignado el "
+                        f"{fecha:%d/%m/%Y}."
+                    )
+
+            renglones.append({
+                "tipo_actividad": actividad,
+                "proyecto": proyecto,
+                "horas": (horas[indice] if indice < len(horas) else "").replace(",", "."),
+                "detalle": detalles[indice] if indice < len(detalles) else "",
+            })
+
+        svc.guardar_renglones(dia, renglones)
+        messages.success(request, "Actividades guardadas. Revisa el resumen antes de aceptar.")
         return redirect(f"{request.path}?fecha={fecha.isoformat()}")
 
-    def _quitar(self, request, recurso, fecha):
-        renglon = RegistroHoras.objects.filter(
-            pk=request.POST.get("renglon"), dia__recurso=recurso,
-        ).first()
-        if renglon is None:
-            raise ValidationError("Ese renglón no existe.")
+    def _reabrir(self, request, recurso, fecha):
+        """Vuelve al formulario para corregir antes de aceptar.
 
-        svc.quitar_renglon(renglon)
-        return redirect(f"{request.path}?fecha={fecha.isoformat()}")
+        Solo mientras el día siga abierto: una vez aceptado, se acabó.
+        """
+        dia = DiaLegalizado.objects.filter(recurso=recurso, fecha=fecha).first()
+        if dia is None:
+            raise ValidationError("No hay nada que corregir en este día.")
+        if not dia.editable:
+            raise ValidationError("Este día ya fue aceptado y no se puede modificar.")
+
+        return redirect(f"{request.path}?fecha={fecha.isoformat()}&editar=1")
 
     def _registrar(self, request, recurso, fecha):
         dia = DiaLegalizado.objects.filter(recurso=recurso, fecha=fecha).first()

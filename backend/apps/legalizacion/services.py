@@ -235,3 +235,102 @@ def dias_pendientes(recurso, desde=None, hasta=None):
 
 def actividades_disponibles():
     return TipoActividad.objects.filter(activo=True)
+
+
+def proyectos_disponibles(recurso, fecha: date):
+    """Proyectos a los que esa persona puede imputar horas ese día.
+
+    Dos grupos, por motivos distintos:
+
+    - **De cliente**: solo aquellos en los que tenía una asignación APROBADA que
+      cubría esa fecha. Ofrecer la lista completa invitaría a imputar horas a
+      proyectos en los que nunca se estuvo, que es precisamente lo que el módulo
+      viene a evitar. Se mira la fecha del día que se legaliza, no la de hoy: al
+      rellenar un día de la semana pasada valen los proyectos de entonces.
+
+    - **Internos**: siempre. Nadie recibe una asignación a «Departamentales», y
+      sin ellos alguien en bench no tendría con qué completar la jornada — y
+      como el día no cierra si no cuadra, se quedaría bloqueado sin salida.
+    """
+    from apps.core.models import Proyecto
+
+    asignados = Proyecto.objects.filter(
+        facturable=True,
+        asignaciones__recurso=recurso,
+        asignaciones__estado="APROBADA",
+        asignaciones__deleted_at__isnull=True,
+        asignaciones__fecha_inicio__lte=fecha,
+        asignaciones__fecha_fin__gte=fecha,
+    )
+    internos = Proyecto.objects.filter(facturable=False, estado="ACTIVO")
+
+    return (asignados | internos).distinct().order_by("-facturable", "codigo")
+
+
+@transaction.atomic
+def guardar_renglones(dia, renglones):
+    """Reemplaza de una vez todos los renglones del día.
+
+    La pantalla arma la lista en el navegador y no toca la base hasta que la
+    persona pulsa Guardar: así puede componer el día, corregirse y reordenarse
+    sin dejar a medias filas que luego nadie limpia.
+
+    Se valida todo antes de escribir nada. Si un renglón falla, no se guarda
+    ninguno: un día medio guardado es peor que uno sin guardar, porque parece
+    completo.
+    """
+    _exigir_editable(dia)
+
+    if not renglones:
+        raise ValidationError("No has añadido ninguna actividad.")
+
+    validados = []
+    total = Decimal("0")
+
+    for indice, crudo in enumerate(renglones, start=1):
+        actividad = crudo.get("tipo_actividad")
+        proyecto = crudo.get("proyecto")
+        detalle = (crudo.get("detalle") or "").strip()
+
+        if actividad is None:
+            raise ValidationError(f"Actividad {indice}: falta indicar de qué se trata.")
+        if not detalle:
+            raise ValidationError(f"Actividad {indice}: falta decir qué hiciste.")
+
+        try:
+            horas = Decimal(str(crudo.get("horas")))
+        except Exception:
+            raise ValidationError(f"Actividad {indice}: las horas tienen que ser un número.") from None
+
+        if horas <= 0:
+            raise ValidationError(f"Actividad {indice}: las horas tienen que ser mayores que cero.")
+        if (horas * 2) % 1 != 0:
+            raise ValidationError(
+                f"Actividad {indice}: las horas van en bloques de media hora (0.5, 1, 1.5...)."
+            )
+
+        if actividad.requiere_proyecto and proyecto is None:
+            raise ValidationError(f"Actividad {indice}: «{actividad.nombre}» necesita un proyecto.")
+        if not actividad.requiere_proyecto and proyecto is not None:
+            raise ValidationError(
+                f"Actividad {indice}: «{actividad.nombre}» no se imputa a ningún proyecto."
+            )
+
+        total += horas
+        validados.append((actividad, proyecto, horas, detalle[:300]))
+
+    if total > dia.jornada_esperada:
+        raise ValidationError(
+            f"Has registrado {total} h y la jornada de ese día es de {dia.jornada_esperada} h."
+        )
+
+    # Reemplazo completo: lo que llega es el día entero, no un añadido.
+    dia.registros.all().delete()  # soft-delete
+    RegistroHoras.objects.bulk_create([
+        RegistroHoras(
+            dia=dia, tipo_actividad=actividad, proyecto=proyecto,
+            horas=horas, detalle=detalle,
+        )
+        for actividad, proyecto, horas, detalle in validados
+    ])
+    return dia
