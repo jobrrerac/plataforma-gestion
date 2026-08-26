@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load l10n %}
 
 {% block page_title %}Registrar horas{% endblock %}
 {% block active_horas %}active{% endblock %}
@@ -214,7 +215,7 @@
       <div class="col-md-3">
         <label class="form-label" style="font-size:.82rem;font-weight:600">Horas</label>
         <input type="number" id="f-horas" class="form-control" step="0.5" min="0.5"
-               max="{{ estado_dia.jornada }}" placeholder="8.5">
+               max="{{ estado_dia.jornada|unlocalize }}" placeholder="8.5">
       </div>
 
       <div class="col-12">
@@ -335,7 +336,10 @@
   // hasta pulsar Guardar, así se puede corregir y reordenar sin dejar filas
   // a medias que luego nadie limpia.
   (function () {
-    var JORNADA = parseFloat("{{ estado_dia.jornada }}");
+    // |unlocalize es obligatorio: con LANGUAGE_CODE="es-co" Django escribe la
+    // jornada con coma decimal, y parseFloat corta ahi y devuelve el entero.
+    // La jornada valia 8 en vez de 8.5 y el dia nunca llegaba a cuadrar.
+    var JORNADA = parseFloat("{{ estado_dia.jornada|unlocalize }}");
     var renglones = [];
 
     var elActividad = document.getElementById('f-actividad');

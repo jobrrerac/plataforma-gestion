@@ -324,6 +324,27 @@ class PantallaTests(BaseLegalizacion):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(RegistroHoras.objects.count(), 0)
 
+    def test_los_numeros_que_van_a_javascript_no_llevan_coma(self):
+        """Regresión: con LANGUAGE_CODE="es-co" Django escribe 8,5 en la
+        plantilla, y `parseFloat("8,5")` devuelve 8 porque corta en la coma.
+
+        La jornada quedaba valiendo 8 en el navegador: el día nunca cuadraba y
+        el aviso de horas restantes daba números imposibles. El `max` del input
+        tenía el mismo problema — `max="8,5"` es HTML inválido y se ignora.
+        """
+        self.client.force_login(self.ing)
+        html = self.client.get(f"{reverse('horas')}?fecha={self.fecha.isoformat()}").content.decode()
+
+        self.assertIn('var JORNADA = parseFloat("8.5")', html)
+        self.assertNotIn('var JORNADA = parseFloat("8,5")', html)
+        self.assertIn('max="8.5"', html)
+
+    def test_el_viernes_tambien_llega_bien_a_javascript(self):
+        self.client.force_login(self.ing)
+        viernes = ultimo_viernes()
+        html = self.client.get(f"{reverse('horas')}?fecha={viernes.isoformat()}").content.decode()
+        self.assertIn('parseFloat("8.0")', html)
+
     def test_un_dia_de_vacaciones_no_ofrece_formulario(self):
         n = novedades_svc.registrar_novedad(self.ing, self.fecha, self.fecha, "VACACION")
         admin = User.objects.create_user(username="adm2", password="x")
