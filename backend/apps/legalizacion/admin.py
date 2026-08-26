@@ -7,7 +7,7 @@ from .models import DiaLegalizado, RegistroHoras, TipoActividad
 
 @admin.register(TipoActividad)
 class TipoActividadAdmin(admin.ModelAdmin):
-    list_display = ["nombre", "requiere_proyecto", "activo", "orden"]
+    list_display = ["nombre", "descripcion", "requiere_proyecto", "activo", "orden"]
     list_filter = ["requiere_proyecto", "activo"]
     list_editable = ["activo", "orden"]
     ordering = ["orden", "nombre"]

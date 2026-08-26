@@ -55,6 +55,11 @@
   .pendiente-chip:hover { border-color:#e0178a; color:#e0178a; }
 
   .vacio-lista { text-align:center; color:#9ca3af; padding:22px 12px; font-size:.9rem; }
+  .ayuda-actividad {
+    font-size:.79rem; color:#6b7280; line-height:1.45; margin-top:6px;
+    padding-left:9px; border-left:2px solid #e0d6f5; min-height:1.1rem;
+  }
+  .ayuda-actividad:empty { display:none; }
 </style>
 {% endblock %}
 
@@ -192,9 +197,13 @@
         <label class="form-label" style="font-size:.82rem;font-weight:600">Actividad</label>
         <select id="f-actividad" class="form-select">
           {% for a in actividades %}
-          <option value="{{ a.pk }}" data-proyecto="{{ a.requiere_proyecto|yesno:"1,0" }}">{{ a.nombre }}</option>
+          <option value="{{ a.pk }}" data-proyecto="{{ a.requiere_proyecto|yesno:"1,0" }}"
+                  data-ayuda="{{ a.descripcion }}">{{ a.nombre }}</option>
           {% endfor %}
         </select>
+        {# Siempre visible, no en un popup: si hay que hacer clic para saber
+           cual elegir, nadie hace clic y se rellena a ojo. #}
+        <div class="ayuda-actividad" id="ayuda-actividad"></div>
       </div>
 
       <div class="col-md-5" id="campo-proyecto">
@@ -360,10 +369,14 @@
     }
 
     function sincronizarProyecto() {
+      var op = elActividad.options[elActividad.selectedIndex];
       var necesita = necesitaProyecto();
       campoProy.hidden = !necesita;
       elProyecto.disabled = !necesita;
       if (!necesita) { elProyecto.value = ''; }
+
+      var ayuda = document.getElementById('ayuda-actividad');
+      if (ayuda) { ayuda.textContent = (op && op.dataset.ayuda) || ''; }
     }
 
     function total() {

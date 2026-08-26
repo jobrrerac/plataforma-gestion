@@ -54,6 +54,20 @@ class CatalogoActividadesTests(TestCase):
         primero = TipoActividad.objects.first()
         self.assertEqual(primero.nombre, "Proyecto")
 
+    def test_todas_explican_cuando_usarlas(self):
+        # Tres categorías parecidas sin una frase que las separe se rellenan al
+        # azar, y entonces el informe de en qué se va el tiempo no dice nada.
+        for actividad in TipoActividad.objects.all():
+            self.assertTrue(
+                actividad.descripcion.strip(),
+                f"«{actividad.nombre}» no explica cuándo usarla",
+            )
+
+    def test_cada_descripcion_es_distinta(self):
+        # Si dos se pudieran describir igual, sobraría una.
+        descripciones = list(TipoActividad.objects.values_list("descripcion", flat=True))
+        self.assertEqual(len(descripciones), len(set(descripciones)))
+
     def test_desactivar_no_borra_el_historico(self):
         act = TipoActividad.objects.get(nombre="Estudio")
         act.activo = False

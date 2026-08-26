@@ -339,6 +339,14 @@ class PantallaTests(BaseLegalizacion):
         self.assertNotIn('var JORNADA = parseFloat("8,5")', html)
         self.assertIn('max="8.5"', html)
 
+    def test_cada_actividad_lleva_su_ayuda_en_el_desplegable(self):
+        self.client.force_login(self.ing)
+        html = self.client.get(f"{reverse('horas')}?fecha={self.fecha.isoformat()}").content.decode()
+
+        self.assertIn("data-ayuda=", html)
+        # La de Estudio, para comprobar que llega el texto y no el atributo vacío.
+        self.assertIn("Aprendizaje por tu cuenta", html)
+
     def test_el_viernes_tambien_llega_bien_a_javascript(self):
         self.client.force_login(self.ing)
         viernes = ultimo_viernes()

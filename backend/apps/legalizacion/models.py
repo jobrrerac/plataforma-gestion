@@ -33,6 +33,13 @@ class TipoActividad(models.Model):
     """
 
     nombre = models.CharField(max_length=80, unique=True)
+    descripcion = models.CharField(
+        max_length=300, blank=True,
+        help_text=(
+            "Cuándo usar esta actividad. Se muestra al elegirla, y es lo que "
+            "evita que dos categorías parecidas se rellenen al azar."
+        ),
+    )
     requiere_proyecto = models.BooleanField(
         default=False,
         help_text="Si está marcado, al registrar horas hay que indicar a qué proyecto.",
