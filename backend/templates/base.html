@@ -227,7 +227,14 @@
         <i class="bi bi-snow"></i> Liberaciones
       </a>
       {% endif %}
-      {# Novedades es para todo el mundo: un PM o un Admin también tiene vacaciones. #}
+      {% comment %}
+        Registrar horas y Novedades son para todo el mundo: un PM o un Admin
+        también legaliza su tiempo y también tiene vacaciones.
+      {% endcomment %}
+      <a href="/horas/"
+         class="inet-nav-link {% block active_horas %}{% endblock %}">
+        <i class="bi bi-clock-history"></i> Registrar horas
+      </a>
       <a href="/novedades/"
          class="inet-nav-link {% block active_novedades %}{% endblock %}">
         <i class="bi bi-calendar-heart"></i> Novedades

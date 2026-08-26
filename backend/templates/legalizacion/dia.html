@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block page_title %}Registrar horas{% endblock %}
+{% block active_horas %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .btn-pink { background:#e0178a; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.6rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+  .btn-cerrar { background:#059669; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.6rem 1.8rem; }
+  .btn-cerrar:hover { background:#047857; color:#fff; }
+
+  /* Medidor de cuadre */
+  .medidor { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .barra { flex:1; min-width:180px; height:10px; background:#e8e6f0; border-radius:20px; overflow:hidden; }
+  .barra span { display:block; height:100%; background:#e0178a; transition:width .2s; }
+  .barra.ok span { background:#059669; }
+  .cifra { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:#110d26; white-space:nowrap; }
+  .cifra small { font-weight:600; color:#6b7280; font-size:.8rem; }
+  .cifra.ok { color:#059669; }
+
+  .renglon { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; border:1px solid #eee; border-radius:10px; padding:12px 14px; margin-bottom:8px; background:#fff; }
+  .renglon .qué { font-size:.92rem; }
+  .renglon .meta { color:#6b7280; font-size:.83rem; }
+  .renglon .hrs { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; white-space:nowrap; }
+  .chip { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:20px; }
+  .c-fact { background:#d1fae5; color:#065f46; }
+  .c-int  { background:#fef3c7; color:#92400e; }
+  .c-otra { background:#ede9fe; color:#4c1d95; }
+
+  .aviso-dia { border-radius:12px; padding:26px; text-align:center; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+  .aviso-dia .emo { font-size:2.6rem; }
+  .cerrado { background:#ecfdf5; border:1px solid #6ee7b7; border-radius:12px; padding:16px 20px; color:#065f46; }
+
+  .pendiente-chip { display:inline-block; background:#fff; border:1px solid #e0d6f5; border-radius:8px; padding:5px 11px; margin:0 6px 6px 0; font-size:.82rem; text-decoration:none; color:#110d26; }
+  .pendiente-chip:hover { border-color:#e0178a; color:#e0178a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi bi-clock-history" style="color:#e0178a"></i> Registrar <span>horas</span></h1>
+
+  <form method="get" class="ms-auto d-flex align-items-center gap-2">
+    <label class="fw-semibold mb-0" style="font-size:.82rem">Día</label>
+    <input type="date" name="fecha" value="{{ fecha|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}"
+           class="form-control form-control-sm" style="width:160px" onchange="this.form.submit()">
+  </form>
+</div>
+
+<div class="container py-4" style="max-width:840px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-success py-2 px-3" style="font-size:.87rem;border-radius:10px">
+      <i class="bi bi-check-circle me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger py-2 px-3" style="font-size:.87rem;border-radius:10px">
+    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  {% if not recurso %}
+  <div class="aviso-dia">
+    <div class="emo">🔗</div>
+    <h5 class="fw-bold mt-2 mb-2" style="font-family:'Montserrat',sans-serif">Tu cuenta no está vinculada a un recurso</h5>
+    <p class="text-muted mb-0" style="font-size:.9rem">
+      No se pueden registrar horas a tu nombre hasta que un administrador lo resuelva.
+    </p>
+  </div>
+
+  {% elif not estado_dia.habil %}
+  {# Fin de semana, festivo o ausencia aprobada: no hay nada que legalizar. #}
+  <div class="aviso-dia">
+    <div class="emo">{% if estado_dia.motivo_no_habil == "AUSENCIA" %}🌴{% else %}🗓️{% endif %}</div>
+    <h5 class="fw-bold mt-2 mb-2" style="font-family:'Montserrat',sans-serif">
+      {{ fecha|date:"l j \d\e F"|capfirst }}
+    </h5>
+    <p class="text-muted mb-0" style="font-size:.92rem">
+      {% if estado_dia.motivo_no_habil == "AUSENCIA" %}
+        Tienes {% if estado_dia.tipo_ausencia == "VACACION" %}vacaciones{% else %}un permiso{% endif %}
+        aprobado. Cuenta como día no laborable y no hay horas que registrar.
+      {% elif estado_dia.motivo_no_habil == "FINDE" %}
+        Es fin de semana.
+      {% elif estado_dia.motivo_no_habil == "FERIADO" %}
+        Es festivo en Colombia.
+      {% else %}
+        Es un día no laborable.
+      {% endif %}
+    </p>
+  </div>
+
+  {% else %}
+
+  {# ── Día cerrado ─────────────────────────────────────────────── #}
+  {% if dia and not dia.editable %}
+  <div class="cerrado mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <strong><i class="bi bi-lock-fill me-1"></i>Día registrado</strong>
+        <div style="font-size:.87rem">
+          {{ dia.total_horas }} h el {{ dia.registrado_en|date:"d/m/Y H:i" }}.
+          {% if dia.estado == "APROBADO" %}Aprobado por {{ dia.aprobado_por.get_full_name|default:dia.aprobado_por.username }}.
+          {% else %}Pendiente de aprobación.{% endif %}
+        </div>
+      </div>
+      <span class="chip c-fact">{{ dia.get_estado_display }}</span>
+    </div>
+    <div class="mt-2" style="font-size:.83rem">
+      Para cambiar algo hay que pedir la reapertura y que la autoricen.
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Medidor de cuadre ───────────────────────────────────────── #}
+  {% if resumen %}
+  <div class="card p-3 mb-3">
+    <div class="medidor">
+      <div class="cifra {% if resumen.cuadra %}ok{% endif %}">
+        {{ resumen.total }} <small>/ {{ resumen.jornada }} h</small>
+      </div>
+      <div class="barra {% if resumen.cuadra %}ok{% endif %}">
+        <span style="width:{% widthratio resumen.total resumen.jornada 100 %}%"></span>
+      </div>
+      {% if resumen.cuadra %}
+      <span class="chip c-fact"><i class="bi bi-check-lg"></i> Cuadra</span>
+      {% else %}
+      <span class="chip c-int">Faltan {{ resumen.faltan }} h</span>
+      {% endif %}
+    </div>
+    {% if resumen.total %}
+    <div class="mt-2" style="font-size:.82rem;color:#6b7280">
+      {{ resumen.facturables }} h facturables · {{ resumen.no_facturables }} h no facturables
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Renglones ───────────────────────────────────────────────── #}
+  {% for r in resumen.registros %}
+  <div class="renglon">
+    <div>
+      <div class="qué">
+        {% if r.proyecto %}
+          <strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
+          <span class="chip {% if r.facturable %}c-fact{% else %}c-int{% endif %} ms-1">
+            {% if r.facturable %}Facturable{% else %}Interno{% endif %}
+          </span>
+        {% else %}
+          <span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>
+        {% endif %}
+      </div>
+      <div class="meta mt-1">{{ r.detalle }}</div>
+    </div>
+    <div class="hrs">{{ r.horas }} h</div>
+    <div>
+      {% if dia.editable %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="quitar">
+        <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+        <input type="hidden" name="renglon" value="{{ r.pk }}">
+        <button type="submit" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">Quitar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {# ── Añadir renglón ──────────────────────────────────────────── #}
+  {% if not dia or dia.editable %}
+  <div class="card p-4 mt-3">
+    <h6 class="fw-bold mb-3" style="font-family:'Montserrat',sans-serif;font-size:.95rem">Añadir actividad</h6>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="agregar">
+      <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Actividad</label>
+          <select name="tipo_actividad" id="actividad" class="form-select" required>
+            {% for a in actividades %}
+            <option value="{{ a.pk }}" data-proyecto="{{ a.requiere_proyecto|yesno:"1,0" }}">{{ a.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Solo aparece si la actividad elegida lo exige. #}
+        <div class="col-md-5" id="campo-proyecto">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          <select name="proyecto" id="proyecto" class="form-select">
+            <option value="">— Elige el proyecto —</option>
+            {% for p in proyectos %}
+            <option value="{{ p.pk }}">{{ p.codigo }} — {{ p.nombre }}{% if not p.facturable %} (interno){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Horas</label>
+          <input type="number" name="horas" class="form-control" step="0.5" min="0.5"
+                 max="{{ estado_dia.jornada }}" placeholder="8.5" required>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Qué hiciste?</label>
+          <input type="text" name="detalle" class="form-control" maxlength="300" required
+                 placeholder="Ej: desarrollo del módulo de facturación, revisión de incidencias...">
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-plus-lg me-1"></i>Añadir
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {# ── Cerrar el día ───────────────────────────────────────────── #}
+  {% if resumen and resumen.cuadra %}
+  <div class="card p-4 mt-3 text-center">
+    <p class="mb-3" style="font-size:.92rem">
+      El día cuadra con <strong>{{ resumen.total }} h</strong> en
+      {{ resumen.registros|length }} actividad{{ resumen.registros|length|pluralize:"es" }}.
+      Al registrarlo <strong>ya no podrás modificarlo</strong>.
+    </p>
+    <form method="post" onsubmit="return confirm('¿Registrar el día? Después no se puede modificar sin autorización.')">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="registrar">
+      <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+      <button type="submit" class="btn-cerrar">
+        <i class="bi bi-lock me-1"></i>Registrar día
+      </button>
+    </form>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# ── Días pendientes ─────────────────────────────────────────── #}
+  {% if pendientes %}
+  <div class="mt-4">
+    <h6 class="fw-bold mb-2" style="font-family:'Montserrat',sans-serif;font-size:.88rem;color:#110d26">
+      Días hábiles sin registrar
+    </h6>
+    {% for d in pendientes %}
+    <a class="pendiente-chip" href="?fecha={{ d|date:'Y-m-d' }}">{{ d|date:"D j M" }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+<script>
+  // El proyecto solo se pide cuando la actividad lo exige. Se deshabilita
+  // además de ocultarse: un campo deshabilitado no se envía, así no se cuela
+  // un proyecto elegido antes de cambiar a formación.
+  (function () {
+    var actividad = document.getElementById('actividad');
+    if (!actividad) { return; }
+    var campo = document.getElementById('campo-proyecto');
+    var select = document.getElementById('proyecto');
+
+    function sincronizar() {
+      var opcion = actividad.options[actividad.selectedIndex];
+      var necesita = opcion && opcion.dataset.proyecto === '1';
+      campo.hidden = !necesita;
+      select.disabled = !necesita;
+      select.required = necesita;
+      if (!necesita) { select.value = ''; }
+    }
+
+    actividad.addEventListener('change', sincronizar);
+    sincronizar();
+  })();
+</script>
+{% endblock %}

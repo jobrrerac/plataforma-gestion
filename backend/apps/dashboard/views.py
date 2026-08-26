@@ -60,7 +60,17 @@ class OcupacionAPIView(APIView):
             return Response({"error": "El rango máximo es 90 días."}, status=400)
 
         # Solo recursos asignables: los Admin/PM/staff no aparecen en el heatmap
-        recursos = list(recursos_asignables().order_by("nombre"))
+        recursos = recursos_asignables().order_by("nombre")
+
+        # Un ingeniero ve su propia ocupación y nada más. El heatmap completo
+        # dice quién está en bench y con qué carga anda cada quien: eso es
+        # información de gestión, y aunque el RBAC ya impide ver costos, la
+        # disponibilidad del equipo tampoco es asunto suyo.
+        if not es_admin_o_pm(request.user):
+            propio = Recurso.objects.filter(usuario=request.user).first()
+            recursos = recursos.filter(pk=propio.pk) if propio else recursos.none()
+
+        recursos = list(recursos)
 
         # Prefetch de todas las asignaciones aprobadas en el rango (una sola query)
         asignaciones = list(

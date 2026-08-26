@@ -12,6 +12,7 @@ from apps.dashboard.views import (
 )
 from apps.accounts.views import LoginRateLimitView, CambiarPasswordView, salud, listo
 from apps.calendar_engine.views_novedades import NovedadesView, NovedadesRevisarView
+from apps.legalizacion.views import LegalizarDiaView
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
@@ -36,6 +37,8 @@ urlpatterns = [
     # de revisión, solo para Admin.
     path("novedades/", NovedadesView.as_view(), name="novedades"),
     path("novedades/revisar/", NovedadesRevisarView.as_view(), name="novedades-revisar"),
+    # Legalizacion de horas: cada quien registra su propio dia.
+    path("horas/", LegalizarDiaView.as_view(), name="horas"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
     # Sondas de la plataforma. Van sin autenticar y sin redirección a HTTPS.
     path("healthz/", salud, name="healthz"),
