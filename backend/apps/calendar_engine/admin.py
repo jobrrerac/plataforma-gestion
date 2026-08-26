@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.core.admin_mixins import SoftDeleteAdminMixin
 from django.utils import timezone
 from .models import DiaNoLaborable, Indisponibilidad
 
@@ -10,7 +11,7 @@ class DiaNoLaborableAdmin(admin.ModelAdmin):
 
 
 @admin.register(Indisponibilidad)
-class IndisponibilidadAdmin(admin.ModelAdmin):
+class IndisponibilidadAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ["recurso", "tipo", "fecha_inicio", "fecha_fin", "estado", "origen"]
     list_filter = ["estado", "tipo", "origen"]
     search_fields = ["recurso__nombre"]

@@ -4,6 +4,7 @@ from math import ceil
 from decimal import Decimal
 from django import forms
 from django.contrib import admin, messages
+from apps.core.admin_mixins import SoftDeleteAdminMixin
 from django.utils.html import format_html
 from apps.accounts.roles import es_admin
 from apps.calendar_engine.services import calcular_fecha_fin as _cal_fecha_fin, contar_dias_habiles
@@ -141,7 +142,7 @@ class LiberacionInline(admin.TabularInline):
 
 
 @admin.register(Asignacion)
-class AsignacionAdmin(admin.ModelAdmin):
+class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     form = AsignacionAdminForm
     list_display = [
         "recurso", "acciones_rapidas", "proyecto", "estado_badge", "modo_asignacion",

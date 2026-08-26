@@ -1,4 +1,5 @@
 from django.contrib import admin, messages
+from .admin_mixins import SoftDeleteAdminMixin
 from django.utils.html import format_html, mark_safe, escape
 from .models import Recurso, Proyecto, Skill, RecursoSkill, Cluster, TarifaVigente
 
@@ -66,7 +67,7 @@ class RecursoSkillInline(admin.TabularInline):
 
 
 @admin.register(Recurso)
-class RecursoAdmin(admin.ModelAdmin):
+class RecursoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ["nombre", "nro_persona_sap", "email", "banda", "clusters_display", "skills_display", "activo"]
     list_filter = ["banda", "activo", "clusters", "skills"]
     search_fields = ["nombre", "email", "nro_persona_sap"]
@@ -127,8 +128,14 @@ class RecursoAdmin(admin.ModelAdmin):
 
 
 @admin.register(Proyecto)
-class ProyectoAdmin(admin.ModelAdmin):
-    list_display = ["codigo", "codigo_pep", "grafo", "nombre", "cliente", "estado", "pm", "fecha_inicio", "fecha_fin"]
-    list_filter = ["estado"]
+class ProyectoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = [
+        "codigo", "codigo_pep", "grafo", "nombre", "cliente",
+        "estado", "facturable", "pm", "fecha_inicio", "fecha_fin",
+    ]
+    # Editables desde la propia lista: son los dos campos que más se cambian
+    # sobre la marcha, y entrar a cada proyecto para marcar una casilla sobra.
+    list_editable = ["estado", "facturable"]
+    list_filter = ["estado", "facturable"]
     search_fields = ["codigo", "codigo_pep", "grafo", "nombre", "cliente"]
     exclude = ["deleted_at", "created_at", "updated_at"]
