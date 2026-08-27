@@ -71,10 +71,14 @@ class ForzarCambioPasswordTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_logout_permitido_con_pendiente(self):
-        # Logout no debe quedar interceptado por el middleware hacia la página de cambio.
-        resp = self.client.get(reverse("logout"))
-        destino = resp.url if resp.status_code == 302 else ""
-        self.assertNotEqual(destino, reverse("password-cambiar"))
+        # Logout no debe quedar interceptado por el middleware hacia la página
+        # de cambio. Se comprueba que la sesión SE CIERRA, no solo que el
+        # destino no sea el formulario: la versión anterior de este test tomaba
+        # el destino como cadena vacía cuando la respuesta no era 302, así que
+        # pasaba igual aunque el logout devolviera un 405 y no cerrara nada.
+        resp = self.client.post(reverse("logout"))
+        self.assertRedirects(resp, "/login/", fetch_redirect_response=False)
+        self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_cambio_exitoso_borra_flag_y_libera(self):
         resp = self.client.post(reverse("password-cambiar"), {
@@ -90,3 +94,41 @@ class ForzarCambioPasswordTests(TestCase):
     def test_sin_pendiente_no_redirige(self):
         CambioPasswordPendiente.objects.filter(usuario=self.user).delete()
         self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
+
+
+class LogoutTests(TestCase):
+    """Cerrar sesión tiene que cerrarla de verdad.
+
+    Regresión reportada en QA: el botón de la cabecera era un enlace, así que
+    hacía GET. Desde Django 4.1 `LogoutView` rechaza GET con un 405 — y con
+    razón: por GET, una página externa podría cerrar la sesión de cualquiera
+    con una simple etiqueta `<img>`. El resultado era un error 405 y la sesión
+    intacta.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="sale", password="Clave2026!")
+        self.client.force_login(self.user)
+
+    def test_por_post_cierra_la_sesion(self):
+        resp = self.client.post(reverse("logout"))
+        self.assertRedirects(resp, "/login/", fetch_redirect_response=False)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_por_get_no_cierra_nada(self):
+        # Es el comportamiento correcto de Django, no un fallo: se comprueba
+        # para que nadie "arregle" el 405 permitiendo GET.
+        self.assertEqual(self.client.get(reverse("logout")).status_code, 405)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_la_cabecera_ofrece_un_formulario_no_un_enlace(self):
+        html = self.client.get(reverse("dashboard")).content.decode()
+        self.assertIn('action="/logout/"', html)
+        self.assertNotIn('href="/logout/"', html)
+
+    def test_tras_salir_las_paginas_piden_login(self):
+        # Lo que reportó QA: volver a entrar y seguir dentro.
+        self.client.post(reverse("logout"))
+        resp = self.client.get(reverse("dashboard"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login/", resp.url)
