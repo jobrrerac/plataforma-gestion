@@ -44,17 +44,29 @@ Cuentas de apoyo, para casos concretos:
 | Cuenta | Rol | Para qué |
 |---|---|---|
 | `test.ingeniero@inetumoffshore.onmicrosoft.com` | Ingeniero | **Sin asignaciones**: solo para HOR-10 |
-| `carmen.leon@inetumoffshore.onmicrosoft.com` | PM | **PM ajeno** a `QA-DEMO`: solo para HAP-02 |
+| `carmen.leon@inetumoffshore.onmicrosoft.com` | PM | **PM ajeno** a `QA-001`: solo para HAP-02 |
 
 ### 1.3 Datos preparados para ti
 
-- **Proyecto `QA-DEMO`** (facturable), cuyo PM es `qa.pm`.
-- **Asignación aprobada tuya a `QA-DEMO`**, del **2026-08-06 al 2026-08-26**. Es la que hace que `QA-DEMO` te aparezca en el desplegable de `/horas/` esos días — y que **desaparezca** fuera de ese rango (HOR-11 y HOR-12).
-- Proyectos internos: `INT-DEPART`, `INT-MGMT` (no facturables). Salen siempre, tengas o no asignación.
+Tres proyectos de prueba, cada uno con un papel distinto:
+
+| Proyecto | PM | Estado | Para qué |
+|---|---|---|---|
+| `QA-001` Portal de Clientes QA | `qa.pm` | Activo | **Estás asignada.** Aparece en `/horas/` dentro del rango |
+| `QA-002` Migración SAP QA | `carmen.leon` | Activo | PM distinto: sirve para comprobar que la cola de aprobación filtra |
+| `QA-003` Mantenimiento Legacy QA | `qa.pm` | **Cerrado** | Comprobar que un proyecto cerrado **no** aparece donde no debe |
+
+- **Tu asignación aprobada a `QA-001`** va del **2026-08-06 a hoy**. Ese rango es lo que hace verificable el filtro: dentro, `QA-001` aparece en el desplegable de `/horas/`; fuera, desaparece (HOR-11 y HOR-12).
+- `qa.pm` también tiene recurso y asignación, para poder probar que un PM legaliza sus propias horas (HOR-27).
+- Proyectos internos: `INT-DEPART`, `INT-MGMT` (no facturables). Salen **siempre**, con o sin asignación.
 - Actividades sin proyecto: **Entrenamiento** y **Estudio**. `Formación` está retirada y **no debe aparecer**.
 - Jornada: **lunes a jueves 8,5 h · viernes 8 h** (42 h semanales desde 2026-07-15).
 
-> Al terminar, la asignación a `QA-DEMO` y el propio proyecto deberían revocarse: son datos de prueba dentro de la base real y hoy suman ocupación en tu fila del dashboard.
+> **Al terminar la ronda**, todo esto se retira con un comando:
+> ```bash
+> python manage.py datos_qa limpiar
+> ```
+> Retira proyectos, asignaciones, las horas legalizadas contra ellos y desactiva las cuentas `qa.*` — todo por soft-delete. Lo único que queda a mano es **desactivar `qa.pm` y `qa.admin` en Entra ID**.
 
 ### 1.4 Orden sugerido
 
@@ -253,8 +265,9 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HOR-08 | Formación no aparece | Revisar el desplegable | Solo Proyecto, Entrenamiento y Estudio |
 | HOR-09 | El proyecto solo cuando aplica | Elegir Estudio y luego Proyecto | El campo Proyecto **se oculta** con Estudio y aparece con Proyecto |
 | HOR-10 | **Proyectos filtrados (sin asignación)** | Como `test.ingeniero`, abrir el desplegable | Solo `INT-DEPART` e `INT-MGMT`. **Ningún proyecto de cliente** |
-| HOR-11 | **Proyectos filtrados (con asignación)** | Con tu cuenta, abrir un día **entre el 06 y el 26 de agosto** | Además de los internos, aparece **`QA-DEMO`** |
-| HOR-12 | El filtro depende del día | Con tu cuenta, abrir un día **anterior al 06 de agosto** | `QA-DEMO` **desaparece**; quedan solo los internos |
+| HOR-11 | **Proyectos filtrados (con asignación)** | Con tu cuenta, abrir un día **del 06 de agosto en adelante** | Además de los internos, aparece **`QA-001`** |
+| HOR-12b | Un proyecto cerrado no aparece | Buscar `QA-003` en el desplegable | **No** aparece: está cerrado |
+| HOR-12 | El filtro depende del día | Con tu cuenta, abrir un día **anterior al 06 de agosto** | `QA-001` **desaparece**; quedan solo los internos |
 | HOR-13 | **Nada se guarda al añadir** | Añadir dos actividades a la lista y **recargar la página sin guardar** | La lista se pierde: no se guardó nada |
 | HOR-14 | El contador avanza | Ir añadiendo actividades | El marcador sube (`x / 8,5 h`) y la barra se llena |
 | HOR-15 | **Decimales correctos** | Con 4 h puestas, añadir 4,5 h en un día de 8,5 | Lo acepta y el día cuadra. **No** debe decir "quedan 4 h" |
@@ -280,8 +293,8 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| HAP-01 | El PM ve lo suyo | Como `qa.pm`, abrir `/horas/aprobar/` tras registrar días con horas de `QA-DEMO` | Ve esos días: es el PM del proyecto |
-| HAP-02 | Un PM ajeno no lo ve | Como `carmen.leon`, que no es PM de `QA-DEMO` | La cola **no** incluye esos días |
+| HAP-01 | El PM ve lo suyo | Como `qa.pm`, abrir `/horas/aprobar/` tras registrar días con horas de `QA-001` | Ve esos días: es el PM del proyecto |
+| HAP-02 | Un PM ajeno no lo ve | Como `carmen.leon`, que es PM de `QA-002` pero **no** de `QA-001` | La cola **no** incluye esos días |
 | HAP-03 | **El Admin lo ve todo** | Como Admin, abrir la misma pantalla | Ve todos los días pendientes, también los de proyectos ajenos |
 | HAP-04 | Al Admin se le avisa | Como Admin, mirar arriba de la cola | Franja explicando que ve todo y que sirve de respaldo |
 | HAP-05 | Al PM no se le muestra esa nota | Como PM | No aparece esa franja |

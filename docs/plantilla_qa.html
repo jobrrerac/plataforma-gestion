@@ -1,0 +1,303 @@
+<title>Ronda de QA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@500;700&display=swap">
+
+<style>
+  :root {
+    --tinta:      #110d26;
+    --magenta:    #e0178a;
+    --lima:       #8a9400;
+    --papel:      #fbfafd;
+    --superficie: #ffffff;
+    --linea:      #e6e1ee;
+    --suave:      #f4f1f8;
+    --texto:      #241c3d;
+    --tenue:      #6b6480;
+    --ok:         #0f766e;
+    --aviso:      #b45309;
+    --alerta:     #b91c1c;
+    --sombra:     0 1px 3px rgba(17,13,38,.06), 0 8px 24px rgba(17,13,38,.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --tinta:      #f4f1f8;
+      --magenta:    #ff4da6;
+      --lima:       #d5e500;
+      --papel:      #0d0a1a;
+      --superficie: #171130;
+      --linea:      #2e2450;
+      --suave:      #1e1738;
+      --texto:      #e8e4f2;
+      --tenue:      #a49bc4;
+      --ok:         #2dd4bf;
+      --aviso:      #fbbf24;
+      --alerta:     #fca5a5;
+      --sombra:     0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --tinta:      #f4f1f8;
+    --magenta:    #ff4da6;
+    --lima:       #d5e500;
+    --papel:      #0d0a1a;
+    --superficie: #171130;
+    --linea:      #2e2450;
+    --suave:      #1e1738;
+    --texto:      #e8e4f2;
+    --tenue:      #a49bc4;
+    --ok:         #2dd4bf;
+    --aviso:      #fbbf24;
+    --alerta:     #fca5a5;
+    --sombra:     0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--papel);
+    color: var(--texto);
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 16.5px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 1.5rem 6rem;
+  }
+  .envoltura { max-width: 1000px; margin: 0 auto; }
+  .prosa { max-width: 70ch; }
+
+  header {
+    padding: 3.5rem 0 2rem;
+    border-bottom: 3px solid var(--magenta);
+    margin-bottom: 2rem;
+  }
+  .marca {
+    font-family: Montserrat, system-ui, sans-serif;
+    font-size: .66rem; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--tenue); margin-bottom: 1rem;
+  }
+  .marca b { color: var(--magenta); }
+  h1 {
+    font-family: Montserrat, system-ui, sans-serif;
+    font-size: clamp(1.9rem, 4.5vw, 2.7rem);
+    font-weight: 800; letter-spacing: -.035em; line-height: 1.07;
+    margin: 0 0 .8rem; color: var(--tinta); text-wrap: balance;
+  }
+  h1 em { font-style: normal; color: var(--magenta); }
+  .bajada { font-size: 1.1rem; color: var(--tenue); max-width: 58ch; margin: 0; }
+
+  h2 {
+    font-family: Montserrat, system-ui, sans-serif;
+    font-size: 1.32rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--tinta); margin: 2.8rem 0 .6rem; text-wrap: balance;
+  }
+  h3 {
+    font-family: Montserrat, system-ui, sans-serif;
+    font-size: 1rem; font-weight: 700; color: var(--tinta); margin: 1.8rem 0 .4rem;
+  }
+  p { margin: 0 0 .95rem; }
+  strong { font-weight: 600; color: var(--tinta); }
+  ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+  li { margin-bottom: .4rem; }
+  hr { border: none; border-top: 1px solid var(--linea); margin: 2.5rem 0; }
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .84em; background: var(--suave);
+    border: 1px solid var(--linea); border-radius: 4px; padding: .06em .36em;
+  }
+  pre {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .78rem; line-height: 1.7; background: var(--superficie);
+    border: 1px solid var(--linea); border-radius: 10px;
+    padding: 1.1rem 1.3rem; overflow-x: auto; margin: 1.2rem 0;
+  }
+
+  .scroll { overflow-x: auto; margin: 1.2rem 0; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: Montserrat, system-ui, sans-serif; font-size: .82rem;
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-radius: 10px; overflow: hidden;
+  }
+  th {
+    text-align: left; font-weight: 700; font-size: .64rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--tenue); padding: .75rem .95rem;
+    border-bottom: 1px solid var(--linea); background: var(--suave); white-space: nowrap;
+  }
+  td { padding: .72rem .95rem; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .nota {
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-left: 3px solid var(--magenta); border-radius: 8px;
+    padding: .9rem 1.2rem; margin: 1.1rem 0; font-size: .93rem;
+  }
+
+  /* ── Índice ─────────────────────────────────────────────── */
+  .indice { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.4rem 0 0; }
+  .indice a {
+    display: flex; align-items: baseline; gap: .4rem;
+    font-family: Montserrat, sans-serif; font-size: .74rem; font-weight: 700;
+    text-decoration: none; color: var(--texto);
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-radius: 20px; padding: .35rem .8rem;
+  }
+  .indice a:hover { border-color: var(--magenta); color: var(--magenta); }
+  .indice b { color: var(--tenue); font-weight: 600; font-size: .68rem; }
+
+  /* ── Progreso ───────────────────────────────────────────── */
+  .progreso {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--papel); border-bottom: 1px solid var(--linea);
+    padding: .7rem 0; margin: 0 0 1.5rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .progreso .barra {
+    flex: 1; min-width: 160px; height: 8px; background: var(--suave);
+    border-radius: 20px; overflow: hidden; border: 1px solid var(--linea);
+  }
+  .progreso .barra span { display: block; height: 100%; background: var(--magenta); width: 0; transition: width .2s; }
+  .progreso .cifra {
+    font-family: Montserrat, sans-serif; font-weight: 800; font-size: .88rem;
+    color: var(--tinta); white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .progreso button {
+    font-family: Montserrat, sans-serif; font-size: .7rem; font-weight: 700;
+    background: none; border: 1px solid var(--linea); color: var(--tenue);
+    border-radius: 20px; padding: .3rem .8rem; cursor: pointer;
+  }
+  .progreso button:hover { border-color: var(--magenta); color: var(--magenta); }
+
+  /* ── Casos ──────────────────────────────────────────────── */
+  .bloque { margin: 2.4rem 0; scroll-margin-top: 4rem; }
+  .bloque-cab { display: flex; align-items: baseline; gap: .7rem; margin-bottom: .8rem; flex-wrap: wrap; }
+  .bloque-cab h3 { margin: 0; }
+  .sigla {
+    font-family: "JetBrains Mono", monospace; font-size: .72rem; font-weight: 700;
+    background: var(--magenta); color: #fff; border-radius: 5px; padding: .15rem .5rem;
+  }
+  .cuenta { font-family: Montserrat, sans-serif; font-size: .7rem; color: var(--tenue); margin-left: auto; }
+
+  .caso {
+    display: flex; gap: .8rem; align-items: flex-start;
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-radius: 9px; padding: .8rem 1rem; margin-bottom: .5rem; cursor: pointer;
+  }
+  .caso:hover { border-color: var(--magenta); }
+  .caso input { margin-top: .3rem; width: 16px; height: 16px; accent-color: var(--magenta); flex: none; cursor: pointer; }
+  .caso:has(input:checked) { opacity: .5; background: var(--suave); }
+  .caso-cuerpo { flex: 1; min-width: 0; }
+  .caso-cab { display: flex; gap: .55rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .3rem; }
+  .cid {
+    font-family: "JetBrains Mono", monospace; font-size: .7rem; font-weight: 700;
+    color: var(--magenta); white-space: nowrap;
+  }
+  .ctit { font-family: Montserrat, sans-serif; font-size: .88rem; font-weight: 700; color: var(--tinta); }
+  .campo { font-size: .87rem; margin-top: .2rem; }
+  .etq {
+    font-family: Montserrat, sans-serif; font-size: .6rem; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--tenue);
+    display: inline-block; min-width: 4.6rem;
+  }
+
+  footer {
+    margin-top: 3.5rem; padding-top: 1.6rem; border-top: 1px solid var(--linea);
+    font-family: Montserrat, sans-serif; font-size: .74rem; color: var(--tenue);
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 15.5px; padding: 0 1rem 4rem; }
+    .etq { display: block; min-width: 0; }
+  }
+</style>
+
+<div class="envoltura">
+
+<header>
+  <div class="marca">inetum<b>.</b> &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
+  <h1>Ronda de QA: <em>{{TOTAL}} casos</em> y cómo pensar el sistema</h1>
+  <p class="bajada">
+    Primero cómo funciona la plataforma y dónde ya han aparecido errores. Después
+    los casos, marcables a medida que los ejecutas.
+  </p>
+</header>
+
+<div class="prosa">
+{{ENTORNO}}
+</div>
+
+<hr>
+
+<div class="prosa">
+{{MANUAL}}
+</div>
+
+<hr>
+
+<h2>Los casos</h2>
+<p class="prosa">
+  Marca cada uno al ejecutarlo. El progreso se guarda en este navegador, así que
+  puedes cerrar la página y volver.
+</p>
+
+<div class="indice">{{INDICE}}</div>
+
+<div class="progreso">
+  <span class="cifra"><span id="hechos">0</span> / {{TOTAL}}</span>
+  <div class="barra"><span id="barra"></span></div>
+  <button type="button" id="reiniciar">Reiniciar</button>
+</div>
+
+{{CASOS}}
+
+<footer>
+  Generado desde <code>docs/QA_MANUAL.md</code> y <code>docs/QA_PLAN_PRUEBAS.md</code>.
+  Esos archivos son la fuente: si cambian, esta página se regenera.
+</footer>
+
+</div>
+
+<script>
+  // El progreso vive solo en este navegador. Es una comodidad para no perder
+  // la cuenta entre sesiones, no un informe compartido: lo que se reporta
+  // sigue siendo el registro de ejecución.
+  (function () {
+    var CLAVE = 'qa-inetum-progreso';
+    var cajas = Array.prototype.slice.call(document.querySelectorAll('.caso input'));
+    var hechos = document.getElementById('hechos');
+    var barra = document.getElementById('barra');
+
+    function leer() {
+      try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; }
+      catch (e) { return {}; }
+    }
+    function guardar(estado) {
+      try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch (e) { /* sin persistencia */ }
+    }
+    function pintar() {
+      var n = cajas.filter(function (c) { return c.checked; }).length;
+      hechos.textContent = n;
+      barra.style.width = (cajas.length ? (n / cajas.length) * 100 : 0) + '%';
+    }
+
+    var estado = leer();
+    cajas.forEach(function (caja) {
+      caja.checked = !!estado[caja.dataset.caso];
+      caja.addEventListener('change', function () {
+        var actual = leer();
+        if (caja.checked) { actual[caja.dataset.caso] = true; }
+        else { delete actual[caja.dataset.caso]; }
+        guardar(actual);
+        pintar();
+      });
+    });
+
+    document.getElementById('reiniciar').addEventListener('click', function () {
+      if (!confirm('¿Desmarcar los ' + cajas.length + ' casos?')) { return; }
+      cajas.forEach(function (c) { c.checked = false; });
+      guardar({});
+      pintar();
+    });
+
+    pintar();
+  })();
+</script>
