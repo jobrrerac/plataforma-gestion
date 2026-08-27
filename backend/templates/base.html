@@ -22,6 +22,12 @@
       --inet-grad-left:   #5c1040;
       --inet-grad-mid:    #2a0e4a;
       --inet-grad-right:  #110d26;
+
+      /* Densidad de la cabecera. Se aprietan por tramos mas abajo segun el
+         ancho de ventana; centralizadas aqui para ajustarlas en un solo sitio. */
+      --inet-header-pad:  2rem;
+      --inet-nav-pad:     15px;
+      --inet-nav-size:    .7rem;
     }
 
     /* ─── HEADER ────────────────────────────────────────────────── */
@@ -39,8 +45,12 @@
     .inet-header-inner {
       display: flex;
       align-items: stretch;
-      padding: 0 2rem;
+      padding: 0 var(--inet-header-pad);
       min-height: 62px;
+      /* Sin esto el contenido se sale del fondo pintado del header y acaba
+         flotando sobre la pagina (lo que reporto QA con el rol Admin, que
+         tiene 10 destinos en la barra). */
+      overflow: hidden;
     }
 
     /* Logo "inetum.↗" */
@@ -71,18 +81,28 @@
       display: flex;
       align-items: stretch;
       gap: 0;
-      flex: 1;
+      /* `flex: 1` solo no basta: todo hijo flex trae `min-width: auto`, que le
+         impide encoger por debajo de su contenido. Con los enlaces en `nowrap`
+         el nav se queda clavado en su ancho intrinseco y empuja al resto. */
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-x: auto;
+      /* Red de seguridad para zoom alto o pantallas pequenas: antes de tapar
+         nada, la barra se desplaza. Sin barra de scroll visible dentro de una
+         cabecera de 62 px. */
+      scrollbar-width: none;
     }
+    .inet-nav::-webkit-scrollbar { display: none; }
 
     .inet-nav-link {
       font-family: 'Montserrat', sans-serif;
-      font-size: .7rem;
+      font-size: var(--inet-nav-size);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .1em;
       color: rgba(255, 255, 255, .75);
       text-decoration: none;
-      padding: 0 15px;
+      padding: 0 var(--inet-nav-pad);
       display: flex;
       align-items: center;
       gap: 5px;
@@ -106,6 +126,9 @@
       align-items: center;
       margin-left: auto;
       gap: 4px;
+      /* Saber quien esta dentro y poder salir no son opcionales: este bloque
+         conserva su tamano y es el nav el que cede. */
+      flex: 0 0 auto;
     }
 
     /* Identidad de quien esta dentro */
@@ -129,6 +152,9 @@
       font-weight: 700;
       color: #fff;
       white-space: nowrap;
+      max-width: 15ch;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .inet-usuario-rol {
       font-family: 'Montserrat', sans-serif;
@@ -157,6 +183,20 @@
     .inet-salir:focus-visible {
       outline: 2px solid var(--inet-yellow);
       outline-offset: 3px;
+    }
+
+    /* Densificado progresivo. El rol Admin ve 10 destinos; a partir de
+       ~1600 px de ventana el ancho intrinseco de la cabecera supera al de la
+       pantalla, asi que se aprieta por tramos en vez de desbordar. */
+    @media (max-width: 1600px) {
+      :root { --inet-header-pad: 1rem; --inet-nav-pad: 8px; --inet-nav-size: .66rem; }
+      .inet-logo { margin-right: 1rem; font-size: 1.3rem; }
+      .inet-nav-link { gap: 4px; letter-spacing: .06em; }
+    }
+    @media (max-width: 1400px) {
+      /* El engranaje se entiende sin etiqueta. */
+      .inet-admin-texto { display: none; }
+      .inet-usuario-nombre { max-width: 11ch; }
     }
 
     @media (max-width: 900px) {
@@ -318,7 +358,7 @@
     <div class="inet-header-right">
       {% if user.is_staff %}
       <a href="/admin/" class="inet-nav-link {% block active_admin %}{% endblock %}">
-        <i class="bi bi-gear"></i> Admin
+        <i class="bi bi-gear"></i> <span class="inet-admin-texto">Admin</span>
       </a>
       {% endif %}
 
