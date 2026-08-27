@@ -138,6 +138,7 @@
       letter-spacing: .1em;
       color: var(--inet-yellow);
     }
+    .inet-salir-form { display: flex; margin: 0; }
     .inet-salir {
       color: rgba(255, 255, 255, .6);
       font-size: 1.05rem;
@@ -145,8 +146,18 @@
       align-items: center;
       text-decoration: none;
       transition: color .15s;
+      /* Es un boton dentro de un formulario, pero se ve como el icono que era. */
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
     }
     .inet-salir:hover { color: var(--inet-pink); }
+    .inet-salir:focus-visible {
+      outline: 2px solid var(--inet-yellow);
+      outline-offset: 3px;
+    }
 
     @media (max-width: 900px) {
       .inet-usuario-datos { display: none; }
@@ -325,9 +336,17 @@
             {% if es_admin %}Admin{% elif es_admin_o_pm %}PM{% else %}Ingeniero{% endif %}
           </span>
         </div>
-        <a href="/logout/" class="inet-salir" title="Cerrar sesión">
-          <i class="bi bi-box-arrow-right"></i>
-        </a>
+        {% comment %}
+          Cerrar sesión va por POST, no por enlace. Desde Django 4.1 LogoutView
+          rechaza GET con un 405, y con razón: por GET cualquier página externa
+          podría cerrarte la sesión con una simple etiqueta <img>.
+        {% endcomment %}
+        <form method="post" action="{% url 'logout' %}" class="inet-salir-form">
+          {% csrf_token %}
+          <button type="submit" class="inet-salir" title="Cerrar sesión">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </form>
       </div>
       {% endif %}
     </div>
