@@ -1,0 +1,41 @@
+# Copiar a terraform.tfvars y ajustar. terraform.tfvars esta en .gitignore.
+#
+# Todo tiene un valor por defecto sensato: se puede aplicar sin ningun tfvars.
+# Lo unico que conviene rellenar es ip_desarrollador.
+
+# Tu IP publica, para poder conectarte a PostgreSQL desde tu maquina
+# (restaurar el backup inicial, inspeccionar datos con psql).
+# Obtenerla con: curl -s https://api.ipify.org
+# ip_desarrollador = "190.xxx.xxx.xxx"
+
+# --- Ahorro / escalado -----------------------------------------------------
+
+# 0 = la app se apaga cuando nadie la usa (arranque en frio de 10-30s).
+# 1 = siempre encendida, ~15 USD/mes mas.
+# min_replicas = 0
+
+# max_replicas = 2
+# cpu          = 0.5
+# memoria      = "1Gi"
+
+# --- SSO -------------------------------------------------------------------
+
+# false = solo login local con usuario/contrasena (el SSO queda desactivado
+#         pero la infraestructura de Entra se sigue creando).
+# sso_habilitado = true
+
+# false = solo pueden entrar por SSO usuarios que ya existan en Django.
+# sso_crear_usuarios = true
+
+# --- Aplicacion ------------------------------------------------------------
+
+# sap_validacion_estricta = false
+
+# Dominio propio, si algun dia se pone uno delante de la Container App.
+# django_allowed_hosts_extra = ["gestion.miempresa.com"]
+
+# --- CI/CD -----------------------------------------------------------------
+
+# Vacio = no crear la identidad federada de GitHub Actions.
+# github_repo   = "jobrrerac/plataforma-gestion"
+# github_branch = "main"

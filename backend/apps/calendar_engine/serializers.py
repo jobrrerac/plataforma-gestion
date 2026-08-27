@@ -17,6 +17,13 @@ class IndisponibilidadSerializer(serializers.ModelSerializer):
         fields = [
             "id", "recurso", "recurso_nombre",
             "fecha_inicio", "fecha_fin", "tipo", "origen", "external_id",
+            "estado", "motivo", "motivo_rechazo",
+            "solicitada_por", "revisada_por", "revisada_en",
+        ]
+        # El estado solo se mueve por el flujo de aprobación
+        # (apps.calendar_engine.novedades), nunca escribiéndolo por la API.
+        read_only_fields = [
+            "estado", "motivo_rechazo", "solicitada_por", "revisada_por", "revisada_en",
         ]
 
     def validate(self, data):

@@ -1,221 +1,382 @@
-# Plan de Pruebas QA — Plataforma de Gestión de Asignación de Recursos
+# Plan de Pruebas QA — Plataforma de Gestión de Recursos
 
-**Versión:** 1.0 · **Fecha:** 2026-07-07 · **Alcance:** Fase 1 (calendario, solicitudes, aprobación, dashboard, RBAC, auditoría)
+**Versión:** 2.0 · **Fecha:** 2026-08-26
+**Alcance:** aplicación completa desplegada en Azure — autenticación local y SSO, RBAC, catálogos, calendario, asignaciones, cesiones, liberaciones, novedades, legalización de horas y su aprobación.
 
-Cada caso indica: precondiciones, pasos y resultado esperado. QA registra **PASS / FAIL / BLOQUEADO** y evidencia (captura o respuesta de API). Los casos de API pueden ejecutarse desde el DRF browsable API (navegando a la URL logueado) o con Postman/curl usando sesión.
+Cada caso indica pasos y resultado esperado. QA registra **PASS / FAIL / BLOQUEADO** y evidencia (captura o respuesta de API) en el anexo final.
 
----
-
-## 1. Preparación del entorno y datos de prueba
-
-Ejecutar una sola vez antes de la ronda de pruebas (o tras un reseteo de BD):
-
-```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py setup_grupos
-docker compose exec web python manage.py createsuperuser   # si no existe
-```
-
-### 1.1 Usuarios de prueba
-
-Crear en `/admin/auth/user/` (logueado como superusuario):
-
-| Usuario     | Grupo     | Es staff | Uso |
-|-------------|-----------|----------|-----|
-| `qa_admin`  | Admin     | ✔ Sí     | Aprueba/rechaza/revoca, administra catálogos |
-| `qa_pm`     | PM        | ✔ Sí     | Crea solicitudes, gestiona indisponibilidades |
-| `qa_ing`    | Ingeniero | ✔ Sí     | Solo consulta; **nunca debe ver costos ni emails** |
-
-> "Es staff" es necesario para que puedan entrar a `/admin/`. El grupo controla qué pueden hacer una vez dentro.
-
-### 1.2 Datos maestros
-
-Crear como `qa_admin` en `/admin/`:
-
-| Entidad | Datos |
-|---|---|
-| Recurso **R1** | Nombre: `QA Recurso Uno`, email: `r1@qa.test`, banda: Senior, activo |
-| Recurso **R2** | Nombre: `QA Recurso Dos`, email: `r2@qa.test`, banda: Junior, activo |
-| Proyecto **P1** | Código: `QA-001`, estado: ACTIVO, PM: `qa_pm`, fecha inicio: `2026-07-01` |
-| Proyecto **P2** | Código: `QA-002`, estado: CERRADO (para probar que no aparece en formularios) |
-| Tarifa R1 | 50,00 €/h vigente desde `2026-01-01` |
-| Día no laborable global | `2026-07-24` (viernes), descripción: "Día QA global" |
-| Indisponibilidad R2 | Del `2026-07-13` al `2026-07-17` (vacaciones) |
-
-### 1.3 Fechas de referencia (julio–agosto 2026)
-
-- `2026-07-20` (lunes) — **feriado**: Día de la Independencia.
-- `2026-08-07` (viernes) — **feriado**: Batalla de Boyacá.
-- `2026-07-24` (viernes) — día no laborable global creado en 1.2.
-- `2026-07-13` a `2026-07-17` — semana de indisponibilidad de R2.
-- Jornada máxima: **lunes a jueves 8,5 h · viernes 8,0 h** (42 h semanales).
-
-> La lista oficial de feriados puede consultarse en `/api/calendario/feriados/?year=2026`.
+> **La v1.0 cubría solo la Fase 1.** Esta versión añade SSO con Entra ID, novedades, legalización de horas, aprobación de horas y el despliegue en Azure. Los casos de la v1.0 siguen vigentes con su misma numeración salvo donde se indica lo contrario.
 
 ---
 
-## 2. AUT — Autenticación y bloqueo de fuerza bruta
+## 1. Entorno y cuentas
+
+### 1.1 Dónde se prueba
+
+**Todo se prueba aquí**, desde el navegador. No hace falta instalar nada.
+
+> ### https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io
+
+**La primera carga tarda 10-30 segundos** si nadie ha usado la aplicación en un rato: se apaga sola cuando está ociosa para no gastar. A partir de ahí va rápida. **No es un fallo** — es lo primero con lo que te vas a topar.
+
+Tres casos del bloque INF y la limpieza final los ejecuta el equipo de desarrollo, no tú; están marcados como tales.
+
+### 1.2 Tus cuentas
+
+El plan recorre los tres roles, así que hacen falta tres accesos. Todas entran por **"Iniciar sesión con Microsoft"**.
+
+| Cuenta (UPN de Entra) | Rol | Cuándo usarla |
+|---|---|---|
+| `erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com` | Ingeniero | **Tu cuenta.** Bloques AUT, SSO, RBAC, NOV y HOR |
+| `qa.pm@inetumoffshore.onmicrosoft.com` | PM | Bloques SOL, CES, LIB y la parte de PM en HAP |
+| `qa.admin@inetumoffshore.onmicrosoft.com` | Admin | Bloques MAE, APR, la aprobación de novedades y la parte de Admin en HAP |
+
+> **`qa.pm` y `qa.admin` son cuentas de prueba creadas para esta ronda.** Se usan para no tener que cambiarle el rol a nadie de verdad. **`qa.admin` puede aprobar y revocar asignaciones reales**, así que hay que desactivarlas en Entra cuando termine la ronda.
+
+Cuentas de apoyo, para casos concretos:
+
+| Cuenta | Rol | Para qué |
+|---|---|---|
+| `test.ingeniero@inetumoffshore.onmicrosoft.com` | Ingeniero | **Sin asignaciones**: solo para HOR-10 |
+| `carmen.leon@inetumoffshore.onmicrosoft.com` | PM | **PM ajeno** a `QA-001`: solo para HAP-02 |
+
+### 1.3 Datos preparados para ti
+
+Tres proyectos de prueba, cada uno con un papel distinto:
+
+| Proyecto | PM | Estado | Para qué |
+|---|---|---|---|
+| `QA-001` Portal de Clientes QA | `qa.pm` | Activo | **Estás asignada.** Aparece en `/horas/` dentro del rango |
+| `QA-002` Migración SAP QA | `carmen.leon` | Activo | PM distinto: sirve para comprobar que la cola de aprobación filtra |
+| `QA-003` Mantenimiento Legacy QA | `qa.pm` | **Cerrado** | Comprobar que un proyecto cerrado **no** aparece donde no debe |
+
+- **Tu asignación aprobada a `QA-001`** va del **2026-08-06 a hoy**. Ese rango es lo que hace verificable el filtro: dentro, `QA-001` aparece en el desplegable de `/horas/`; fuera, desaparece (HOR-11 y HOR-12).
+- `qa.pm` también tiene recurso y asignación, para poder probar que un PM legaliza sus propias horas (HOR-27).
+- Proyectos internos: `INT-DEPART`, `INT-MGMT` (no facturables). Salen **siempre**, con o sin asignación.
+- Actividades sin proyecto: **Entrenamiento** y **Estudio**. `Formación` está retirada y **no debe aparecer**.
+- Jornada: **lunes a jueves 8,5 h · viernes 8 h** (42 h semanales desde 2026-07-15).
+
+> **Al terminar la ronda**, avisa al equipo: retiran los proyectos de prueba, tus asignaciones a ellos y las cuentas `qa.*` con un solo comando. No tienes que deshacer nada tú.
+
+### 1.4 Orden sugerido
+
+El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.
+
+1. **AUT y SSO** con tu cuenta — confirma que entras y con qué rol.
+2. **RBAC** alternando las tres cuentas.
+3. **MAE y CAL** con `qa.admin` — deja los datos listos.
+4. **SOL, CES, LIB** con `qa.pm`; sus aprobaciones con `qa.admin`.
+5. **NOV** con tu cuenta; las aprobaciones con `qa.admin`.
+6. **HOR** con tu cuenta — es el bloque más largo.
+7. **HAP** con `qa.pm` y `qa.admin`, sobre los días que registraste en el paso 6.
+8. **DASH, AUD, INF** al final.
+
+---
+
+## 2. AUT — Autenticación
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| AUT-01 | Login correcto | Ir a `/login/`, ingresar `qa_pm` con contraseña válida | Redirige al dashboard (`/`); se ve el heatmap de ocupación |
-| AUT-02 | Login incorrecto | Ingresar `qa_pm` con contraseña errónea | Vuelve al formulario con mensaje de error; NO revela si el usuario existe |
-| AUT-03 | Bloqueo tras 5 intentos fallidos | Fallar el login 5 veces seguidas con `qa_ing`; intentar una 6ª vez (incluso con la contraseña correcta) | Página 403: "Demasiados intentos fallidos. Espere 15 minutos…" |
-| AUT-04 | El bloqueo es por usuario/IP, no global | Con AUT-03 activo, en otro navegador (u otra sesión) loguear `qa_admin` correctamente | `qa_admin` entra sin problema |
-| AUT-05 | Desbloqueo tras 15 min | Esperar 15 min tras AUT-03 y loguear `qa_ing` con contraseña correcta | Login exitoso |
-| AUT-06 | Rutas protegidas sin sesión | Sin loguearse, abrir `/dashboard/`, `/solicitud/`, `/recurso/1/` | Redirige a `/login/?next=…`; tras loguearse vuelve a la página pedida |
-| AUT-07 | API sin sesión | Sin sesión, GET `/api/asignaciones/` | HTTP 403 (no expone datos) |
-| AUT-08 | Logout | Logueado, ir a `/logout/` | Sesión cerrada, redirige a `/login/`; el "atrás" del navegador no muestra datos nuevos |
-| AUT-09 | Login del admin redirige al login propio | Sin sesión, abrir `/admin/` | Redirige a `/login/?next=/admin/`; tras login como `qa_admin` entra al sitio administrativo |
+| AUT-01 | Login local correcto | `/login/` con usuario y contraseña válidos | Entra al dashboard |
+| AUT-02 | Login incorrecto | Contraseña errónea | Vuelve al formulario con error; **no revela** si el usuario existe |
+| AUT-03 | Bloqueo tras 5 intentos | Fallar 5 veces; intentar una 6ª **con la contraseña correcta** | 403 "Demasiados intentos fallidos. Espere 15 minutos…" |
+| AUT-04 | El bloqueo no es global | Con AUT-03 activo, loguear otra cuenta en otro navegador | Entra sin problema |
+| AUT-05 | Rutas protegidas sin sesión | Abrir `/dashboard/`, `/horas/`, `/novedades/` sin sesión | Redirige a `/login/?next=…` y vuelve a la página pedida tras entrar |
+| AUT-06 | API sin sesión | GET `/api/asignaciones/` sin sesión | 403, sin exponer datos |
+| AUT-07 | Logout | `/logout/` | Cierra sesión y vuelve a `/login/` |
+| AUT-08 | El login del admin usa la página propia | Abrir `/admin/` sin sesión | Redirige a `/login/?next=/admin/`, no al login de Django |
+| AUT-09 | **Quién está dentro** | Logueado con cualquier cuenta, mirar la esquina superior derecha | Muestra nombre y **rol** (Admin / PM / Ingeniero) y el botón de salir |
+| AUT-10 | El rol mostrado coincide | Repetir AUT-09 con las tres cuentas de distinto rol | La etiqueta cambia correctamente en cada una |
 
 ---
 
-## 3. RBAC — Control de acceso por rol
+## 3. SSO — Entra ID
+
+Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: es la vía de contingencia.
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| RBAC-01 | Ingeniero no accede al flujo de solicitud | Como `qa_ing`, abrir `/solicitud/` y `/solicitud/crear/` | HTTP 403 en ambas |
-| RBAC-02 | PM sí accede al flujo de solicitud | Como `qa_pm`, abrir `/solicitud/` | Carga el buscador de disponibilidad |
-| RBAC-03 | **Ingeniero nunca ve costos** | Como `qa_pm`, buscar disponibilidad en `/solicitud/` y anotar que aparecen columnas de tarifa/costo estimado. Repetir el intento como `qa_ing` | Para `qa_ing` la página devuelve 403 (no llega a ver costos). En ninguna pantalla accesible a `qa_ing` (dashboard, detalle de recurso, API) aparece tarifa ni costo |
-| RBAC-04 | Ingeniero no ve emails en el dashboard | Como `qa_ing`, GET `/api/dashboard/ocupacion/` | La respuesta NO incluye el campo `email` de los recursos |
-| RBAC-05 | Admin/PM sí ven emails | Como `qa_pm`, GET `/api/dashboard/ocupacion/` | Cada recurso incluye su `email` |
-| RBAC-06 | API recursos oculta email a Ingeniero | Como `qa_ing`, GET `/api/recursos/` | Los objetos NO traen campo `email`; como `qa_pm` sí lo traen |
-| RBAC-07 | Solo Admin escribe catálogos por API | Como `qa_pm`, POST `/api/recursos/` con un recurso nuevo | HTTP 403 "Se requiere rol Admin…". Como `qa_admin` → 201 creado |
-| RBAC-08 | PM crea asignaciones por API, Ingeniero no | POST `/api/asignaciones/` (recurso R1, proyecto P1, 8 h, intensidad 8, inicio `2026-08-10`) como `qa_ing` y luego como `qa_pm` | `qa_ing` → 403; `qa_pm` → 201 con estado SOLICITADA |
-| RBAC-09 | PM no puede aprobar | Como `qa_pm`, POST `/api/asignaciones/{id}/aprobar/` sobre la solicitud de RBAC-08 | HTTP 403 |
-| RBAC-10 | PM no puede editar ni borrar asignaciones | Como `qa_pm`, PATCH y DELETE sobre `/api/asignaciones/{id}/` | HTTP 403 en ambos |
-| RBAC-11 | Indisponibilidades: PM y Admin | Como `qa_ing`, GET `/api/calendario/indisponibilidades/` → 403. Como `qa_pm` → 200 y puede crear una | Según lo descrito |
-| RBAC-12 | Días no laborables globales: solo Admin escribe | Como `qa_pm`, POST `/api/calendario/dias-no-laborables/` → 403. GET → 200. Como `qa_admin` POST → 201 | Según lo descrito |
-| RBAC-13 | Admin del sitio: PM no aprueba desde /admin/ | Como `qa_pm`, entrar a `/admin/assignments/asignacion/` e intentar el botón "✓ Aprobar" de una solicitud (o la URL `/admin/assignments/asignacion/aprobar/{id}/`) | Mensaje de error "Se requiere rol Admin para aprobar asignaciones"; el estado NO cambia |
+| SSO-01 | El botón aparece | Abrir `/login/` en Azure | Se ve "Iniciar sesión con Microsoft" **y** el formulario de usuario/contraseña |
+| SSO-02 | Redirección a Microsoft | Pulsar el botón | Lleva a `login.microsoftonline.com`, **sin** pantalla de "se necesita aprobación del administrador" |
+| SSO-03 | Primer inicio pide cambiar contraseña | Entrar con una cuenta nueva | Microsoft obliga a cambiarla antes de continuar |
+| SSO-04 | **Alias de dominio** | Entrar con tu cuenta `erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com` | Entras en tu cuenta **existente** `erika.castiblanco-monroy@inetum.com`, con tu historial. **No** se crea un usuario nuevo |
+| SSO-05 | El total de usuarios no crece | Contar usuarios en `/admin/auth/user/` antes y después de SSO-04 | El número **no cambia** |
+| SSO-06 | **Alias de usuario** | Entrar como `admin@inetumoffshore.onmicrosoft.com` | Entra como `inetum_admin`; su email sigue siendo `jose.barrera-cocunubo@inetum.com`, **no** `admin@inetum.com` |
+| SSO-07 | Rol sincronizado desde Entra | Entrar como `qa.pm@…` | Queda en el grupo **PM**; ve Solicitudes, Cesiones, Liberaciones y Aprobar horas |
+| SSO-08 | Sin rol en Entra no se entra | Quitar el rol a `test.ingeniero` en Entra e intentar entrar | Microsoft impide el acceso a la aplicación |
+| SSO-09 | Cambio de rol en Entra manda | Cambiar en Entra el rol de una cuenta de Ingeniero a PM y volver a entrar | En Django cambia de grupo; el menú se ajusta |
+| SSO-10 | El login local sobrevive | Con SSO activo, entrar con usuario y contraseña locales | Funciona igual |
+| SSO-11 | El usuario SSO no queda atrapado | Entrar por SSO con una cuenta que tuviera cambio de contraseña pendiente | Entra normalmente; **no** lo manda al formulario de cambio |
+| SSO-12 | Aviso de caducidad | Como Admin, mirar la cabecera | Solo aparece la franja si faltan menos de 60 días para que caduque el secreto. Hoy **no** debe verse (caduca 2028-08-25) |
 
 ---
 
-## 4. CAL — Motor de calendario
+## 4. RBAC — Control de acceso
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| CAL-01 | Feriados de Colombia por API | GET `/api/calendario/feriados/?year=2026` logueado | Lista con feriados; incluye `2026-07-20` (Independencia) y `2026-08-07` (Boyacá) |
-| CAL-02 | Año inválido | GET `/api/calendario/feriados/?year=abc` y `?year=1800` | HTTP 400 con mensaje de error en ambos (no error 500) |
-| CAL-03 | Fecha fin salta fin de semana | Como `qa_pm`, en `/solicitud/` modo "por horas": inicio `2026-07-06` (lunes), 40 h, intensidad 8 | Fecha fin calculada `2026-07-10` (viernes): 5 días hábiles corridos |
-| CAL-04 | Fecha fin salta feriado | Igual, inicio `2026-07-16` (jueves), 24 h, intensidad 8 | Fecha fin `2026-07-21`: cuenta 16, 17 y 21; **salta el lunes 20 (feriado)** |
-| CAL-05 | Fecha fin salta día no laborable global | Igual, inicio `2026-07-22` (miércoles), 24 h, intensidad 8 | Fecha fin `2026-07-27`: cuenta 22, 23 y 27; **salta el viernes 24** (día no laborable de 1.2) |
-| CAL-06 | Indisponibilidad del recurso | Como `qa_pm`, buscar disponibilidad del `2026-07-13` al `2026-07-17` | R2 aparece con 0 días hábiles / 0 h de capacidad (semana de vacaciones); R1 con 4 días (el 13–16; nota: 17 es hábil, verificar 5 días si aplica) — R1 muestra la semana completa como disponible |
-| CAL-07 | Día no hábil en el dashboard | Como `qa_pm`, en `/dashboard/` navegar a julio 2026 | Las columnas de sábados, domingos, el 20 y el 24 de julio se ven marcadas como no hábiles (celdas grises) para todos los recursos; la indisponibilidad de R2 (13–17 jul) solo en la fila de R2 |
-
-> Nota CAL-06: la fecha `2026-07-17` es viernes y forma parte tanto de la semana laboral como de la indisponibilidad de R2 — R2 debe quedar con 0 días en todo el rango.
+| RBAC-01 | **El Ingeniero nunca ve costos** | Como Ingeniero, recorrer dashboard, detalle de recurso, `/horas/` y las APIs accesibles | En **ninguna** pantalla aparece tarifa ni costo |
+| RBAC-02 | El Ingeniero no ve emails ajenos | Como Ingeniero, GET `/api/dashboard/ocupacion/` | La respuesta no trae `email` |
+| RBAC-03 | Menú por rol | Comparar el menú superior como Ingeniero, PM y Admin | El Ingeniero **no** ve Solicitudes, Cesiones, Liberaciones ni Aprobar horas. Nadie ve enlaces que devuelvan 403 |
+| RBAC-04 | Vistas de PM cerradas al Ingeniero | Como Ingeniero, abrir `/solicitud/`, `/cesion/`, `/liberacion/`, `/horas/aprobar/` | 403 en las cuatro |
+| RBAC-05 | Revisar novedades es solo de Admin | Abrir `/novedades/revisar/` como PM | 403 |
+| RBAC-06 | **El Ingeniero solo se ve a sí mismo** | Como Ingeniero, abrir `/dashboard/` | Aparece **una sola fila**: la suya. No ve la ocupación ni el bench del equipo |
+| RBAC-07 | El PM ve a todo el equipo | Mismo dashboard como PM | Aparecen todos los recursos asignables |
+| RBAC-08 | El PM no aprueba asignaciones | Como PM, intentar aprobar una asignación desde `/admin/` | Error "Se requiere rol Admin"; el estado no cambia |
+| RBAC-09 | Solo Admin escribe catálogos | Como PM, POST `/api/recursos/` | 403. Como Admin → 201 |
 
 ---
 
-## 5. SOL — Flujo de solicitud de recursos (PM)
-
-Todos como `qa_pm`, en `/solicitud/`.
+## 5. MAE — Datos maestros
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| SOL-01 | Búsqueda por rango de fechas | Buscar del `2026-08-03` al `2026-08-14` sin skills | Lista de recursos activos ordenada de más a menos disponible, con % libre, horas de capacidad y días hábiles (9 días: salta el feriado 07/08) |
-| SOL-02 | Búsqueda por horas totales | Modo "por horas": inicio `2026-08-03`, 40 h, intensidad 8 | Calcula la fecha fin automáticamente y muestra disponibilidad para ese rango |
-| SOL-03 | Filtro por skills | Asignar un skill a R1 en `/admin/` y buscar filtrando por ese skill | Solo aparece R1 |
-| SOL-04 | Validación: fechas invertidas | Buscar con fecha fin anterior a fecha inicio | Mensaje "La fecha fin debe ser posterior a la fecha de inicio"; no rompe la página |
-| SOL-05 | Validación: rango mayor a 180 días | Buscar del `2026-07-01` al `2027-02-01` | Mensaje "El rango máximo de búsqueda es 180 días" |
-| SOL-06 | Validación: intensidad fuera de rango | Modo por horas con intensidad `9` | Mensaje "Intensidad máxima: 8.5 h/día" |
-| SOL-07 | Crear solicitud por rango | Desde los resultados de SOL-01, elegir R1 → formulario de creación → proyecto P1, intensidad 4, enviar | Se crea la asignación en estado **SOLICITADA**; pantalla de confirmación con fechas y horas (36 h = 9 días × 4 h) |
-| SOL-08 | Proyecto cerrado no seleccionable | En el formulario de creación, revisar el desplegable de proyectos | Aparece `QA-001` (ACTIVO); NO aparece `QA-002` (CERRADO) |
-| SOL-09 | Jornada completa | Crear solicitud para R1, `2026-08-10` al `2026-08-14`, marcando "jornada completa" | Horas calculadas: 42 (4×8,5 + 8 del viernes); intensidad guardada 8.0 |
-| SOL-10 | Crear por horas respetando ocupación | Con una asignación APROBADA de 8 h/día para R1 (ver APR-01) en `2026-08-03`–`07`, crear solicitud por horas: R1, inicio `2026-08-03`, 16 h, intensidad 8 | La solicitud salta los días ya llenos: muestra días bloqueados y la fecha fin cae después del `2026-08-07` |
-| SOL-11 | Solicitud con parámetros manipulados | Abrir `/solicitud/crear/?recurso=999&fecha_inicio=2026-08-03&fecha_fin=2026-08-07` (recurso inexistente) | Página de error controlada ("parámetros inválidos"); no error 500 |
+| MAE-01 | Crear recurso | `/admin/core/recurso/add/` con nombre, email y banda | Se crea y aparece en el dashboard |
+| MAE-02 | Email único | Crear otro recurso con un email ya usado | Error de validación |
+| MAE-03 | **Crear proyecto de cliente** | `/admin/core/proyecto/add/`, código con formato SAP, `facturable` marcado | Se crea; aparece en el buscador de solicitudes |
+| MAE-04 | **Crear proyecto interno** | Igual pero **desmarcando `facturable`** | Se crea; aparece en `/horas/` para **todos**, incluso sin asignación |
+| MAE-05 | Código SAP no válido solo avisa | Crear con código `PRUEBA-1` | Se guarda con aviso (`SAP_VALIDACION_ESTRICTA=False`) |
+| MAE-06 | Editar estado y facturable desde la lista | En `/admin/core/proyecto/`, cambiar `estado` y `facturable` sin entrar al detalle | Se guardan los cambios |
+| MAE-07 | Tarifa con vigencia | Añadir una `TarifaVigente` a un recurso con `fecha_desde` futura | Se guarda; el costo de asignaciones activas se recomputa (aviso en pantalla) |
+| MAE-08 | La tarifa es append-only | Intentar **editar** una tarifa ya registrada | No se puede modificar, solo añadir otra |
+| MAE-09 | **Soft-delete individual** | Borrar un recurso desde su ficha | Desaparece de las listas pero la fila sigue en la base (`deleted_at` con fecha) |
+| MAE-10 | **Soft-delete masivo** | Anota el código de un proyecto de prueba. Selecciónalo en la lista y usa "Eliminar seleccionados". Después intenta **crear uno nuevo con ese mismo código** | Desaparece de la lista, pero el código **sigue ocupado**: al crearlo da error de duplicado. Eso demuestra que la fila no se borró de verdad |
+| MAE-11 | Un recurso que sale de la empresa | Marcar `activo = False` en su ficha | Deja de aparecer como asignable; su historial se conserva |
+| MAE-12 | Catálogo de actividades | `/admin/legalizacion/tipoactividad/` | Se ven Proyecto, Entrenamiento y Estudio activos, y Formación **inactiva** |
 
 ---
 
-## 6. APR — Aprobación, rechazo y revocación (Admin)
-
-Todos como `qa_admin` en `/admin/assignments/asignacion/`, salvo indicación.
+## 6. CAL — Calendario y jornada
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| APR-01 | Aprobar solicitud sin conflicto | Crear (como `qa_pm`) una solicitud para R1, `2026-08-03`–`07`, intensidad 8, P1. Como `qa_admin` pulsar "✓ Aprobar" | Estado pasa a **APROBADA** (badge verde); mensaje de éxito |
-| APR-02 | Log de auditoría del ciclo | Abrir la asignación de APR-01 y ver el inline "Logs de auditoría" | Existen entradas CREAR (actor `qa_pm`) y APROBAR (actor `qa_admin`) con timestamp |
-| APR-03 | Sobreasignación bloqueada | Con APR-01 aprobada (8 h/día), crear otra solicitud para R1 mismo rango, intensidad 4, y aprobarla | NO se aprueba directo: aparece la pantalla de **recomputo** proponiendo nueva fecha fin (salta los días llenos) |
-| APR-04 | Aprobar recomputando | En la pantalla de APR-03, confirmar | Estado APROBADA con fecha fin corrida; log con `recomputo: true` |
-| APR-05 | Cancelar recomputo | Repetir APR-03 con otra solicitud pero pulsar "volver"/cancelar en la pantalla de confirmación | La solicitud queda en SOLICITADA, sin cambios |
-| APR-06 | Borde viernes: 8,5 h no caben | Aprobar para R2 una asignación de intensidad 4,5 (`2026-08-24`–`28`, lun–vie). Luego solicitar y aprobar otra de intensidad 4,0 mismo rango | Lun–jue suman 8,5 (cabe justo); el **viernes 28** suma 8,5 > 8,0 → pantalla de recomputo mostrando solo el viernes como conflictivo |
-| APR-07 | Rechazar solicitud | Crear una solicitud y pulsar "✗ Rechazar" | Estado **RECHAZADA**; log RECHAZAR registrado |
-| APR-08 | Revocar aprobada | Sobre una APROBADA, pulsar "↩ Revocar" | Estado **REVOCADA**; sus horas dejan de contar: una nueva solicitud sobre esas fechas ya no genera conflicto |
-| APR-09 | No se aprueba dos veces | Por API: POST `/api/asignaciones/{id}/aprobar/` sobre una ya APROBADA | HTTP 400 "No se puede aprobar una asignación en estado 'APROBADA'" |
-| APR-10 | No se revoca una SOLICITADA | POST `/api/asignaciones/{id}/revocar/` sobre una SOLICITADA | HTTP 400 "Solo se pueden revocar asignaciones aprobadas" |
-| APR-11 | Carrera: primero en aprobar gana (opcional/avanzado) | Dos solicitudes que llenan la misma capacidad de R1. Dos sesiones de admin en ventanas distintas; aprobar casi simultáneamente una en cada una | Solo una queda APROBADA; la otra recibe error de sobreasignación o pantalla de recomputo. Nunca quedan ambas aprobadas superando el tope diario |
-| APR-12 | API de aprobación con conflicto | POST `/api/asignaciones/{id}/aprobar/` sobre una solicitud que excede capacidad | HTTP 409 con mensaje "Sobreasignación: …" |
+| CAL-01 | Feriados de Colombia | GET `/api/calendario/feriados/?year=2026` | Incluye `2026-07-20` y `2026-08-07` |
+| CAL-02 | Año inválido | `?year=abc` y `?year=1800` | 400 con mensaje, no error 500 |
+| CAL-03 | Fecha fin salta fin de semana | Solicitud por horas: inicio lunes, 40 h, intensidad 8 | Termina el viernes de esa semana |
+| CAL-04 | Fecha fin salta feriado | Inicio jueves 2026-07-16, 24 h, intensidad 8 | Termina el 21; **salta el lunes 20** |
+| CAL-05 | Día no laborable global | Crear uno y repetir un cálculo que lo cruce | Ese día no cuenta |
+| CAL-06 | **Jornada lunes a jueves** | En `/horas/`, abrir un miércoles | La jornada exigida es **8,5 h** |
+| CAL-07 | **Jornada del viernes** | En `/horas/`, abrir un viernes | La jornada exigida es **8 h** |
+| CAL-08 | La semana suma 42 h | Sumar las jornadas de lunes a viernes | 42 h exactas |
 
 ---
 
-## 7. DASH — Dashboard de ocupación
+## 7. SOL — Solicitud de asignaciones (PM)
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| DASH-01 | Vista general | Como cualquier usuario logueado, abrir `/dashboard/` | Heatmap con recursos activos en filas y días en columnas; hoy resaltado |
-| DASH-02 | Estados BENCH / OCUPADO | Con R1 con asignación aprobada hoy y R2 sin nada | R1 figura OCUPADO con su % del día; R2 figura BENCH (0 h) |
-| DASH-03 | Porcentajes por día | En un día donde R1 tiene 4 h aprobadas (lun–jue) | Celda ~47 % (4/8,5); si fuera viernes, 50 % (4/8) |
-| DASH-04 | Rango máximo API | GET `/api/dashboard/ocupacion/?fecha_inicio=2026-01-01&fecha_fin=2026-06-30` | HTTP 400 "El rango máximo es 90 días" |
-| DASH-05 | Fechas mal formadas | GET `/api/dashboard/ocupacion/?fecha_inicio=31-12-2026` | HTTP 400 "Formato inválido. Use YYYY-MM-DD." |
-| DASH-06 | Detalle de recurso | Click en un recurso del dashboard (o `/recurso/{id}/`) | Asignaciones en curso y próximas del recurso, con proyecto y fechas; sin datos de tarifa para `qa_ing` |
-| DASH-07 | Recurso inactivo no aparece | Desactivar R2 en `/admin/core/recurso/` (activo=No) y recargar dashboard | R2 desaparece del heatmap; reactivarlo al terminar |
+| SOL-01 | Buscar disponibilidad | `/solicitud/` con un rango de fechas | Lista de recursos con días y horas disponibles |
+| SOL-02 | Crear por horas | Modo "por horas": 40 h, intensidad 8 | Calcula fecha fin sobre días hábiles; queda **SOLICITADA** |
+| SOL-03 | Crear por días | Modo "por días hábiles" | Igual, calculando desde los días |
+| SOL-04 | Crear por rango | Modo "por rango de fechas" | Usa las fechas dadas |
+| SOL-05 | Jornada completa | Marcar "jornada completa" | Consume el tope de cada día (8,5 / 8), no una intensidad fija |
+| SOL-06 | **Solicitud recurrente** | `/solicitud/recurrente/`, varias semanas | Crea una **serie** de asignaciones de un día; todas comparten identificador de serie |
+| SOL-07 | Tope de semanas | Pedir más semanas de las permitidas | Error de validación |
+| SOL-08 | **Capacidad cruzada 8 h/día** | Asignar a alguien que ya tiene 8,5 h aprobadas ese día | Rechaza indicando el día y las horas en conflicto |
+| SOL-09 | Costo estimado | Como PM, ver el resumen antes de crear | Muestra costo estimado con la tarifa vigente de cada día |
+| SOL-10 | Solicitar no consume capacidad | Crear una solicitud y mirar el dashboard | La ocupación **no cambia** hasta aprobarla |
 
 ---
 
-## 8. AUD — Auditoría y soft-delete
+## 8. APR — Aprobación de asignaciones (Admin)
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| AUD-01 | Log append-only en admin | Como `qa_admin`, abrir `/admin/assignments/logauditoria/` y entrar a un registro | Solo lectura: sin botón "Guardar", sin "Añadir log", sin "Eliminar" |
-| AUD-02 | Toda transición queda registrada | Revisar los logs tras la ronda APR | Cada CREAR/APROBAR/RECHAZAR/REVOCAR tiene entrada con actor, timestamp y detalle JSON |
-| AUD-03 | Soft-delete de recurso | Como `qa_admin`, DELETE `/api/recursos/{id de R2}/` (o eliminar desde admin) | HTTP 204; R2 desaparece de `GET /api/recursos/` y del dashboard, **pero** sus asignaciones históricas siguen existiendo y el registro conserva sus datos (verificable en BD: `deleted_at` con fecha) |
-| AUD-04 | Borrado físico bloqueado por integridad | Intentar borrar (desde admin) un Proyecto con asignaciones | El proyecto se marca eliminado (soft-delete), las asignaciones históricas no se pierden |
-
-> Para restaurar un registro soft-deleted durante pruebas: limpiar `deleted_at` en BD o recrear el dato.
+| APR-01 | Aprobar | Como Admin, aprobar una solicitud | Pasa a **APROBADA**; la ocupación aparece en el dashboard |
+| APR-02 | Snapshot de tarifa | Tras APR-01, mirar la asignación | `tarifa_aplicada` y `costo_estimado` quedan rellenos |
+| APR-03 | **Rechazar** | Rechazar una solicitud | Pasa a RECHAZADA; no consume capacidad |
+| APR-04 | **Revocar (cancelar)** | Revocar una asignación ya aprobada | Pasa a REVOCADA; libera la capacidad; queda en auditoría |
+| APR-05 | **Primero en aprobar gana** | Con dos solicitudes que se solapan para el mismo recurso, aprobar ambas | La primera pasa; la segunda es rechazada por capacidad |
+| APR-06 | Recomputo por cambio de tarifa | Registrar una tarifa nueva para un recurso con asignaciones activas | Se recalcula el costo; queda `RECOMPUTO_TARIFA` en auditoría con actor vacío |
+| APR-07 | Reajustar la fecha fin | Provocar un recomputo (p. ej. aprobando una ausencia con política RECOMPUTAR) | La fecha fin se empuja; las horas se conservan |
 
 ---
 
-## 9. API — Robustez general
+## 9. CES — Cesión de horas
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| API-01 | Paginación | GET `/api/asignaciones/` con más de 100 registros | Respuesta paginada (`count`, `next`, `previous`, `results` de máx. 100) |
-| API-02 | Filtros de asignaciones | GET `/api/asignaciones/?recurso={R1}&estado=APROBADA` | Solo asignaciones de R1 aprobadas |
-| API-03 | Throttling autenticado | Lanzar >200 requests en un minuto al mismo endpoint (script) | A partir del límite responde HTTP 429 |
-| API-04 | Validaciones de creación | POST `/api/asignaciones/` con `horas_totales: -5` o `intensidad_diaria: 0` | HTTP 400 con el detalle del campo |
-| API-05 | Datos ajenos al esquema | POST `/api/asignaciones/` intentando fijar `estado: "APROBADA"` o `fecha_fin` manual | Se ignoran: la asignación se crea SOLICITADA y con fecha fin calculada por el motor |
+| CES-01 | Ceder horas | `/cesion/`, ceder horas de una asignación aprobada a otra | Crea la cesión y una asignación destino SOLICITADA |
+| CES-02 | Las horas quedan reservadas | Mirar el dashboard antes de aprobar el destino | La carga bruta **no baja** para terceros: nadie puede ocupar ese cupo |
+| CES-03 | Aprobar el destino | Aprobar la asignación destino | Ahora sí se descuentan de la original |
+| CES-04 | **Anular la cesión** | Rechazar o revocar el destino | Las horas vuelven a la asignación original |
+| CES-05 | No se cede más de lo que hay | Ceder más horas de las disponibles ese día | Error de validación |
 
 ---
 
-## 10. Matriz de trazabilidad rol × acción
+## 10. LIB — Liberación de recursos
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| LIB-01 | Solicitar liberación | `/liberacion/`, elegir asignación y ventana | Queda **SOLICITADA**; no libera cupo todavía |
+| LIB-02 | Una solicitud no libera nada | Mirar el dashboard | La ocupación no cambia |
+| LIB-03 | **Aprobar con RECOMPUTAR** | Como Admin, aprobar con esa política | La ventana se congela; la **fecha fin se empuja**; las horas se conservan |
+| LIB-04 | **Aprobar con REDUCIR** | Igual con la otra política | La ventana se congela; **bajan las horas**; la fecha fin no cambia |
+| LIB-05 | Rechazar | Rechazar una solicitud | No surte ningún efecto |
+| LIB-06 | **Anular una aprobada** | Anular una liberación ya aprobada | Revierte los efectos; si otro proyecto ocupó la ventana, **falla** con mensaje claro |
+| LIB-07 | Solo Admin aprueba | Como PM, intentar aprobar | No puede |
+
+---
+
+## 11. NOV — Novedades (vacaciones y permisos)
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| NOV-01 | Registrar vacaciones | Como Ingeniero, `/novedades/`, tipo Vacaciones | Queda **pendiente de aprobación** |
+| NOV-02 | El motivo solo en permisos | Cambiar el tipo entre Vacaciones y Permiso | El campo "Motivo" solo aparece con **Permiso** |
+| NOV-03 | **Pendiente no bloquea capacidad** | Con la novedad pendiente, mirar el dashboard | Los días siguen apareciendo disponibles |
+| NOV-04 | Cada quien ve solo las suyas | Como otro Ingeniero, abrir `/novedades/` | No ve las de nadie más |
+| NOV-05 | Cancelar una pendiente | Cancelar la propia novedad | Desaparece del listado; la fila se conserva en base |
+| NOV-06 | No se cancela una aprobada | Intentar cancelar tras aprobarla | Lo impide con mensaje claro |
+| NOV-07 | Sin solape | Pedir dos novedades que se crucen | Rechaza la segunda |
+| NOV-08 | Retroactividad limitada | Pedir una novedad de hace más de 60 días | La rechaza |
+| NOV-09 | **Aprobar (Admin)** | `/novedades/revisar/`, aprobar una que no cruce asignaciones | Pasa a Aprobada; los días dejan de ser hábiles |
+| NOV-10 | Rechazar con motivo | Rechazar indicando motivo | El solicitante ve el motivo en su historial |
+| NOV-11 | **Ausencia al 100 % en el dashboard** | Tras NOV-09, mirar esos días en el dashboard | Salen con trama morada y **"100 %"**, no como día libre |
+| NOV-12 | El fin de semana no es ausencia | Mirar un sábado | Sigue gris y al **0 %** |
+| NOV-13 | **Cruce con asignación: hay que elegir** | Pedir una novedad sobre días con asignación aprobada e intentar aprobarla | **No** aparece el botón "Aprobar" suelto: obliga a elegir RECOMPUTAR o REDUCIR por cada asignación |
+| NOV-14 | Aprobar y ajustar | Elegir RECOMPUTAR y confirmar | La novedad queda aprobada y la fecha fin de la asignación se empuja |
+| NOV-15 | Rastro en auditoría | Tras NOV-14, revisar el log de la asignación | Aparecen `SOLICITAR_LIBERACION` y `LIBERAR` |
+| NOV-16 | El PM no aprueba novedades | Como PM, abrir `/novedades/revisar/` | 403 |
+
+---
+
+## 12. HOR — Legalización de horas (Ingeniero)
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| HOR-01 | Abrir la pantalla | Como Ingeniero, `/horas/` | Muestra el día de hoy, el selector con flechas y la lista de días sin registrar |
+| HOR-02 | Navegar entre días | Usar las flechas ← → | Cambia de día; la flecha "siguiente" está inactiva en el día de hoy |
+| HOR-03 | No se legaliza el futuro | Elegir una fecha futura | No lo permite |
+| HOR-04 | **Fin de semana** | Abrir un sábado | Mensaje "no hay horas que registrar"; **sin** formulario |
+| HOR-05 | **Festivo** | Abrir el 2026-08-07 | Igual, indicando que es festivo |
+| HOR-06 | **Día con vacaciones aprobadas** | Abrir un día con una novedad aprobada | Mensaje de vacaciones/permiso; sin formulario. **No hay que teclear nada** |
+| HOR-07 | Ayuda de cada actividad | Cambiar el desplegable de Actividad | Bajo él aparece una frase distinta explicando cuándo usar cada una |
+| HOR-08 | Formación no aparece | Revisar el desplegable | Solo Proyecto, Entrenamiento y Estudio |
+| HOR-09 | El proyecto solo cuando aplica | Elegir Estudio y luego Proyecto | El campo Proyecto **se oculta** con Estudio y aparece con Proyecto |
+| HOR-10 | **Proyectos filtrados (sin asignación)** | Como `test.ingeniero`, abrir el desplegable | Solo `INT-DEPART` e `INT-MGMT`. **Ningún proyecto de cliente** |
+| HOR-11 | **Proyectos filtrados (con asignación)** | Con tu cuenta, abrir un día **del 06 de agosto en adelante** | Además de los internos, aparece **`QA-001`** |
+| HOR-12b | Un proyecto cerrado no aparece | Buscar `QA-003` en el desplegable | **No** aparece: está cerrado |
+| HOR-12 | El filtro depende del día | Con tu cuenta, abrir un día **anterior al 06 de agosto** | `QA-001` **desaparece**; quedan solo los internos |
+| HOR-13 | **Nada se guarda al añadir** | Añadir dos actividades a la lista y **recargar la página sin guardar** | La lista se pierde: no se guardó nada |
+| HOR-14 | El contador avanza | Ir añadiendo actividades | El marcador sube (`x / 8,5 h`) y la barra se llena |
+| HOR-15 | **Decimales correctos** | Con 4 h puestas, añadir 4,5 h en un día de 8,5 | Lo acepta y el día cuadra. **No** debe decir "quedan 4 h" |
+| HOR-16 | No se pasa de la jornada | Intentar añadir más horas de las que caben | Avisa cuántas quedan por asignar |
+| HOR-17 | Media hora | Intentar añadir 1,3 h | Lo rechaza: solo bloques de media hora |
+| HOR-18 | El detalle es obligatorio | Añadir sin escribir qué se hizo | Lo rechaza |
+| HOR-19 | Guardar el día | Con la lista completa, pulsar "Guardar día" | Guarda y **muestra el resumen**; el día sigue **abierto** |
+| HOR-20 | Corregir antes de aceptar | En el resumen, pulsar "Corregir" | Vuelve al formulario |
+| HOR-21 | Guardar reemplaza | Corregir, cambiar las actividades y guardar otra vez | Quedan **solo** las nuevas, no se suman a las anteriores |
+| HOR-22 | **No se acepta si no cuadra** | Guardar solo 6 h de una jornada de 8,5 y mirar el resumen | Dice cuántas faltan y **no ofrece** "Aceptar día" |
+| HOR-23 | **Aceptar el día** | Con el día cuadrado, pulsar "Aceptar día" y confirmar | Queda **Registrado**, pendiente de aprobación |
+| HOR-24 | **Inmutable tras aceptar** | Volver a ese día | Se ve en solo lectura, sin formulario ni botón de corregir |
+| HOR-25 | Facturable vs interno | En el resumen, mirar el desglose | Separa horas facturables de no facturables; las internas y las de estudio **no** son facturables |
+| HOR-26 | Días pendientes | Mirar la lista inferior | Solo días **hábiles** sin registrar; los que ya se aceptaron desaparecen |
+| HOR-27 | Un PM también legaliza | Como PM, abrir `/horas/` | Puede registrar sus propias horas |
+
+---
+
+## 13. HAP — Aprobación de horas (PM y Admin)
+
+> **Quién aprueba qué.** El PM aprueba los días que tocan **sus** proyectos. El Admin ve **todos** — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la **única** vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita `qa.pm`, `qa.admin` y `carmen.leon` (como PM ajeno).
+
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| HAP-01 | El PM ve lo suyo | Como `qa.pm`, abrir `/horas/aprobar/` tras registrar días con horas de `QA-001` | Ve esos días: es el PM del proyecto |
+| HAP-02 | Un PM ajeno no lo ve | Como `carmen.leon`, que es PM de `QA-002` pero **no** de `QA-001` | La cola **no** incluye esos días |
+| HAP-03 | **El Admin lo ve todo** | Como Admin, abrir la misma pantalla | Ve todos los días pendientes, también los de proyectos ajenos |
+| HAP-04 | Al Admin se le avisa | Como Admin, mirar arriba de la cola | Franja explicando que ve todo y que sirve de respaldo |
+| HAP-05 | Al PM no se le muestra esa nota | Como PM | No aparece esa franja |
+| HAP-06 | **Día sin proyecto: solo Admin** | Registrar un día entero de Estudio y mirar la cola | El PM **no** lo ve; el Admin **sí**. Es la única vía para aprobarlo |
+| HAP-07 | Desglose visible | Mirar una tarjeta de la cola | Muestra cada actividad, su detalle y sus horas — no solo el total |
+| HAP-08 | Marca de proyecto propio | Como PM, mirar las líneas | Sus proyectos llevan la etiqueta "Tu proyecto" |
+| HAP-09 | **Aprobar** | Pulsar Aprobar y confirmar | Pasa a Aprobado; el ingeniero lo ve con la firma de quien aprobó |
+| HAP-10 | **El Admin aprueba en lugar del PM** | Como Admin, aprobar un día de un proyecto ajeno | Lo aprueba; queda su nombre como aprobador |
+| HAP-11 | No se aprueba dos veces | Intentar aprobar un día ya aprobado | Error diciendo **"ya está aprobado"** (no un mensaje de permisos) |
+| HAP-12 | El Ingeniero no aprueba | Como Ingeniero, abrir `/horas/aprobar/` | 403 |
+| HAP-13 | **Devolver exige motivo** | Pulsar "Devolver" y enviar sin texto | No lo permite |
+| HAP-14 | **Devolver reabre el día** | Devolver con motivo | El día vuelve a estar abierto para su autor |
+| HAP-15 | **El motivo se ve** | Como el ingeniero, volver a ese día | Franja naranja "Te devolvieron este día para corregir" con el motivo |
+| HAP-16 | El aviso también en el resumen | Corregir, guardar y mirar el resumen | La franja **sigue visible**: no puede re-aceptarse a ciegas |
+| HAP-17 | Aprobar limpia el motivo | Corregir, aceptar y aprobar | El día queda aprobado **sin** el reproche pegado |
+
+---
+
+## 14. DASH — Dashboard
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| DASH-01 | Heatmap | Como PM, cargar un mes | Matriz recurso × día con porcentajes de ocupación |
+| DASH-02 | Bench | Mirar las tarjetas superiores | Totales de recursos, ocupados hoy y en bench |
+| DASH-03 | Rango máximo | Pedir más de 90 días | Error controlado |
+| DASH-04 | PM y Admin fuera del heatmap | Revisar la lista de recursos | Los recursos cuyo usuario es PM o Admin no aparecen |
+| DASH-05 | Jornada completa al 100 % | Mirar una asignación de jornada completa | Sale al 100 % todos los días, no al 94 % |
+
+---
+
+## 15. AUD — Auditoría y trazabilidad
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| AUD-01 | Se registran los cambios de estado | Aprobar, rechazar y revocar asignaciones | Cada acción deja su entrada con actor y fecha |
+| AUD-02 | **Append-only** | Intentar editar o borrar una entrada del log | No es posible |
+| AUD-03 | Actor del sistema | Revisar un `RECOMPUTO_TARIFA` | El actor está vacío (acción automática) |
+| AUD-04 | Nada se borra de verdad | Tras MAE-09 y MAE-10, consultar la base | Las filas siguen ahí con `deleted_at` |
+
+---
+
+## 16. INF — Infraestructura y despliegue
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| INF-01 | Salud | GET `/healthz/` | 200 con `{"estado":"ok","base_datos":"ok"}` |
+| INF-02 | Redirección a HTTPS | GET por `http://` | 301 a `https://` |
+| INF-03 | Estáticos | Cargar cualquier página | CSS y JS cargan; los estáticos llevan hash en el nombre |
+| INF-04 | **Arranque en frío** | Dejar la app sin usar 10 min y volver a entrar | Tarda 10-30 s la primera vez. **Es lo esperado**, no un bug |
+| INF-05 | Guard de suscripción · **lo ejecuta el equipo** | Pídeselo a quien mantiene el despliegue: lanza el plan de Terraform apuntando a otra suscripción | Falla con "Suscripción no permitida". Anota el resultado que te reporten |
+| INF-06 | Migraciones idempotentes · **lo ejecuta el equipo** | Pide que lancen el job de migraciones dos veces seguidas | Ambas terminan correctamente y no se duplican datos |
+
+---
+
+## 17. Matriz rol × acción
 
 | Acción | Ingeniero | PM | Admin |
 |---|:---:|:---:|:---:|
-| Ver dashboard / detalle de recurso | ✔ | ✔ | ✔ |
-| Ver emails de recursos | ✘ | ✔ | ✔ |
+| Ver **su** ocupación | ✔ | ✔ | ✔ |
+| Ver la ocupación **del equipo** | ✘ | ✔ | ✔ |
 | Ver tarifas y costos | ✘ | ✔ | ✔ |
-| Buscar disponibilidad y crear solicitud | ✘ | ✔ | ✔ |
-| Aprobar / rechazar / revocar | ✘ | ✘ | ✔ |
-| Editar / eliminar asignaciones | ✘ | ✘ | ✔ |
-| CRUD recursos, proyectos, tarifas, días no laborables | ✘ | ✘ | ✔ |
-| Gestionar indisponibilidades | ✘ | ✔ | ✔ |
-| Ver log de auditoría | ✔ (API) | ✔ | ✔ |
-| Editar/borrar log de auditoría | ✘ | ✘ | ✘ (append-only) |
+| Ver emails de recursos | ✘ | ✔ | ✔ |
+| Crear solicitudes de asignación | ✘ | ✔ | ✔ |
+| Aprobar / rechazar / revocar asignaciones | ✘ | ✘ | ✔ |
+| Ceder horas y solicitar liberaciones | ✘ | ✔ | ✔ |
+| Aprobar liberaciones | ✘ | ✘ | ✔ |
+| Registrar **sus** novedades | ✔ | ✔ | ✔ |
+| Aprobar novedades | ✘ | ✘ | ✔ |
+| Legalizar **sus** horas | ✔ | ✔ | ✔ |
+| **Aprobar horas** | ✘ | ✔ (sus proyectos) | ✔ (todas) |
+| CRUD de catálogos | ✘ | ✘ | ✔ |
+| Editar o borrar auditoría | ✘ | ✘ | ✘ |
 
 ---
 
-## 11. Gaps conocidos (no reportar como bug)
+## 18. Comportamientos conocidos (no reportar como bug)
 
-1. **Snapshot de tarifa al aprobar**: los campos `tarifa_aplicada` y `costo_estimado` de la asignación existen pero aún no se llenan al aprobar (pendiente de implementación). En el admin se verán vacíos.
-2. **Bloqueo de login con múltiples instancias**: el contador de intentos fallidos es por proceso (cache local). En despliegue con varias instancias el límite efectivo puede ser mayor a 5 hasta que se configure un cache compartido (Redis/BD).
-3. Integraciones Skills/SAP: fuera del alcance de Fase 1 (solo existen los campos `nro_persona_sap` y clusters).
+1. **Arranque en frío de 10-30 s** tras inactividad. Es el precio de `min-replicas 0`, decidido a propósito.
+2. **Una sola réplica.** Sin autoescalado, por decisión: se espera a ver rendimiento real.
+3. **Sin horas extra.** Un día no puede pasar de la jornada. El módulo de extras está fuera de alcance por ahora.
+4. **Sin nómina ni recargos.** Se registran horas; no se calcula lo que valen.
+5. **Reapertura de un día aprobado.** Todavía no existe circuito para que el ingeniero *pida* reabrir un día ya aprobado; solo quien aprueba puede devolver uno **registrado**.
+6. **Un solo PM basta.** Si un día mezcla proyectos de varios PM, cualquiera de ellos puede aprobarlo entero.
+7. **Solo Colombia.** No se gestionan recursos de España ni su jornada.
 
 ---
 
 ## Anexo — Registro de ejecución
 
-| Caso | Resultado (PASS/FAIL/BLOQ) | Evidencia | Observaciones | Probador | Fecha |
+| Caso | Resultado | Evidencia | Observaciones | Probador | Fecha |
 |---|---|---|---|---|---|
 | AUT-01 | | | | | |
 | … | | | | | |
 
-Reportar los FAIL como issues en GitHub indicando: ID del caso, pasos reales, resultado obtenido vs. esperado, capturas y usuario utilizado.
+Reportar cada FAIL con: ID del caso, pasos reales, resultado obtenido frente al esperado, captura y **cuenta utilizada** (el rol cambia lo que se ve, así que sin ese dato el fallo no se puede reproducir).

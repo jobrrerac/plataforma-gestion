@@ -210,6 +210,15 @@ class Proyecto(SoftDeleteModel):
     fecha_fin = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="ACTIVO")
     pm = models.ForeignKey(User, on_delete=models.PROTECT, related_name="proyectos_pm")
+    facturable = models.BooleanField(
+        default=True,
+        help_text=(
+            "Las horas de este proyecto se cobran a un cliente. Desmarcar en los "
+            "proyectos internos (formación interna, gestión departamental...): "
+            "siguen siendo proyectos normales y hay que darlos de alta igual, "
+            "pero no entran en el informe de horas facturables."
+        ),
+    )
 
     class Meta:
         verbose_name = "Proyecto"

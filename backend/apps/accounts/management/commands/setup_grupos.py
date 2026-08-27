@@ -20,6 +20,7 @@ class Command(BaseCommand):
             ("calendar_engine", "indisponibilidad",  ["add", "change", "delete", "view"]),
             ("auth",        "user",          ["add", "change", "delete", "view"]),
             ("auth",        "group",         ["add", "change", "delete", "view"]),
+            ("legalizacion", "tipoactividad", ["add", "change", "delete", "view"]),
         ])
 
         perms_pm = self._perms([
@@ -36,6 +37,14 @@ class Command(BaseCommand):
             ("assignments", "asignacion",   ["view"]),
             ("core",        "recurso",      ["view"]),
             ("core",        "proyecto",     ["view"]),
+            # Registra sus propias novedades (vacaciones y permisos). El alcance
+            # "solo las suyas" no lo da el permiso de Django, que es por modelo:
+            # lo imponen la vista y el ViewSet, que filtran por el recurso
+            # vinculado a la cuenta. Sin `delete`: cancelar una novedad pendiente
+            # es un soft-delete que pasa por el servicio, no un borrado directo.
+            ("calendar_engine", "indisponibilidad", ["add", "view"]),
+            # Catalogo de actividades: lo consulta al legalizar sus horas.
+            ("legalizacion", "tipoactividad", ["view"]),
         ])
 
         grupos = {

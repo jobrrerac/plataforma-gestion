@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block page_title %}Mis novedades{% endblock %}
+{% block active_novedades %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .btn-pink { background:#e0178a; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+  .nov-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+  .nov-row .meta { color:#6b7280; font-size:.84rem; }
+  .badge-estado { padding:3px 10px; border-radius:20px; font-size:.72rem; font-weight:700; letter-spacing:.02em; }
+  .e-PENDIENTE { background:#fef3c7; color:#92400e; }
+  .e-APROBADA  { background:#d1fae5; color:#065f46; }
+  .e-RECHAZADA { background:#fee2e2; color:#991b1b; }
+  .tipo-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
+  .vacio { text-align:center; color:#9ca3af; padding:36px 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi bi-calendar-heart" style="color:#e0178a"></i> Mis <span>novedades</span></h1>
+  {% if es_admin and pendientes_por_revisar %}
+  <a href="/novedades/revisar/" class="ms-auto badge-estado e-PENDIENTE" style="text-decoration:none">
+    {{ pendientes_por_revisar }} por revisar
+  </a>
+  {% endif %}
+</div>
+
+<div class="container py-4" style="max-width:820px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-success py-2 px-3" style="font-size:.87rem;border-radius:10px">
+      <i class="bi bi-check-circle me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger py-2 px-3" style="font-size:.87rem;border-radius:10px">
+    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  {% if not recurso %}
+  {# Sin recurso vinculado no se puede registrar nada a nombre de nadie. #}
+  <div class="card p-4 text-center">
+    <div class="mb-2" style="font-size:2.4rem">🔗</div>
+    <h5 class="fw-bold mb-2" style="font-family:'Montserrat',sans-serif">Tu cuenta no está vinculada a un recurso</h5>
+    <p class="text-muted mb-0" style="font-size:.9rem">
+      No es posible registrar novedades a tu nombre hasta que un administrador
+      vincule tu usuario con tu ficha de recurso.
+    </p>
+  </div>
+
+  {% else %}
+
+  <!-- Registrar -->
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1" style="font-family:'Montserrat',sans-serif;font-size:1rem">Registrar novedad</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Queda pendiente de aprobación. No afecta a tu disponibilidad hasta que un administrador la apruebe.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="crear">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Tipo</label>
+          <select name="tipo" id="tipo" class="form-select" required>
+            {% for valor, etiqueta in tipos %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Desde</label>
+          <input type="date" name="fecha_inicio" class="form-control" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Hasta</label>
+          <input type="date" name="fecha_fin" class="form-control" required>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-pink w-100">
+            <i class="bi bi-plus-lg me-1"></i>Registrar
+          </button>
+        </div>
+        {# Solo tiene sentido en un permiso: unas vacaciones no necesitan explicarse. #}
+        <div class="col-12" id="campo-motivo" hidden>
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Motivo <span class="text-muted fw-normal">(opcional)</span></label>
+          <input type="text" name="motivo" id="motivo" class="form-control" maxlength="200"
+                 placeholder="Ej: cita médica, trámite personal..." disabled>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // El motivo solo aplica a los permisos. Se deshabilita además de ocultarse:
+    // un input deshabilitado no se envía, así que no se cuela un motivo escrito
+    // antes de cambiar el tipo a vacaciones.
+    (function () {
+      var tipo = document.getElementById('tipo');
+      var campo = document.getElementById('campo-motivo');
+      var input = document.getElementById('motivo');
+
+      function sincronizar() {
+        var esPermiso = tipo.value === 'PERMISO';
+        campo.hidden = !esPermiso;
+        input.disabled = !esPermiso;
+        if (!esPermiso) { input.value = ''; }
+      }
+
+      tipo.addEventListener('change', sincronizar);
+      sincronizar();
+    })();
+  </script>
+
+  <!-- Historial -->
+  <h6 class="fw-bold mb-3" style="font-family:'Montserrat',sans-serif;font-size:.92rem;color:#110d26">
+    Historial <span class="text-muted fw-normal">({{ novedades|length }})</span>
+  </h6>
+
+  {% for n in novedades %}
+  <div class="nov-row">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div>
+        <span class="tipo-chip">{{ n.get_tipo_display }}</span>
+        <span class="ms-2 fw-semibold">{{ n.fecha_inicio|date:"d/m/Y" }} → {{ n.fecha_fin|date:"d/m/Y" }}</span>
+        <span class="meta ms-2">({{ n.dias_calendario }} día{{ n.dias_calendario|pluralize }})</span>
+        {% if n.motivo %}<div class="meta mt-1">{{ n.motivo }}</div>{% endif %}
+        {% if n.estado == "RECHAZADA" and n.motivo_rechazo %}
+        <div class="meta mt-1" style="color:#991b1b">Motivo del rechazo: {{ n.motivo_rechazo }}</div>
+        {% endif %}
+        {% if n.revisada_por %}
+        <div class="meta mt-1">
+          Revisada por {{ n.revisada_por.get_full_name|default:n.revisada_por.username }}
+          el {{ n.revisada_en|date:"d/m/Y H:i" }}
+        </div>
+        {% endif %}
+      </div>
+      <div class="text-end">
+        <span class="badge-estado e-{{ n.estado }}">{{ n.get_estado_display }}</span>
+        {% if n.es_pendiente %}
+        <form method="post" class="mt-2" onsubmit="return confirm('¿Cancelar esta novedad?')">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="cancelar">
+          <input type="hidden" name="novedad" value="{{ n.pk }}">
+          <button type="submit" class="btn btn-sm btn-outline-secondary" style="font-size:.76rem">
+            Cancelar
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="card vacio">
+    <div style="font-size:2rem">🌴</div>
+    <div class="mt-2">Todavía no has registrado ninguna novedad.</div>
+  </div>
+  {% endfor %}
+
+  {% endif %}
+</div>
+{% endblock %}

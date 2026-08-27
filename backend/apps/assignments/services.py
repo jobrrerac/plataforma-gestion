@@ -12,7 +12,20 @@ from apps.calendar_engine.services import (
 from .models import Asignacion, CesionHoras, LiberacionRecurso, LogAuditoria
 from apps.core.models import TarifaVigente
 
-# Jornada real: lun–jue 8.5 h, vie 8 h → máximo semanal 42 h
+# Jornada laboral en Colombia: lun–jue 8.5 h, vie 8 h → 42 h semanales.
+#
+# Rige desde el 15 de julio de 2026, cuando la jornada legal bajó a 42 horas.
+# Antes de esa fecha la semana era más larga, y por eso los registros históricos
+# anteriores (por ejemplo el Excel de cargables de marzo y abril de 2026)
+# muestran 8.5 h también los viernes: no están mal, son de otra jornada.
+#
+# Se deja como constante a propósito, no como tabla con vigencia: la
+# legalización de horas arranca limpia y solo cubre de hoy en adelante, así que
+# nunca hay que validar un día anterior a este corte. Si la jornada vuelve a
+# cambiar, esto pasa a ser una tabla con `fecha_desde` — el mismo patrón que ya
+# usa TarifaVigente — y `capacidad_maxima_dia(fecha)` no cambia de firma porque
+# ya recibe la fecha.
+JORNADA_VIGENTE_DESDE = date(2026, 7, 15)
 JORNADA_LUNES_JUEVES = 8.5
 JORNADA_VIERNES = 8.0
 
@@ -881,7 +894,11 @@ def aprobar_liberacion(liberacion, actor):
         if liberacion.estado != "SOLICITADA":
             raise ValueError("Solo se pueden aprobar liberaciones en estado SOLICITADA.")
         asignacion = liberacion.asignacion
-        recurso = asignacion.recurso.__class__.all_objects.select_for_update().get(
+        # No se usa el objeto: la llamada está aquí por el bloqueo de fila que
+        # deja select_for_update sobre el recurso, que es lo que serializa las
+        # aprobaciones concurrentes ("primero en aprobar gana"). Borrarla por
+        # parecer código muerto reabriría la carrera.
+        asignacion.recurso.__class__.all_objects.select_for_update().get(
             pk=asignacion.recurso_id
         )
         asignacion.refresh_from_db()

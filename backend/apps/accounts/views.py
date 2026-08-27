@@ -1,7 +1,10 @@
+from django.conf import settings
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.cache import cache
-from django.http import HttpResponseForbidden
+from django.db import connection
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.urls import reverse_lazy
+from django.views.decorators.cache import never_cache
 
 from apps.accounts.models import CambioPasswordPendiente
 
@@ -63,6 +66,17 @@ class LoginRateLimitView(LoginView):
             cache.delete(key)
         return super().form_valid(form)
 
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        # El botón de Microsoft solo aparece si el SSO está configurado. El
+        # formulario de usuario/contraseña se muestra siempre: es la vía de
+        # entrada cuando Entra falla o el secreto de cliente ha caducado.
+        contexto["sso_habilitado"] = bool(
+            getattr(settings, "OIDC_HABILITADO", False)
+            and getattr(settings, "OIDC_RP_CLIENT_ID", "")
+        )
+        return contexto
+
 
 class CambiarPasswordView(PasswordChangeView):
     """
@@ -80,3 +94,36 @@ class CambiarPasswordView(PasswordChangeView):
         CambioPasswordPendiente.objects.filter(usuario=self.request.user).delete()
         return response
 
+
+
+@never_cache
+def salud(request):
+    """Endpoint de salud para las sondas de Container Apps.
+
+    Comprueba que el proceso responde y que la base de datos está alcanzable:
+    un contenedor vivo que no puede consultar la base no sirve para nada, y sin
+    esta comprobación la plataforma lo daría por sano.
+
+    Está exento de la redirección a HTTPS (`SECURE_REDIRECT_EXEMPT` en
+    settings/production.py) porque las sondas llegan por HTTP dentro del
+    entorno y un 301 las haría fallar.
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except Exception as exc:  # noqa: BLE001 - cualquier fallo aquí es "no sano"
+        return JsonResponse({"estado": "degradado", "base_datos": str(exc)}, status=503)
+
+    return JsonResponse({"estado": "ok", "base_datos": "ok"})
+
+
+@never_cache
+def listo(request):
+    """Sonda de arranque: solo confirma que el proceso acepta peticiones.
+
+    Separada de `salud` a propósito: durante el arranque en frío la app puede
+    estar levantando antes de que la base responda, y reiniciar el contenedor
+    por eso alargaría el arranque en vez de arreglarlo.
+    """
+    return HttpResponse("ok", content_type="text/plain")

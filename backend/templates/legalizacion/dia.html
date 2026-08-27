@@ -1,0 +1,480 @@
+{% extends "base.html" %}
+{% load l10n %}
+
+{% block page_title %}Registrar horas{% endblock %}
+{% block active_horas %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#e0178a; }
+  .btn-pink { background:#e0178a; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.6rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+  .btn-cerrar { background:#059669; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.6rem 2rem; }
+  .btn-cerrar:hover { background:#047857; color:#fff; }
+
+  /* Cabecera del día: el selector va junto al título, no en la otra punta */
+  .dia-cab {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    background:#fff; border-radius:12px; padding:16px 20px; margin-bottom:16px;
+    box-shadow:0 1px 6px rgba(0,0,0,.08);
+  }
+  .dia-cab .nav-dia { display:flex; align-items:center; gap:8px; }
+  .dia-cab input[type=date] { width:165px; }
+  .dia-titulo { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.02rem; color:#110d26; text-transform:capitalize; }
+  .btn-flecha { background:#f4f1f8; border:1px solid #e0d6f5; color:#110d26; border-radius:8px; width:34px; height:34px; display:grid; place-items:center; text-decoration:none; }
+  .btn-flecha:hover { border-color:#e0178a; color:#e0178a; }
+  .btn-flecha.off { opacity:.35; pointer-events:none; }
+
+  .medidor { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .barra { flex:1; min-width:150px; height:10px; background:#e8e6f0; border-radius:20px; overflow:hidden; }
+  .barra span { display:block; height:100%; background:#e0178a; transition:width .2s; }
+  .barra.ok span { background:#059669; }
+  .cifra { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.1rem; color:#110d26; white-space:nowrap; }
+  .cifra small { font-weight:600; color:#6b7280; font-size:.78rem; }
+  .cifra.ok { color:#059669; }
+
+  .renglon { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; border:1px solid #eee; border-radius:10px; padding:12px 14px; margin-bottom:8px; background:#fff; }
+  .renglon .meta { color:#6b7280; font-size:.83rem; }
+  .renglon .hrs { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; white-space:nowrap; }
+  .chip { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:20px; }
+  .c-fact { background:#d1fae5; color:#065f46; }
+  .c-int  { background:#fef3c7; color:#92400e; }
+  .c-otra { background:#ede9fe; color:#4c1d95; }
+
+  .aviso-dia { border-radius:12px; padding:26px; text-align:center; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+  .aviso-dia .emo { font-size:2.6rem; }
+  .cerrado { background:#ecfdf5; border:1px solid #6ee7b7; border-radius:12px; padding:16px 20px; color:#065f46; }
+  .borrador { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 14px; font-size:.84rem; color:#92400e; margin-bottom:14px; }
+
+  .pendiente-chip { display:inline-block; background:#fff; border:1px solid #e0d6f5; border-radius:8px; padding:5px 11px; margin:0 6px 6px 0; font-size:.82rem; text-decoration:none; color:#110d26; }
+  .pendiente-chip:hover { border-color:#e0178a; color:#e0178a; }
+
+  .vacio-lista { text-align:center; color:#9ca3af; padding:22px 12px; font-size:.9rem; }
+  .ayuda-actividad {
+    font-size:.79rem; color:#6b7280; line-height:1.45; margin-top:6px;
+    padding-left:9px; border-left:2px solid #e0d6f5; min-height:1.1rem;
+  }
+  .ayuda-actividad:empty { display:none; }
+  .devuelto { background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:13px 16px; font-size:.86rem; color:#9a3412; margin-bottom:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi bi-clock-history" style="color:#e0178a"></i> Registrar <span>horas</span></h1>
+</div>
+
+<div class="container py-4" style="max-width:840px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-success py-2 px-3" style="font-size:.87rem;border-radius:10px">
+      <i class="bi bi-check-circle me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-danger py-2 px-3" style="font-size:.87rem;border-radius:10px">
+    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  {% if not recurso %}
+  <div class="aviso-dia">
+    <div class="emo">🔗</div>
+    <h5 class="fw-bold mt-2 mb-2" style="font-family:'Montserrat',sans-serif">Tu cuenta no está vinculada a un recurso</h5>
+    <p class="text-muted mb-0" style="font-size:.9rem">
+      No se pueden registrar horas a tu nombre hasta que un administrador lo resuelva.
+    </p>
+  </div>
+
+  {% else %}
+
+  {# ── Selector de día, pegado al contenido ────────────────────── #}
+  <div class="dia-cab">
+    <div class="nav-dia">
+      <a class="btn-flecha" href="?fecha={{ dia_anterior|date:'Y-m-d' }}" title="Día anterior">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+      <a class="btn-flecha {% if fecha >= hoy %}off{% endif %}"
+         href="?fecha={{ dia_siguiente|date:'Y-m-d' }}" title="Día siguiente">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+
+    <div class="dia-titulo">{{ fecha|date:"l j \d\e F" }}</div>
+
+    <form method="get" class="nav-dia ms-auto">
+      <label class="fw-semibold mb-0" style="font-size:.82rem;color:#6b7280">Ir a</label>
+      <input type="date" name="fecha" value="{{ fecha|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}"
+             class="form-control form-control-sm" onchange="this.form.submit()">
+    </form>
+  </div>
+
+  {% if dia.motivo_devolucion and dia.editable %}
+  {% comment %}
+    Va fuera de la bifurcacion a proposito: se ve tanto al corregir como en el
+    resumen. Un dia devuelto que muestre "Aceptar dia" sin avisar se vuelve a
+    aceptar igual, sin arreglar nada.
+  {% endcomment %}
+  <div class="devuelto">
+    <strong><i class="bi bi-arrow-counterclockwise me-1"></i>Te devolvieron este día para corregir</strong>
+    <div class="mt-1">{{ dia.motivo_devolucion }}</div>
+  </div>
+  {% endif %}
+
+  {% if not estado_dia.habil %}
+  {# Fin de semana, festivo o ausencia aprobada: no hay nada que legalizar. #}
+  <div class="aviso-dia">
+    <div class="emo">{% if estado_dia.motivo_no_habil == "AUSENCIA" %}🌴{% else %}🗓️{% endif %}</div>
+    <h5 class="fw-bold mt-2 mb-2" style="font-family:'Montserrat',sans-serif">No hay horas que registrar</h5>
+    <p class="text-muted mb-0" style="font-size:.92rem">
+      {% if estado_dia.motivo_no_habil == "AUSENCIA" %}
+        Tienes {% if estado_dia.tipo_ausencia == "VACACION" %}vacaciones{% else %}un permiso{% endif %}
+        aprobado ese día. Cuenta como no laborable.
+      {% elif estado_dia.motivo_no_habil == "FINDE" %}Es fin de semana.
+      {% elif estado_dia.motivo_no_habil == "FERIADO" %}Es festivo en Colombia.
+      {% else %}Es un día no laborable.{% endif %}
+    </p>
+  </div>
+
+  {% elif dia and not dia.editable %}
+  {# ── Día ya aceptado ─────────────────────────────────────────── #}
+  <div class="cerrado mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <strong><i class="bi bi-lock-fill me-1"></i>Día aceptado</strong>
+        <div style="font-size:.87rem">
+          {{ dia.total_horas }} h el {{ dia.registrado_en|date:"d/m/Y H:i" }}.
+          {% if dia.estado == "APROBADO" %}Aprobado por {{ dia.aprobado_por.get_full_name|default:dia.aprobado_por.username }}.
+          {% else %}Pendiente de aprobación del PM.{% endif %}
+        </div>
+      </div>
+      <span class="chip c-fact">{{ dia.get_estado_display }}</span>
+    </div>
+    <div class="mt-2" style="font-size:.83rem">Para cambiar algo hay que pedir la reapertura.</div>
+  </div>
+
+  {% for r in resumen.registros %}
+  <div class="renglon">
+    <div>
+      <div>
+        {% if r.proyecto %}<strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
+          <span class="chip {% if r.facturable %}c-fact{% else %}c-int{% endif %} ms-1">{% if r.facturable %}Facturable{% else %}Interno{% endif %}</span>
+        {% else %}<span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>{% endif %}
+      </div>
+      <div class="meta mt-1">{{ r.detalle }}</div>
+    </div>
+    <div class="hrs">{{ r.horas }} h</div>
+    <div></div>
+  </div>
+  {% endfor %}
+
+  {% elif modo_edicion %}
+  {# ── PASO 1: componer el día ─────────────────────────────────── #}
+  {% if resumen.registros %}
+  <div class="borrador">
+    <i class="bi bi-pencil me-1"></i>
+    Estás corrigiendo un día ya guardado. Al guardar se reemplazan las actividades anteriores.
+  </div>
+  {% endif %}
+
+  <div class="card p-4 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h6 class="fw-bold mb-0" style="font-family:'Montserrat',sans-serif;font-size:.95rem">Actividades del día</h6>
+      <div class="cifra" id="marcador">
+        <span id="acumulado">0</span> <small>/ {{ estado_dia.jornada }} h</small>
+      </div>
+    </div>
+
+    <div class="barra mb-3" id="barra"><span style="width:0%"></span></div>
+
+    {# Nada se guarda hasta pulsar Guardar: la lista se arma aquí y viaja entera. #}
+    <div id="lista"></div>
+    <div class="vacio-lista" id="vacio">Todavía no has añadido ninguna actividad.</div>
+
+    <hr class="my-3">
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" style="font-size:.82rem;font-weight:600">Actividad</label>
+        <select id="f-actividad" class="form-select">
+          {% for a in actividades %}
+          <option value="{{ a.pk }}" data-proyecto="{{ a.requiere_proyecto|yesno:"1,0" }}"
+                  data-ayuda="{{ a.descripcion }}">{{ a.nombre }}</option>
+          {% endfor %}
+        </select>
+        {% comment %}
+          Siempre visible, no en un popup: si hay que hacer clic para saber
+          cual elegir, nadie hace clic y se rellena a ojo.
+        {% endcomment %}
+        <div class="ayuda-actividad" id="ayuda-actividad"></div>
+      </div>
+
+      <div class="col-md-5" id="campo-proyecto">
+        <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+        <select id="f-proyecto" class="form-select">
+          <option value="">— Elige el proyecto —</option>
+          {% for p in proyectos %}
+          <option value="{{ p.pk }}">{{ p.codigo }} — {{ p.nombre }}{% if not p.facturable %} (interno){% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if not proyectos %}
+        <div class="mt-1" style="font-size:.78rem;color:#b45309">
+          No tenías proyectos asignados ese día. Usa una actividad sin proyecto.
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label" style="font-size:.82rem;font-weight:600">Horas</label>
+        <input type="number" id="f-horas" class="form-control" step="0.5" min="0.5"
+               max="{{ estado_dia.jornada|unlocalize }}" placeholder="8.5">
+      </div>
+
+      <div class="col-12">
+        <label class="form-label" style="font-size:.82rem;font-weight:600">¿Qué hiciste?</label>
+        <input type="text" id="f-detalle" class="form-control" maxlength="300"
+               placeholder="Ej: desarrollo del módulo de facturación, revisión de incidencias...">
+      </div>
+
+      <div class="col-12 d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-secondary" id="btn-anadir">
+          <i class="bi bi-plus-lg me-1"></i>Añadir a la lista
+        </button>
+        <form method="post" id="form-guardar" class="ms-auto">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="guardar">
+          <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+          <div id="campos-ocultos"></div>
+          <button type="submit" class="btn btn-pink" id="btn-guardar" disabled>
+            <i class="bi bi-save me-1"></i>Guardar día
+          </button>
+        </form>
+      </div>
+    </div>
+    <div class="mt-2" style="font-size:.8rem;color:#6b7280">
+      Nada se guarda hasta que pulses <strong>Guardar día</strong>.
+    </div>
+  </div>
+
+  {% else %}
+  {# ── PASO 2: resumen y aceptación ────────────────────────────── #}
+  <div class="card p-3 mb-3">
+    <div class="medidor">
+      <div class="cifra {% if resumen.cuadra %}ok{% endif %}">
+        {{ resumen.total }} <small>/ {{ resumen.jornada }} h</small>
+      </div>
+      <div class="barra {% if resumen.cuadra %}ok{% endif %}">
+        <span style="width:{% widthratio resumen.total resumen.jornada 100 %}%"></span>
+      </div>
+      {% if resumen.cuadra %}
+      <span class="chip c-fact"><i class="bi bi-check-lg"></i> Cuadra</span>
+      {% else %}
+      <span class="chip c-int">Faltan {{ resumen.faltan }} h</span>
+      {% endif %}
+    </div>
+    <div class="mt-2" style="font-size:.82rem;color:#6b7280">
+      {{ resumen.facturables }} h facturables · {{ resumen.no_facturables }} h no facturables
+    </div>
+  </div>
+
+  {% for r in resumen.registros %}
+  <div class="renglon">
+    <div>
+      <div>
+        {% if r.proyecto %}<strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
+          <span class="chip {% if r.facturable %}c-fact{% else %}c-int{% endif %} ms-1">{% if r.facturable %}Facturable{% else %}Interno{% endif %}</span>
+        {% else %}<span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>{% endif %}
+      </div>
+      <div class="meta mt-1">{{ r.detalle }}</div>
+    </div>
+    <div class="hrs">{{ r.horas }} h</div>
+    <div></div>
+  </div>
+  {% endfor %}
+
+  <div class="card p-4 mt-3 text-center">
+    {% if resumen.cuadra %}
+    <p class="mb-3" style="font-size:.92rem">
+      El día cuadra con <strong>{{ resumen.total }} h</strong> en
+      {{ resumen.registros|length }} actividad{{ resumen.registros|length|pluralize:"es" }}.
+      Al aceptar <strong>ya no podrás modificarlo</strong>.
+    </p>
+    {% else %}
+    <p class="mb-3" style="font-size:.92rem;color:#92400e">
+      Faltan <strong>{{ resumen.faltan }} h</strong> para completar la jornada.
+      Complétalas con lo que corresponda: estudio, formación o un proyecto interno.
+    </p>
+    {% endif %}
+
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="reabrir">
+        <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+        <button type="submit" class="btn btn-outline-secondary">
+          <i class="bi bi-pencil me-1"></i>Corregir
+        </button>
+      </form>
+
+      {% if resumen.cuadra %}
+      <form method="post" onsubmit="return confirm('¿Aceptar el día? Después no se puede modificar sin autorización.')">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="registrar">
+        <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+        <button type="submit" class="btn-cerrar"><i class="bi bi-lock me-1"></i>Aceptar día</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if pendientes %}
+  <div class="mt-4">
+    <h6 class="fw-bold mb-2" style="font-family:'Montserrat',sans-serif;font-size:.88rem;color:#110d26">
+      Días hábiles sin registrar
+    </h6>
+    {% for d in pendientes %}
+    <a class="pendiente-chip" href="?fecha={{ d|date:'Y-m-d' }}">{{ d|date:"D j M" }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+{% if modo_edicion %}
+<script>
+  // Todo el día se compone aquí y viaja en un solo POST. Nada toca la base
+  // hasta pulsar Guardar, así se puede corregir y reordenar sin dejar filas
+  // a medias que luego nadie limpia.
+  (function () {
+    // |unlocalize es obligatorio: con LANGUAGE_CODE="es-co" Django escribe la
+    // jornada con coma decimal, y parseFloat corta ahi y devuelve el entero.
+    // La jornada valia 8 en vez de 8.5 y el dia nunca llegaba a cuadrar.
+    var JORNADA = parseFloat("{{ estado_dia.jornada|unlocalize }}");
+    var renglones = [];
+
+    var elActividad = document.getElementById('f-actividad');
+    var elProyecto  = document.getElementById('f-proyecto');
+    var elHoras     = document.getElementById('f-horas');
+    var elDetalle   = document.getElementById('f-detalle');
+    var campoProy   = document.getElementById('campo-proyecto');
+    var lista       = document.getElementById('lista');
+    var vacio       = document.getElementById('vacio');
+    var ocultos     = document.getElementById('campos-ocultos');
+    var btnGuardar  = document.getElementById('btn-guardar');
+    var acumulado   = document.getElementById('acumulado');
+    var barra       = document.getElementById('barra');
+
+    function necesitaProyecto() {
+      var op = elActividad.options[elActividad.selectedIndex];
+      return op && op.dataset.proyecto === '1';
+    }
+
+    function sincronizarProyecto() {
+      var op = elActividad.options[elActividad.selectedIndex];
+      var necesita = necesitaProyecto();
+      campoProy.hidden = !necesita;
+      elProyecto.disabled = !necesita;
+      if (!necesita) { elProyecto.value = ''; }
+
+      var ayuda = document.getElementById('ayuda-actividad');
+      if (ayuda) { ayuda.textContent = (op && op.dataset.ayuda) || ''; }
+    }
+
+    function total() {
+      return renglones.reduce(function (s, r) { return s + r.horas; }, 0);
+    }
+
+    function escapar(txt) {
+      var d = document.createElement('div');
+      d.textContent = txt;
+      return d.innerHTML;
+    }
+
+    function pintar() {
+      lista.innerHTML = renglones.map(function (r, i) {
+        return '<div class="renglon">' +
+          '<div><div>' + escapar(r.etiqueta) + '</div>' +
+          '<div class="meta mt-1">' + escapar(r.detalle) + '</div></div>' +
+          '<div class="hrs">' + r.horas + ' h</div>' +
+          '<div><button type="button" class="btn btn-sm btn-outline-secondary" ' +
+          'data-quitar="' + i + '" style="font-size:.75rem">Quitar</button></div>' +
+          '</div>';
+      }).join('');
+
+      var suma = total();
+      acumulado.textContent = suma;
+      var pct = Math.min(100, JORNADA ? (suma / JORNADA) * 100 : 0);
+      barra.firstElementChild.style.width = pct + '%';
+      barra.classList.toggle('ok', suma === JORNADA);
+      document.getElementById('marcador').classList.toggle('ok', suma === JORNADA);
+
+      vacio.hidden = renglones.length > 0;
+      btnGuardar.disabled = renglones.length === 0;
+
+      ocultos.innerHTML = renglones.map(function (r) {
+        return '<input type="hidden" name="renglon_tipo" value="' + r.tipo + '">' +
+               '<input type="hidden" name="renglon_proyecto" value="' + (r.proyecto || '') + '">' +
+               '<input type="hidden" name="renglon_horas" value="' + r.horas + '">' +
+               '<input type="hidden" name="renglon_detalle" value="' + escapar(r.detalle) + '">';
+      }).join('');
+    }
+
+    document.getElementById('btn-anadir').addEventListener('click', function () {
+      var horas = parseFloat(elHoras.value);
+      var detalle = elDetalle.value.trim();
+
+      if (!horas || horas <= 0) { alert('Indica cuántas horas.'); return; }
+      if (horas * 2 % 1 !== 0) { alert('Las horas van en bloques de media hora.'); return; }
+      if (!detalle) { alert('Falta decir qué hiciste.'); return; }
+      if (necesitaProyecto() && !elProyecto.value) { alert('Elige el proyecto.'); return; }
+      if (total() + horas > JORNADA) {
+        alert('Te pasas de la jornada. Quedan ' + (JORNADA - total()) + ' h por asignar.');
+        return;
+      }
+
+      var opAct = elActividad.options[elActividad.selectedIndex];
+      var etiqueta = necesitaProyecto()
+        ? elProyecto.options[elProyecto.selectedIndex].text
+        : opAct.text;
+
+      renglones.push({
+        tipo: elActividad.value,
+        proyecto: necesitaProyecto() ? elProyecto.value : '',
+        horas: horas,
+        detalle: detalle,
+        etiqueta: etiqueta,
+      });
+
+      elHoras.value = '';
+      elDetalle.value = '';
+      pintar();
+    });
+
+    lista.addEventListener('click', function (e) {
+      var indice = e.target.dataset && e.target.dataset.quitar;
+      if (indice === undefined) { return; }
+      renglones.splice(parseInt(indice, 10), 1);
+      pintar();
+    });
+
+    elActividad.addEventListener('change', sincronizarProyecto);
+    sincronizarProyecto();
+    pintar();
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from datetime import date
 from decimal import Decimal
 from apps.core.models import Recurso, Proyecto, TarifaVigente
-from .models import Asignacion, LiberacionRecurso, LogAuditoria
+from .models import Asignacion, LogAuditoria
 from .services import (
     calcular_fecha_fin, puede_asignar, aprobar_asignacion,
     analizar_recurrencia, crear_solicitudes_recurrentes,
@@ -569,7 +569,8 @@ class LiberacionTests(TestCase):
         lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR", "", self.pm)
         self.assertEqual(lib.estado, "SOLICITADA")
         aprobar_liberacion(lib, self.admin)
-        a.refresh_from_db(); lib.refresh_from_db()
+        a.refresh_from_db()
+        lib.refresh_from_db()
         self.assertEqual(lib.estado, "APROBADA")
         self.assertEqual(lib.revisada_por, self.admin)
         self.assertEqual(a.fecha_fin, date(2026, 2, 20))
@@ -578,7 +579,8 @@ class LiberacionTests(TestCase):
         a = self._aprobada()
         lib = solicitar_liberacion(a, date(2026, 2, 9), date(2026, 2, 13), "REDUCIR", "", self.pm)
         rechazar_liberacion(lib, self.admin)
-        a.refresh_from_db(); lib.refresh_from_db()
+        a.refresh_from_db()
+        lib.refresh_from_db()
         self.assertEqual(lib.estado, "RECHAZADA")
         self.assertEqual(a.horas_totales, 80)
         self.assertEqual(a.fecha_fin, date(2026, 2, 13))
@@ -648,7 +650,8 @@ class LiberacionTests(TestCase):
         a = self._aprobada()
         lib = self._liberar(a, date(2026, 2, 9), date(2026, 2, 13), "RECOMPUTAR")
         anular_liberacion(lib, self.admin)
-        a.refresh_from_db(); lib.refresh_from_db()
+        a.refresh_from_db()
+        lib.refresh_from_db()
         self.assertEqual(a.fecha_fin, date(2026, 2, 13))
         self.assertEqual(lib.estado, "ANULADA")
 
@@ -726,7 +729,6 @@ class LiberacionViewTests(TestCase):
         self.proyecto = Proyecto.objects.create(
             codigo="P-VW", nombre="P", cliente="C", fecha_inicio=date(2026, 2, 1), pm=self.pm,
         )
-        from math import ceil
         ff = calcular_fecha_fin(self.recurso, date(2026, 2, 2), 80, 8)
         self.asig = Asignacion.objects.create(
             recurso=self.recurso, proyecto=self.proyecto, horas_totales=80,
@@ -779,7 +781,6 @@ class CesionViewTests(TestCase):
         self.destino = Proyecto.objects.create(
             codigo="P-CES-D", nombre="D", cliente="C", fecha_inicio=date(2026, 2, 1), pm=self.pm,
         )
-        from math import ceil
         ff = calcular_fecha_fin(self.recurso, date(2026, 2, 2), 80, 8)
         self.asig = Asignacion.objects.create(
             recurso=self.recurso, proyecto=self.proyecto, horas_totales=80,

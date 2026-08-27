@@ -1,0 +1,147 @@
+name: Deploy a Azure
+
+# Despliegue a Azure Container Apps.
+#
+# Autenticación sin secretos: GitHub intercambia su propio token OIDC por uno de
+# Azure contra la identidad federada que crea Terraform (ver terraform/cicd.tf).
+# En el repositorio no hay ninguna credencial de Azure que rotar ni que filtrar.
+#
+# Los valores de AZURE_* y las variables de repositorio los imprime Terraform:
+#   terraform output -raw cicd_comandos_gh
+
+on:
+  push:
+    branches: [main]
+    # Cambios que no afectan a la imagen no justifican un despliegue.
+    paths-ignore:
+      - "docs/**"
+      - "terraform/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  # Un despliegue a la vez: dos `az containerapp update` simultáneos dejarían
+  # la app en la revisión de quien terminase último, no en la del último commit.
+  group: deploy-produccion
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # necesario para el login OIDC contra Azure
+  contents: read
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    environment: produccion
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticarse en Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Comprobar que es la suscripción correcta
+        # Misma idea que el guard de Terraform: el pipeline no debe poder tocar
+        # otra suscripción aunque alguien cambie un secret por error.
+        run: |
+          ACTUAL=$(az account show --query id -o tsv)
+          if [ "$ACTUAL" != "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Suscripción inesperada: $ACTUAL"
+            exit 1
+          fi
+          echo "Suscripción verificada: $ACTUAL"
+
+      - name: Construir y publicar la imagen
+        id: imagen
+        env:
+          ACR: ${{ vars.ACR_NAME }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_SHA::12}"
+          IMAGEN="${ACR}.azurecr.io/plataforma-gestion:${TAG}"
+
+          az acr login --name "$ACR"
+          docker build -t "$IMAGEN" -t "${ACR}.azurecr.io/plataforma-gestion:latest" ./backend
+          docker push "$IMAGEN"
+          docker push "${ACR}.azurecr.io/plataforma-gestion:latest"
+
+          echo "imagen=$IMAGEN" >> "$GITHUB_OUTPUT"
+
+      - name: Aplicar migraciones
+        # Antes de publicar la nueva revisión: el código nuevo puede depender de
+        # columnas nuevas, y durante el despliegue conviven réplicas viejas y
+        # nuevas. Va en un job aparte para que solo un proceso ejecute `migrate`,
+        # en vez de todas las réplicas a la vez al arrancar.
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          JOB: ${{ vars.MIGRATIONS_JOB_NAME }}
+          IMAGEN: ${{ steps.imagen.outputs.imagen }}
+        run: |
+          set -euo pipefail
+          az containerapp job update -n "$JOB" -g "$RG" --image "$IMAGEN" --output none
+
+          EJECUCION=$(az containerapp job start -n "$JOB" -g "$RG" --query name -o tsv)
+          echo "Ejecución lanzada: $EJECUCION"
+
+          for _ in $(seq 1 60); do
+            ESTADO=$(az containerapp job execution show \
+              -n "$JOB" -g "$RG" --job-execution-name "$EJECUCION" \
+              --query properties.status -o tsv)
+            echo "  estado: $ESTADO"
+            case "$ESTADO" in
+              Succeeded) exit 0 ;;
+              Failed|Degraded)
+                echo "::error::Las migraciones fallaron. Logs:"
+                az containerapp job logs show -n "$JOB" -g "$RG" \
+                  --container migrate --execution "$EJECUCION" --tail 200 || true
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::Las migraciones no terminaron en 10 minutos."
+          exit 1
+
+      - name: Publicar la nueva revisión
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP: ${{ vars.CONTAINER_APP_NAME }}
+          IMAGEN: ${{ steps.imagen.outputs.imagen }}
+        run: |
+          set -euo pipefail
+          az containerapp update -n "$APP" -g "$RG" --image "$IMAGEN" --output none
+
+          FQDN=$(az containerapp show -n "$APP" -g "$RG" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Desplegado en https://$FQDN"
+          echo "### Desplegado: https://$FQDN" >> "$GITHUB_STEP_SUMMARY"
+          echo "Imagen: \`$IMAGEN\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verificar que la app responde
+        # Con min_replicas = 0 la app puede estar apagada: la primera petición la
+        # despierta y el arranque en frío tarda. Por eso se reintenta.
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP: ${{ vars.CONTAINER_APP_NAME }}
+        run: |
+          set -euo pipefail
+          FQDN=$(az containerapp show -n "$APP" -g "$RG" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+
+          for intento in $(seq 1 15); do
+            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" "https://$FQDN/healthz/" || echo "000")
+            if [ "$CODIGO" = "200" ]; then
+              echo "La app responde correctamente."
+              exit 0
+            fi
+            echo "  intento $intento: HTTP $CODIGO"
+            sleep 10
+          done
+
+          echo "::error::La app no respondió 200 en /healthz/ tras el despliegue."
+          exit 1

@@ -60,7 +60,17 @@ class OcupacionAPIView(APIView):
             return Response({"error": "El rango máximo es 90 días."}, status=400)
 
         # Solo recursos asignables: los Admin/PM/staff no aparecen en el heatmap
-        recursos = list(recursos_asignables().order_by("nombre"))
+        recursos = recursos_asignables().order_by("nombre")
+
+        # Un ingeniero ve su propia ocupación y nada más. El heatmap completo
+        # dice quién está en bench y con qué carga anda cada quien: eso es
+        # información de gestión, y aunque el RBAC ya impide ver costos, la
+        # disponibilidad del equipo tampoco es asunto suyo.
+        if not es_admin_o_pm(request.user):
+            propio = Recurso.objects.filter(usuario=request.user).first()
+            recursos = recursos.filter(pk=propio.pk) if propio else recursos.none()
+
+        recursos = list(recursos)
 
         # Prefetch de todas las asignaciones aprobadas en el rango (una sola query)
         asignaciones = list(
@@ -91,18 +101,34 @@ class OcupacionAPIView(APIView):
                 if habil:
                     asig_hoy = [a for a in asig_recurso if a.fecha_inicio <= cur <= a.fecha_fin]
                     horas = carga_dias.get(cur, 0.0)
+                    # Las mismas claves que en la rama de no hábil: un payload
+                    # con forma estable evita que el cliente tenga que
+                    # distinguir entre "false" y "la clave no viene".
                     detalle_por_dia.append({
                         "fecha": cur.isoformat(),
+                        "no_habil": False,
+                        "motivo_no_habil": None,
+                        "ausencia": False,
+                        "tipo_ausencia": None,
                         "horas_asignadas": round(horas, 2),
                         "porcentaje": min(100, round((horas / capacidad_maxima_dia(cur)) * 100, 1)),
                         "proyectos": list({a.proyecto.codigo for a in asig_hoy}),
                     })
                 else:
+                    motivo = cal.motivo_no_habil(cur, recurso)
+                    es_ausencia = motivo == "AUSENCIA"
+                    # Una ausencia aprobada no es "0% de carga": es una persona
+                    # 100% no disponible. Pintarla como los fines de semana la
+                    # haría leerse como hueco libre para asignar, que es
+                    # exactamente lo contrario de lo que significa.
                     detalle_por_dia.append({
                         "fecha": cur.isoformat(),
                         "no_habil": True,
+                        "motivo_no_habil": motivo,
+                        "ausencia": es_ausencia,
+                        "tipo_ausencia": cal.tipo_ausencia(cur, recurso) if es_ausencia else None,
                         "horas_asignadas": 0,
-                        "porcentaje": 0,
+                        "porcentaje": 100 if es_ausencia else 0,
                         "proyectos": [],
                     })
                 cur += timedelta(days=1)

@@ -27,7 +27,11 @@ class ForzarCambioPasswordMiddleware:
             path = request.path
             excluidas = self._rutas_permitidas()
             es_estatico = path.startswith("/static/") or path.startswith("/media/")
-            if path not in excluidas and not es_estatico:
+            # Las cuentas que entran por SSO no tienen contraseña local utilizable.
+            # Mandarlas al formulario de cambio las dejaría atrapadas: pide la
+            # contraseña anterior, que nunca han tenido.
+            solo_sso = not user.has_usable_password()
+            if path not in excluidas and not es_estatico and not solo_sso:
                 # .exists() evita traer el objeto; una sola query indexada por el OneToOne.
                 if CambioPasswordPendiente.objects.filter(usuario=user).exists():
                     return redirect("password-cambiar")

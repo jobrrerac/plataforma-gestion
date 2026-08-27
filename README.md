@@ -89,13 +89,27 @@ POST /api/calendario/dias-no-laborables/  Registrar día no laborable
 GET  /api/dashboard/ocupacion/         Datos de ocupación (fecha_inicio, fecha_fin)
 ```
 
-## Despliegue en Azure / servidor
+## Despliegue en Azure
 
-El stack Docker es portable — los mismos comandos sirven local, en una VM Azure o en Azure App Service.
+Infraestructura como código en [`terraform/`](terraform/). Guía completa:
+**[docs/DESPLIEGUE_AZURE.md](docs/DESPLIEGUE_AZURE.md)**.
 
-Para producción:
+Azure Container Apps (scale-to-zero) + PostgreSQL Flexible B1ms + SSO de Entra ID,
+por ~26-29 USD/mes. Cada push a `main` construye la imagen, corre las migraciones
+y publica la revisión.
+
+```bash
+cd terraform && terraform init && terraform apply
+```
+
+El despliegue está restringido por Terraform a una única suscripción
+(ver `terraform/guard.tf`).
+
+### Otros servidores (VM / intranet)
+
+El stack Docker sigue siendo portable. Para producción fuera de Azure:
 1. Copiar `.env.example` → `.env` con valores reales
 2. Setear `DJANGO_DEBUG=False`
 3. Setear `DJANGO_ALLOWED_HOSTS` con el dominio o IP del servidor
 4. Usar una `DJANGO_SECRET_KEY` larga y aleatoria (50+ caracteres)
-5. Agregar nginx como reverse proxy (ver sprint A11)
+5. Usar `docker-compose.prod.yml`, que ya incluye nginx como reverse proxy

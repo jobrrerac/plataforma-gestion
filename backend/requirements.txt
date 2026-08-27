@@ -5,3 +5,8 @@ django-environ>=0.11,<1
 holidays>=0.60,<2
 django-cors-headers>=4.3,<5
 gunicorn>=22,<24
+# Sirve los estáticos desde el propio proceso de gunicorn. En Container Apps no
+# hay nginx delante: el ingress habla directo con el contenedor.
+whitenoise[brotli]>=6.6,<7
+# SSO con Microsoft Entra ID (OpenID Connect). Convive con el login local.
+mozilla-django-oidc>=4.0,<5

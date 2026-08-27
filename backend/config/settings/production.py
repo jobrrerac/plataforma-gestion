@@ -2,6 +2,31 @@ from .base import *  # noqa: F401, F403
 
 DEBUG = False
 
+# ---------------------------------------------------------------------------
+# Estáticos
+# ---------------------------------------------------------------------------
+# En Container Apps no hay nginx delante: el ingress habla directo con gunicorn,
+# así que los estáticos los sirve el propio proceso. WhiteNoise va justo después
+# de SecurityMiddleware y antes que todo lo demás: un fichero estático no
+# necesita sesión, CSRF ni tocar la base de datos.
+MIDDLEWARE = list(MIDDLEWARE)  # noqa: F405
+MIDDLEWARE.insert(
+    MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1,
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+)
+
+# Comprime (gzip + brotli) y versiona cada fichero con un hash en el nombre, lo
+# que permite servirlos con cache inmutable. Exige haber corrido collectstatic,
+# que la imagen hace en tiempo de build (ver backend/Dockerfile).
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
@@ -25,6 +50,15 @@ SECURE_REFERRER_POLICY = "same-origin"
 # contenedor. Sin este header Django no detecta HTTPS y puede entrar en loop de redirección.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = True
+
+# Las sondas de Container Apps llegan por HTTP desde dentro del entorno, sin
+# X-Forwarded-Proto. Sin esta exención recibirían un 301, la plataforma daría la
+# revisión por no sana y la app nunca llegaría a recibir tráfico.
+# Las rutas van sin la barra inicial: Django compara contra request.path[1:].
+SECURE_REDIRECT_EXEMPT = [
+    r"^healthz/$",
+    r"^readyz/$",
+]
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 # SECURE_HSTS_PRELOAD = True  # activar tras confirmar que el dominio funciona bien varios días
@@ -46,4 +80,28 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+}
+
+# Log a stdout: Container Apps recoge la salida estándar del contenedor y la
+# envía a Log Analytics. Escribir a un archivo dentro del contenedor perdería
+# los registros en cada reinicio.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "%(levelname)s %(asctime)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "consola": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+    "root": {"handlers": ["consola"], "level": "INFO"},
+    "loggers": {
+        # Altas, cambios de rol y accesos denegados por SSO.
+        "apps.accounts.oidc": {"level": "INFO", "propagate": True},
+        # Ruido de las sondas: solo interesa cuando algo falla de verdad.
+        "django.server": {"level": "WARNING", "propagate": True},
+    },
 }

@@ -1,0 +1,317 @@
+<title>Ronda de QA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+
+<style>
+  /* Paleta neutra de documento tecnico. El magenta de Inetum aparece solo en
+     los filetes y los identificadores: es la marca, no el fondo. */
+  :root {
+    --tinta:      #16191d;
+    --texto:      #2b3036;
+    --tenue:      #5f666e;
+    --papel:      #f5f6f7;
+    --superficie: #ffffff;
+    --linea:      #d8dbdf;
+    --linea-sutil:#e8eaec;
+    --suave:      #f0f1f3;
+    --marca:      #d10f7d;
+    --ok:         #0b6b52;
+    --aviso:      #8a5a00;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --tinta:      #eef0f2;
+      --texto:      #d2d6da;
+      --tenue:      #9aa2ab;
+      --papel:      #15181b;
+      --superficie: #1c2024;
+      --linea:      #333940;
+      --linea-sutil:#272c31;
+      --suave:      #22272b;
+      --marca:      #ff5fb0;
+      --ok:         #4ec9a8;
+      --aviso:      #e0a33c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --tinta:      #eef0f2;
+    --texto:      #d2d6da;
+    --tenue:      #9aa2ab;
+    --papel:      #15181b;
+    --superficie: #1c2024;
+    --linea:      #333940;
+    --linea-sutil:#272c31;
+    --suave:      #22272b;
+    --marca:      #ff5fb0;
+    --ok:         #4ec9a8;
+    --aviso:      #e0a33c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--papel);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 1.5rem 5rem;
+  }
+  .envoltura { max-width: 1020px; margin: 0 auto; }
+  .prosa { max-width: 78ch; }
+
+  /* ── Cabecera ───────────────────────────────────────────── */
+  header {
+    padding: 3rem 0 1.6rem;
+    border-bottom: 1px solid var(--linea);
+    margin-bottom: 2rem;
+  }
+  .filete { width: 44px; height: 3px; background: var(--marca); margin-bottom: 1.4rem; }
+  .marca {
+    font-size: .7rem; font-weight: 600; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--tenue); margin-bottom: .9rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 3.6vw, 2.15rem);
+    font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+    margin: 0 0 .7rem; color: var(--tinta); text-wrap: balance;
+  }
+  .bajada { font-size: 1rem; color: var(--tenue); max-width: 62ch; margin: 0; }
+
+  h2 {
+    font-size: 1.16rem; font-weight: 600; letter-spacing: -.01em;
+    color: var(--tinta); margin: 2.6rem 0 .6rem;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--linea-sutil);
+    text-wrap: balance;
+  }
+  h3 { font-size: .98rem; font-weight: 600; color: var(--tinta); margin: 1.7rem 0 .4rem; }
+  p { margin: 0 0 .85rem; }
+  strong { font-weight: 600; color: var(--tinta); }
+  ul, ol { margin: 0 0 .9rem; padding-left: 1.25rem; }
+  li { margin-bottom: .35rem; }
+  hr { border: none; border-top: 1px solid var(--linea); margin: 2.4rem 0; }
+  code {
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .86em; background: var(--suave);
+    border: 1px solid var(--linea-sutil); border-radius: 2px; padding: .05em .32em;
+  }
+
+  pre {
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .8rem; line-height: 1.65; background: var(--superficie);
+    border: 1px solid var(--linea); border-left: 3px solid var(--linea);
+    padding: 1rem 1.2rem; overflow-x: auto; margin: 1.1rem 0;
+    color: var(--texto);
+  }
+
+  /* ── Tablas ─────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; margin: 1.1rem 0; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: .86rem;
+    background: var(--superficie); border: 1px solid var(--linea);
+  }
+  th {
+    text-align: left; font-weight: 600; font-size: .68rem; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue); padding: .6rem .85rem;
+    border-bottom: 1px solid var(--linea); background: var(--suave); white-space: nowrap;
+  }
+  td { padding: .6rem .85rem; border-bottom: 1px solid var(--linea-sutil); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .nota {
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-left: 3px solid var(--marca);
+    padding: .8rem 1.1rem; margin: 1rem 0; font-size: .9rem;
+  }
+
+  /* ── Índice ─────────────────────────────────────────────── */
+  .indice {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border: 1px solid var(--linea); background: var(--superficie); margin: 1.2rem 0 0;
+  }
+  .indice a {
+    display: flex; align-items: baseline; gap: .35rem;
+    font-size: .74rem; font-weight: 600; text-decoration: none; color: var(--texto);
+    padding: .45rem .8rem; border-right: 1px solid var(--linea-sutil);
+  }
+  .indice a:last-child { border-right: none; }
+  .indice a:hover { background: var(--suave); color: var(--marca); }
+  .indice b { color: var(--tenue); font-weight: 500; font-size: .68rem; }
+
+  /* ── Progreso ───────────────────────────────────────────── */
+  .progreso {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--papel); border-bottom: 1px solid var(--linea);
+    padding: .65rem 0; margin: 0 0 1.4rem;
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+  }
+  .progreso .barra {
+    flex: 1; min-width: 150px; height: 6px; background: var(--suave);
+    border: 1px solid var(--linea); overflow: hidden;
+  }
+  .progreso .barra span { display: block; height: 100%; background: var(--marca); width: 0; transition: width .2s; }
+  .progreso .cifra {
+    font-weight: 600; font-size: .84rem; color: var(--tinta);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .progreso button {
+    font-family: inherit; font-size: .72rem; font-weight: 600;
+    background: var(--superficie); border: 1px solid var(--linea); color: var(--tenue);
+    padding: .28rem .75rem; cursor: pointer;
+  }
+  .progreso button:hover { border-color: var(--marca); color: var(--marca); }
+
+  /* ── Casos ──────────────────────────────────────────────── */
+  .bloque { margin: 2.2rem 0; scroll-margin-top: 3.5rem; }
+  .bloque-cab {
+    display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
+    padding-bottom: .45rem; border-bottom: 1px solid var(--linea); margin-bottom: .7rem;
+  }
+  .bloque-cab h3 { margin: 0; font-size: 1.02rem; }
+  .sigla {
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem; font-weight: 600;
+    color: var(--marca); border: 1px solid var(--marca); padding: .08rem .4rem;
+  }
+  .cuenta { font-size: .72rem; color: var(--tenue); margin-left: auto; }
+
+  .caso {
+    display: flex; gap: .75rem; align-items: flex-start;
+    background: var(--superficie); border: 1px solid var(--linea-sutil);
+    border-left: 2px solid var(--linea);
+    padding: .7rem .9rem; margin-bottom: .3rem; cursor: pointer;
+  }
+  .caso:hover { border-left-color: var(--marca); }
+  .caso input { margin-top: .25rem; width: 15px; height: 15px; accent-color: var(--marca); flex: none; cursor: pointer; }
+  .caso:has(input:checked) { opacity: .48; background: var(--suave); border-left-color: var(--ok); }
+  .caso-cuerpo { flex: 1; min-width: 0; }
+  .caso-cab { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .25rem; }
+  .cid {
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem;
+    font-weight: 600; color: var(--marca); white-space: nowrap;
+  }
+  .ctit { font-size: .88rem; font-weight: 600; color: var(--tinta); }
+  .campo { font-size: .85rem; margin-top: .15rem; display: flex; gap: .5rem; }
+  .etq {
+    font-size: .62rem; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue);
+    flex: none; min-width: 4.4rem; padding-top: .18rem;
+  }
+
+  footer {
+    margin-top: 3rem; padding-top: 1.3rem; border-top: 1px solid var(--linea);
+    font-size: .76rem; color: var(--tenue);
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 14.5px; padding: 0 1rem 3.5rem; }
+    .campo { display: block; }
+    .etq { display: block; min-width: 0; padding-top: 0; }
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 10pt; padding: 0; }
+    header { padding-top: 0; }
+    .progreso, .indice, #reiniciar { display: none !important; }
+    .caso { break-inside: avoid; page-break-inside: avoid; border-color: #bbb; }
+    .bloque-cab, h2, h3 { break-after: avoid; page-break-after: avoid; }
+    table, pre, .nota { break-inside: avoid; }
+    a { text-decoration: none; color: inherit; }
+    .caso input { -webkit-appearance: none; appearance: none;
+                  border: 1px solid #555; border-radius: 0; }
+    .caso:has(input:checked) { opacity: 1; background: #fff; }
+  }
+</style>
+
+<div class="envoltura">
+
+<header>
+  <div class="filete"></div>
+  <div class="marca">Inetum &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
+  <h1>Ronda de QA — {{TOTAL}} casos de prueba</h1>
+  <p class="bajada">
+    Primero cómo funciona la plataforma y dónde ya han aparecido errores.
+    Después los casos, marcables a medida que se ejecutan.
+  </p>
+</header>
+
+<div class="prosa">
+{{ENTORNO}}
+</div>
+
+<hr>
+
+<div class="prosa">
+{{MANUAL}}
+</div>
+
+<hr>
+
+<h2>Los casos</h2>
+<p class="prosa">
+  Marca cada uno al ejecutarlo. El progreso se guarda en este navegador, así que
+  puedes cerrar la página y volver.
+</p>
+
+<div class="indice">{{INDICE}}</div>
+
+<div class="progreso">
+  <span class="cifra"><span id="hechos">0</span> / {{TOTAL}}</span>
+  <div class="barra"><span id="barra"></span></div>
+  <button type="button" id="reiniciar">Reiniciar</button>
+</div>
+
+{{CASOS}}
+
+<footer>
+  Plataforma de Gestión de Recursos · Inetum · ronda de QA de agosto de 2026.<br>
+  Este archivo es autocontenido: no necesitas nada más para ejecutar la ronda.
+</footer>
+
+</div>
+
+<script>
+  // El progreso vive solo en este navegador. Es una comodidad para no perder
+  // la cuenta entre sesiones, no un informe compartido: lo que se reporta
+  // sigue siendo el registro de ejecución.
+  (function () {
+    var CLAVE = 'qa-inetum-progreso';
+    var cajas = Array.prototype.slice.call(document.querySelectorAll('.caso input'));
+    var hechos = document.getElementById('hechos');
+    var barra = document.getElementById('barra');
+
+    function leer() {
+      try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; }
+      catch (e) { return {}; }
+    }
+    function guardar(estado) {
+      try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch (e) { /* sin persistencia */ }
+    }
+    function pintar() {
+      var n = cajas.filter(function (c) { return c.checked; }).length;
+      hechos.textContent = n;
+      barra.style.width = (cajas.length ? (n / cajas.length) * 100 : 0) + '%';
+    }
+
+    var estado = leer();
+    cajas.forEach(function (caja) {
+      caja.checked = !!estado[caja.dataset.caso];
+      caja.addEventListener('change', function () {
+        var actual = leer();
+        if (caja.checked) { actual[caja.dataset.caso] = true; }
+        else { delete actual[caja.dataset.caso]; }
+        guardar(actual);
+        pintar();
+      });
+    });
+
+    document.getElementById('reiniciar').addEventListener('click', function () {
+      if (!confirm('¿Desmarcar los ' + cajas.length + ' casos?')) { return; }
+      cajas.forEach(function (c) { c.checked = false; });
+      guardar({});
+      pintar();
+    });
+
+    pintar();
+  })();
+</script>

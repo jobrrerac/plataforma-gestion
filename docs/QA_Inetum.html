@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA — Plataforma de Gestion de Recursos (Inetum)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+
+<style>
+  /* Paleta neutra de documento tecnico. El magenta de Inetum aparece solo en
+     los filetes y los identificadores: es la marca, no el fondo. */
+  :root {
+    --tinta:      #16191d;
+    --texto:      #2b3036;
+    --tenue:      #5f666e;
+    --papel:      #f5f6f7;
+    --superficie: #ffffff;
+    --linea:      #d8dbdf;
+    --linea-sutil:#e8eaec;
+    --suave:      #f0f1f3;
+    --marca:      #d10f7d;
+    --ok:         #0b6b52;
+    --aviso:      #8a5a00;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --tinta:      #eef0f2;
+      --texto:      #d2d6da;
+      --tenue:      #9aa2ab;
+      --papel:      #15181b;
+      --superficie: #1c2024;
+      --linea:      #333940;
+      --linea-sutil:#272c31;
+      --suave:      #22272b;
+      --marca:      #ff5fb0;
+      --ok:         #4ec9a8;
+      --aviso:      #e0a33c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --tinta:      #eef0f2;
+    --texto:      #d2d6da;
+    --tenue:      #9aa2ab;
+    --papel:      #15181b;
+    --superficie: #1c2024;
+    --linea:      #333940;
+    --linea-sutil:#272c31;
+    --suave:      #22272b;
+    --marca:      #ff5fb0;
+    --ok:         #4ec9a8;
+    --aviso:      #e0a33c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--papel);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 1.5rem 5rem;
+  }
+  .envoltura { max-width: 1020px; margin: 0 auto; }
+  .prosa { max-width: 78ch; }
+
+  /* ── Cabecera ───────────────────────────────────────────── */
+  header {
+    padding: 3rem 0 1.6rem;
+    border-bottom: 1px solid var(--linea);
+    margin-bottom: 2rem;
+  }
+  .filete { width: 44px; height: 3px; background: var(--marca); margin-bottom: 1.4rem; }
+  .marca {
+    font-size: .7rem; font-weight: 600; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--tenue); margin-bottom: .9rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 3.6vw, 2.15rem);
+    font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+    margin: 0 0 .7rem; color: var(--tinta); text-wrap: balance;
+  }
+  .bajada { font-size: 1rem; color: var(--tenue); max-width: 62ch; margin: 0; }
+
+  h2 {
+    font-size: 1.16rem; font-weight: 600; letter-spacing: -.01em;
+    color: var(--tinta); margin: 2.6rem 0 .6rem;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--linea-sutil);
+    text-wrap: balance;
+  }
+  h3 { font-size: .98rem; font-weight: 600; color: var(--tinta); margin: 1.7rem 0 .4rem; }
+  p { margin: 0 0 .85rem; }
+  strong { font-weight: 600; color: var(--tinta); }
+  ul, ol { margin: 0 0 .9rem; padding-left: 1.25rem; }
+  li { margin-bottom: .35rem; }
+  hr { border: none; border-top: 1px solid var(--linea); margin: 2.4rem 0; }
+  code {
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .86em; background: var(--suave);
+    border: 1px solid var(--linea-sutil); border-radius: 2px; padding: .05em .32em;
+  }
+
+  pre {
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .8rem; line-height: 1.65; background: var(--superficie);
+    border: 1px solid var(--linea); border-left: 3px solid var(--linea);
+    padding: 1rem 1.2rem; overflow-x: auto; margin: 1.1rem 0;
+    color: var(--texto);
+  }
+
+  /* ── Tablas ─────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; margin: 1.1rem 0; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: .86rem;
+    background: var(--superficie); border: 1px solid var(--linea);
+  }
+  th {
+    text-align: left; font-weight: 600; font-size: .68rem; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue); padding: .6rem .85rem;
+    border-bottom: 1px solid var(--linea); background: var(--suave); white-space: nowrap;
+  }
+  td { padding: .6rem .85rem; border-bottom: 1px solid var(--linea-sutil); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .nota {
+    background: var(--superficie); border: 1px solid var(--linea);
+    border-left: 3px solid var(--marca);
+    padding: .8rem 1.1rem; margin: 1rem 0; font-size: .9rem;
+  }
+
+  /* ── Índice ─────────────────────────────────────────────── */
+  .indice {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border: 1px solid var(--linea); background: var(--superficie); margin: 1.2rem 0 0;
+  }
+  .indice a {
+    display: flex; align-items: baseline; gap: .35rem;
+    font-size: .74rem; font-weight: 600; text-decoration: none; color: var(--texto);
+    padding: .45rem .8rem; border-right: 1px solid var(--linea-sutil);
+  }
+  .indice a:last-child { border-right: none; }
+  .indice a:hover { background: var(--suave); color: var(--marca); }
+  .indice b { color: var(--tenue); font-weight: 500; font-size: .68rem; }
+
+  /* ── Progreso ───────────────────────────────────────────── */
+  .progreso {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--papel); border-bottom: 1px solid var(--linea);
+    padding: .65rem 0; margin: 0 0 1.4rem;
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+  }
+  .progreso .barra {
+    flex: 1; min-width: 150px; height: 6px; background: var(--suave);
+    border: 1px solid var(--linea); overflow: hidden;
+  }
+  .progreso .barra span { display: block; height: 100%; background: var(--marca); width: 0; transition: width .2s; }
+  .progreso .cifra {
+    font-weight: 600; font-size: .84rem; color: var(--tinta);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .progreso button {
+    font-family: inherit; font-size: .72rem; font-weight: 600;
+    background: var(--superficie); border: 1px solid var(--linea); color: var(--tenue);
+    padding: .28rem .75rem; cursor: pointer;
+  }
+  .progreso button:hover { border-color: var(--marca); color: var(--marca); }
+
+  /* ── Casos ──────────────────────────────────────────────── */
+  .bloque { margin: 2.2rem 0; scroll-margin-top: 3.5rem; }
+  .bloque-cab {
+    display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
+    padding-bottom: .45rem; border-bottom: 1px solid var(--linea); margin-bottom: .7rem;
+  }
+  .bloque-cab h3 { margin: 0; font-size: 1.02rem; }
+  .sigla {
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem; font-weight: 600;
+    color: var(--marca); border: 1px solid var(--marca); padding: .08rem .4rem;
+  }
+  .cuenta { font-size: .72rem; color: var(--tenue); margin-left: auto; }
+
+  .caso {
+    display: flex; gap: .75rem; align-items: flex-start;
+    background: var(--superficie); border: 1px solid var(--linea-sutil);
+    border-left: 2px solid var(--linea);
+    padding: .7rem .9rem; margin-bottom: .3rem; cursor: pointer;
+  }
+  .caso:hover { border-left-color: var(--marca); }
+  .caso input { margin-top: .25rem; width: 15px; height: 15px; accent-color: var(--marca); flex: none; cursor: pointer; }
+  .caso:has(input:checked) { opacity: .48; background: var(--suave); border-left-color: var(--ok); }
+  .caso-cuerpo { flex: 1; min-width: 0; }
+  .caso-cab { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .25rem; }
+  .cid {
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem;
+    font-weight: 600; color: var(--marca); white-space: nowrap;
+  }
+  .ctit { font-size: .88rem; font-weight: 600; color: var(--tinta); }
+  .campo { font-size: .85rem; margin-top: .15rem; display: flex; gap: .5rem; }
+  .etq {
+    font-size: .62rem; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue);
+    flex: none; min-width: 4.4rem; padding-top: .18rem;
+  }
+
+  footer {
+    margin-top: 3rem; padding-top: 1.3rem; border-top: 1px solid var(--linea);
+    font-size: .76rem; color: var(--tenue);
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 14.5px; padding: 0 1rem 3.5rem; }
+    .campo { display: block; }
+    .etq { display: block; min-width: 0; padding-top: 0; }
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 10pt; padding: 0; }
+    header { padding-top: 0; }
+    .progreso, .indice, #reiniciar { display: none !important; }
+    .caso { break-inside: avoid; page-break-inside: avoid; border-color: #bbb; }
+    .bloque-cab, h2, h3 { break-after: avoid; page-break-after: avoid; }
+    table, pre, .nota { break-inside: avoid; }
+    a { text-decoration: none; color: inherit; }
+    .caso input { -webkit-appearance: none; appearance: none;
+                  border: 1px solid #555; border-radius: 0; }
+    .caso:has(input:checked) { opacity: 1; background: #fff; }
+  }
+</style>
+
+<div class="envoltura">
+
+<header>
+  <div class="filete"></div>
+  <div class="marca">Inetum &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
+  <h1>Ronda de QA — 156 casos de prueba</h1>
+  <p class="bajada">
+    Primero cómo funciona la plataforma y dónde ya han aparecido errores.
+    Después los casos, marcables a medida que se ejecutan.
+  </p>
+</header>
+
+<div class="prosa">
+<h3>1.1 Dónde se prueba</h3>
+<p><strong>Todo se prueba aquí</strong>, desde el navegador. No hace falta instalar nada.</p>
+<div class="nota">### https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io</div>
+<p><strong>La primera carga tarda 10-30 segundos</strong> si nadie ha usado la aplicación en un rato: se apaga sola cuando está ociosa para no gastar. A partir de ahí va rápida. <strong>No es un fallo</strong> — es lo primero con lo que te vas a topar.</p>
+<p>Tres casos del bloque INF y la limpieza final los ejecuta el equipo de desarrollo, no tú; están marcados como tales.</p>
+<h3>1.2 Tus cuentas</h3>
+<p>El plan recorre los tres roles, así que hacen falta tres accesos. Todas entran por <strong>&quot;Iniciar sesión con Microsoft&quot;</strong>.</p>
+<div class="scroll"><table><thead><tr><th>Cuenta (UPN de Entra)</th><th>Rol</th><th>Cuándo usarla</th></tr></thead><tbody><tr><td><code>erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com</code></td><td>Ingeniero</td><td><strong>Tu cuenta.</strong> Bloques AUT, SSO, RBAC, NOV y HOR</td></tr><tr><td><code>qa.pm@inetumoffshore.onmicrosoft.com</code></td><td>PM</td><td>Bloques SOL, CES, LIB y la parte de PM en HAP</td></tr><tr><td><code>qa.admin@inetumoffshore.onmicrosoft.com</code></td><td>Admin</td><td>Bloques MAE, APR, la aprobación de novedades y la parte de Admin en HAP</td></tr></tbody></table></div>
+<div class="nota"><strong><code>qa.pm</code> y <code>qa.admin</code> son cuentas de prueba creadas para esta ronda.</strong> Se usan para no tener que cambiarle el rol a nadie de verdad. <strong><code>qa.admin</code> puede aprobar y revocar asignaciones reales</strong>, así que hay que desactivarlas en Entra cuando termine la ronda.</div>
+<p>Cuentas de apoyo, para casos concretos:</p>
+<div class="scroll"><table><thead><tr><th>Cuenta</th><th>Rol</th><th>Para qué</th></tr></thead><tbody><tr><td><code>test.ingeniero@inetumoffshore.onmicrosoft.com</code></td><td>Ingeniero</td><td><strong>Sin asignaciones</strong>: solo para HOR-10</td></tr><tr><td><code>carmen.leon@inetumoffshore.onmicrosoft.com</code></td><td>PM</td><td><strong>PM ajeno</strong> a <code>QA-001</code>: solo para HAP-02</td></tr></tbody></table></div>
+<h3>1.3 Datos preparados para ti</h3>
+<p>Tres proyectos de prueba, cada uno con un papel distinto:</p>
+<div class="scroll"><table><thead><tr><th>Proyecto</th><th>PM</th><th>Estado</th><th>Para qué</th></tr></thead><tbody><tr><td><code>QA-001</code> Portal de Clientes QA</td><td><code>qa.pm</code></td><td>Activo</td><td><strong>Estás asignada.</strong> Aparece en <code>/horas/</code> dentro del rango</td></tr><tr><td><code>QA-002</code> Migración SAP QA</td><td><code>carmen.leon</code></td><td>Activo</td><td>PM distinto: sirve para comprobar que la cola de aprobación filtra</td></tr><tr><td><code>QA-003</code> Mantenimiento Legacy QA</td><td><code>qa.pm</code></td><td><strong>Cerrado</strong></td><td>Comprobar que un proyecto cerrado <strong>no</strong> aparece donde no debe</td></tr></tbody></table></div>
+<ul><li><strong>Tu asignación aprobada a <code>QA-001</code></strong> va del <strong>2026-08-06 a hoy</strong>. Ese rango es lo que hace verificable el filtro: dentro, <code>QA-001</code> aparece en el desplegable de <code>/horas/</code>; fuera, desaparece (HOR-11 y HOR-12).</li><li><code>qa.pm</code> también tiene recurso y asignación, para poder probar que un PM legaliza sus propias horas (HOR-27).</li><li>Proyectos internos: <code>INT-DEPART</code>, <code>INT-MGMT</code> (no facturables). Salen <strong>siempre</strong>, con o sin asignación.</li><li>Actividades sin proyecto: <strong>Entrenamiento</strong> y <strong>Estudio</strong>. <code>Formación</code> está retirada y <strong>no debe aparecer</strong>.</li><li>Jornada: <strong>lunes a jueves 8,5 h · viernes 8 h</strong> (42 h semanales desde 2026-07-15).</li></ul>
+<div class="nota"><strong>Al terminar la ronda</strong>, avisa al equipo: retiran los proyectos de prueba, tus asignaciones a ellos y las cuentas <code>qa.*</code> con un solo comando. No tienes que deshacer nada tú.</div>
+<h3>1.4 Orden sugerido</h3>
+<p>El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.</p>
+<ol><li>1. <strong>AUT y SSO</strong> con tu cuenta — confirma que entras y con qué rol.</li><li>2. <strong>RBAC</strong> alternando las tres cuentas.</li><li>3. <strong>MAE y CAL</strong> con <code>qa.admin</code> — deja los datos listos.</li><li>4. <strong>SOL, CES, LIB</strong> con <code>qa.pm</code>; sus aprobaciones con <code>qa.admin</code>.</li><li>5. <strong>NOV</strong> con tu cuenta; las aprobaciones con <code>qa.admin</code>.</li><li>6. <strong>HOR</strong> con tu cuenta — es el bloque más largo.</li><li>7. <strong>HAP</strong> con <code>qa.pm</code> y <code>qa.admin</code>, sobre los días que registraste en el paso 6.</li><li>8. <strong>DASH, AUD, INF</strong> al final.</li></ol>
+<hr>
+</div>
+
+<hr>
+
+<div class="prosa">
+<p>Esta primera parte no lista casos de prueba: explica <strong>cómo está pensado el sistema</strong> para que puedas diseñar los tuyos. Los casos vienen después.</p>
+<p>Lo escribe quien construyó la aplicación, así que incluye lo que normalmente no se cuenta: dónde ya han aparecido errores y qué partes son frágiles.</p>
+<hr>
+<h2>1. Qué es esto</h2>
+<p>Una herramienta interna para <strong>~30 ingenieros</strong> que sustituye una planilla de Excel. Hace dos cosas que se miran entre sí:</p>
+<div class="scroll"><table><thead><tr><th></th><th>Quién</th><th>Qué responde</th></tr></thead><tbody><tr><td><strong>Planificación</strong> (asignaciones)</td><td>El PM</td><td><em>&quot;Qué vamos a hacer&quot;</em> — comprometo a Ana con el proyecto X por 40 h</td></tr><tr><td><strong>Legalización</strong> (horas)</td><td>La propia persona</td><td><em>&quot;Qué hicimos&quot;</em> — Ana declara en qué se le fue cada día</td></tr></tbody></table></div>
+<p><strong>Que las dos no coincidan no es un fallo: es el producto.</strong> Si a alguien se le asignaron 40 h y cargó 63, eso es una desviación que antes nadie veía hasta abrir la planilla.</p>
+<p>Esa distinción explica muchas decisiones. Por ejemplo, las horas se registran contra el <strong>proyecto</strong> y no contra la asignación: alguien puede acabar trabajando en algo que nadie le asignó, y el sistema tiene que poder recogerlo en vez de impedirlo.</p>
+<hr>
+<h2>2. Los tres roles</h2>
+<div class="scroll"><table><thead><tr><th>Rol</th><th>En una frase</th><th>Puntos sensibles</th></tr></thead><tbody><tr><td><strong>Ingeniero</strong></td><td>Registra sus horas y sus vacaciones</td><td><strong>Nunca</strong> debe ver costos ni tarifas. Solo ve <strong>sus</strong> datos</td></tr><tr><td><strong>PM</strong></td><td>Pide recursos para sus proyectos y aprueba las horas que se les imputan</td><td>Ve costos. <strong>No</strong> puede aprobar asignaciones</td></tr><tr><td><strong>Admin</strong></td><td>Aprueba asignaciones y administra los catálogos</td><td>Puede todo. Es el respaldo cuando un PM no está</td></tr></tbody></table></div>
+<p>El rol <strong>no vive en la aplicación</strong>: viene de Microsoft Entra ID y se sincroniza en cada inicio de sesión. Si a alguien le cambian el rol en Entra, cambia en la aplicación la próxima vez que entre.</p>
+<hr>
+<h2>3. Las reglas que nunca deben romperse</h2>
+<p>Si encuentras una forma de saltarte alguna de estas, es un fallo grave aunque la pantalla no dé error.</p>
+<ol><li>1. <strong>El Ingeniero nunca ve costos ni tarifas.</strong> En ninguna pantalla, ninguna API, ningún informe. Un usuario sin rol asignado tampoco.</li><li>2. <strong>Nada se borra de verdad.</strong> Todo es <em>soft-delete</em>: la fila se queda en la base marcada como eliminada. Vale tanto para el botón de la ficha como para el borrado masivo de la lista.</li><li>3. <strong>El registro de auditoría no se edita ni se borra.</strong> Solo se añade.</li><li>4. <strong>Nadie supera su jornada.</strong> Ni al asignar (8,5 h/día máximo entre todos los proyectos) ni al legalizar.</li><li>5. <strong>Solo lo aprobado cuenta.</strong> Una vacación pendiente no bloquea capacidad. Una liberación solicitada no libera cupo. Una asignación solicitada no ocupa a nadie.</li><li>6. <strong>Un día de horas aceptado es inmutable.</strong> Solo quien aprueba puede devolverlo, y con motivo.</li><li>7. <strong>El día tiene que cuadrar exacto.</strong> Ni más ni menos que la jornada.</li><li>8. <strong>El SSO no crea cuentas duplicadas.</strong> Quien ya existe entra en su cuenta, con su historial.</li></ol>
+<hr>
+<h2>4. Los estados</h2>
+<p>Cuatro máquinas de estado. La mayoría de los errores interesantes están en las transiciones.</p>
+<p><strong>Asignación</strong> — la pide un PM, la aprueba un Admin</p>
+<pre>SOLICITADA ──► APROBADA ──► REVOCADA
+     └───────► RECHAZADA</pre>
+<p>Solo <code>APROBADA</code> consume capacidad.</p>
+<p><strong>Liberación</strong> — congela temporalmente una asignación</p>
+<pre>SOLICITADA ──► APROBADA ──► ANULADA
+     └───────► RECHAZADA</pre>
+<p>Al aprobar hay que elegir política: <strong>RECOMPUTAR</strong> (empuja la fecha de fin, conserva horas) o <strong>REDUCIR</strong> (mantiene la fecha, baja las horas).</p>
+<p><strong>Novedad</strong> (vacaciones o permiso) — la pide la persona, la aprueba un Admin</p>
+<pre>PENDIENTE ──► APROBADA
+    ├───────► RECHAZADA
+    └───────► (cancelada por quien la pidió, solo mientras esté pendiente)</pre>
+<p>Solo <code>APROBADA</code> hace que esos días dejen de ser hábiles.</p>
+<p><strong>Día de horas</strong> — lo registra la persona, lo aprueba el PM</p>
+<pre>ABIERTO ──► REGISTRADO ──► APROBADO
+   ▲              │
+   └── devolver ──┘   (con motivo obligatorio)</pre>
+<hr>
+<h2>5. Vocabulario del dominio</h2>
+<p><strong>Jornada.</strong> Lunes a jueves <strong>8,5 h</strong>, viernes <strong>8 h</strong> — 42 h semanales. Es la jornada legal colombiana desde el 15 de julio de 2026. Solo se gestionan recursos de Colombia.</p>
+<p><strong>Día hábil.</strong> No lo es un fin de semana, un festivo de Colombia, un día no laborable de empresa, ni un día con <strong>ausencia aprobada</strong> de esa persona. En un día no hábil no hay horas que registrar.</p>
+<p><strong>Facturable vs interno.</strong> Un proyecto interno (<code>INT-DEPART</code>, <code>INT-MGMT</code>) es un proyecto normal marcado como no facturable. Las horas de estudio y entrenamiento tampoco son facturables. Esta separación es la que alimenta el informe de horas cobrables.</p>
+<p><strong>Bench.</strong> Alguien sin carga asignada ese día.</p>
+<p><strong>Cesión de horas.</strong> Pasar horas de una asignación a otra. Mientras el destino no se apruebe, las horas quedan <strong>reservadas</strong>: la carga no baja para terceros, para que nadie ocupe ese cupo.</p>
+<p><strong>Liberación.</strong> Congelar una ventana de una asignación para que el recurso quede libre en esos días.</p>
+<p><strong>Capacidad cruzada.</strong> Nadie puede tener más de 8,5 h/día sumando <strong>todos</strong> sus proyectos. Se valida al aprobar.</p>
+<hr>
+<h2>6. Los dos alias de identidad</h2>
+<p>Esto es peculiar de este despliegue y conviene entenderlo, porque si se rompe <strong>no da ningún error visible</strong>.</p>
+<p>El tenant de Microsoft no tiene verificado el dominio corporativo. Las cuentas son <code>nombre@inetumoffshore.onmicrosoft.com</code>, pero en la plataforma las personas son <code>nombre@inetum.com</code>.</p>
+<ul><li><strong>Alias de dominio.</strong> Al entrar, el sistema traduce el dominio. Tu cuenta <code>erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com</code> entra en la cuenta existente <code>erika.castiblanco-monroy@inetum.com</code>.</li><li><strong>Alias de usuario.</strong> Para cuentas cuyo nombre no deriva de un email de negocio: <code>admin@inetumoffshore…</code> entra como el superusuario <code>inetum_admin</code>.</li></ul>
+<p><strong>Cómo se rompería sin avisar:</strong> en vez de entrar en tu cuenta, crearía una nueva vacía. La pantalla se vería perfecta; simplemente habría dos &quot;Erika&quot; y el historial se quedaría en la otra. <strong>Por eso hay un caso que cuenta los usuarios antes y después de entrar</strong> (SSO-05).</p>
+<hr>
+<h2>7. Dónde ya han aparecido errores</h2>
+<p>No es una lista teórica: todos estos se encontraron durante el desarrollo. Son las zonas donde merece la pena insistir.</p>
+<p><strong>Decimales con coma.</strong> El sistema está en español, así que Django escribe <code>8,5</code>. Cuando ese número llega a JavaScript, <code>parseFloat(&quot;8,5&quot;)</code> devuelve <strong>8</strong> — corta en la coma. Provocó que la jornada valiera 8 en el navegador y el día no cuadrara nunca. <em>Prueba cualquier cosa con medias horas y mira si los totales cuadran.</em></p>
+<p><strong>Borrado individual vs masivo.</strong> Borrar desde la ficha y borrar seleccionando en la lista son <strong>dos caminos distintos</strong> en Django. El masivo se saltaba el soft-delete y borraba de verdad. <em>Cuando pruebes borrados, prueba los dos.</em></p>
+<p><strong>Comentarios que se imprimen.</strong> Los comentarios de plantilla de una sola línea, partidos en dos, se renderizan como texto visible. Pasó tres veces. <em>Si ves texto raro entre llaves, es esto.</em></p>
+<p><strong>Orden de operaciones.</strong> Al aprobar una vacación que cruza asignaciones, los ajustes tienen que hacerse <strong>antes</strong> de marcar la ausencia como aprobada; al revés, los días ya no son hábiles y el cálculo da cero. <em>Prueba aprobar ausencias sobre días ocupados.</em></p>
+<p><strong>Mensajes que mienten.</strong> Aprobar dos veces daba <em>&quot;no eres PM de este proyecto&quot;</em> en lugar de <em>&quot;ya está aprobado&quot;</em>. El permiso y el estado son preguntas distintas. <em>Cuando un mensaje de error te desoriente, repórtalo: probablemente esté mezclando dos cosas.</em></p>
+<p><strong>Concurrencia.</strong> Varias pantallas releen el dato bajo bloqueo antes de actuar, porque con dos pestañas abiertas se podía cerrar dos veces el mismo día o aprobar dos veces. <em>Prueba con dos pestañas.</em></p>
+<hr>
+<h2>8. Cosas que no son fallos</h2>
+<ol><li>1. <strong>La primera carga tarda 10-30 s</strong> tras un rato sin uso. La aplicación se apaga sola cuando nadie la usa, para no cobrar por estar encendida.</li><li>2. <strong>Una sola réplica</strong>, sin autoescalado. Decisión consciente hasta ver rendimiento real.</li><li>3. <strong>No hay horas extra.</strong> Un día no puede pasar de la jornada.</li><li>4. <strong>No se calcula dinero por hora.</strong> Se registran horas; la nómina vive en otro sistema.</li><li>5. <strong>Un solo PM basta.</strong> Si un día mezcla proyectos de varios PM, cualquiera de ellos lo aprueba entero.</li><li>6. <strong>No existe pedir reapertura</strong> de un día ya aprobado. Solo quien aprueba puede devolver uno <em>registrado</em>.</li></ol>
+<hr>
+<h2>9. Cómo reportar</h2>
+<p>Para cada fallo:</p>
+<ul><li><strong>ID del caso</strong> si venía del plan, o una descripción corta si lo encontraste explorando.</li><li><strong>Con qué cuenta.</strong> Imprescindible: la misma pantalla enseña cosas distintas según el rol, y sin ese dato el fallo no se puede reproducir. El nombre y el rol salen arriba a la derecha.</li><li><strong>Qué esperabas y qué pasó.</strong></li><li><strong>Captura</strong>, y la fecha si es algo del calendario (los festivos y los fines de semana cambian el comportamiento).</li></ul>
+<p>Si algo te parece raro pero no sabes si es un fallo, repórtalo igual. Varias de las decisiones de esta lista se tomaron a ojo y pueden estar mal: que no dé error no significa que sea correcto.</p>
+</div>
+
+<hr>
+
+<h2>Los casos</h2>
+<p class="prosa">
+  Marca cada uno al ejecutarlo. El progreso se guarda en este navegador, así que
+  puedes cerrar la página y volver.
+</p>
+
+<div class="indice"><a href="#b-AUT"><span>AUT</span><b>10</b></a><a href="#b-SSO"><span>SSO</span><b>12</b></a><a href="#b-RBAC"><span>RBAC</span><b>9</b></a><a href="#b-MAE"><span>MAE</span><b>12</b></a><a href="#b-CAL"><span>CAL</span><b>8</b></a><a href="#b-SOL"><span>SOL</span><b>10</b></a><a href="#b-APR"><span>APR</span><b>7</b></a><a href="#b-CES"><span>CES</span><b>5</b></a><a href="#b-LIB"><span>LIB</span><b>7</b></a><a href="#b-NOV"><span>NOV</span><b>16</b></a><a href="#b-HOR"><span>HOR</span><b>28</b></a><a href="#b-HAP"><span>HAP</span><b>17</b></a><a href="#b-DASH"><span>DASH</span><b>5</b></a><a href="#b-AUD"><span>AUD</span><b>4</b></a><a href="#b-INF"><span>INF</span><b>6</b></a></div>
+
+<div class="progreso">
+  <span class="cifra"><span id="hechos">0</span> / 156</span>
+  <div class="barra"><span id="barra"></span></div>
+  <button type="button" id="reiniciar">Reiniciar</button>
+</div>
+
+<section class="bloque" id="b-AUT">
+<div class="bloque-cab"><span class="sigla">AUT</span><h3>Autenticación</h3><span class="cuenta">10 casos</span></div>
+
+<label class="caso" for="c-AUT-01"><input type="checkbox" id="c-AUT-01" data-caso="AUT-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-01</span><span class="ctit">Login local correcto</span></div><div class="campo"><span class="etq">Pasos</span><code>/login/</code> con usuario y contraseña válidos</div><div class="campo"><span class="etq">Esperado</span>Entra al dashboard</div></div></label>
+<label class="caso" for="c-AUT-02"><input type="checkbox" id="c-AUT-02" data-caso="AUT-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-02</span><span class="ctit">Login incorrecto</span></div><div class="campo"><span class="etq">Pasos</span>Contraseña errónea</div><div class="campo"><span class="etq">Esperado</span>Vuelve al formulario con error; <strong>no revela</strong> si el usuario existe</div></div></label>
+<label class="caso" for="c-AUT-03"><input type="checkbox" id="c-AUT-03" data-caso="AUT-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-03</span><span class="ctit">Bloqueo tras 5 intentos</span></div><div class="campo"><span class="etq">Pasos</span>Fallar 5 veces; intentar una 6ª <strong>con la contraseña correcta</strong></div><div class="campo"><span class="etq">Esperado</span>403 &quot;Demasiados intentos fallidos. Espere 15 minutos…&quot;</div></div></label>
+<label class="caso" for="c-AUT-04"><input type="checkbox" id="c-AUT-04" data-caso="AUT-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-04</span><span class="ctit">El bloqueo no es global</span></div><div class="campo"><span class="etq">Pasos</span>Con AUT-03 activo, loguear otra cuenta en otro navegador</div><div class="campo"><span class="etq">Esperado</span>Entra sin problema</div></div></label>
+<label class="caso" for="c-AUT-05"><input type="checkbox" id="c-AUT-05" data-caso="AUT-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-05</span><span class="ctit">Rutas protegidas sin sesión</span></div><div class="campo"><span class="etq">Pasos</span>Abrir <code>/dashboard/</code>, <code>/horas/</code>, <code>/novedades/</code> sin sesión</div><div class="campo"><span class="etq">Esperado</span>Redirige a <code>/login/?next=…</code> y vuelve a la página pedida tras entrar</div></div></label>
+<label class="caso" for="c-AUT-06"><input type="checkbox" id="c-AUT-06" data-caso="AUT-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-06</span><span class="ctit">API sin sesión</span></div><div class="campo"><span class="etq">Pasos</span>GET <code>/api/asignaciones/</code> sin sesión</div><div class="campo"><span class="etq">Esperado</span>403, sin exponer datos</div></div></label>
+<label class="caso" for="c-AUT-07"><input type="checkbox" id="c-AUT-07" data-caso="AUT-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-07</span><span class="ctit">Logout</span></div><div class="campo"><span class="etq">Pasos</span><code>/logout/</code></div><div class="campo"><span class="etq">Esperado</span>Cierra sesión y vuelve a <code>/login/</code></div></div></label>
+<label class="caso" for="c-AUT-08"><input type="checkbox" id="c-AUT-08" data-caso="AUT-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-08</span><span class="ctit">El login del admin usa la página propia</span></div><div class="campo"><span class="etq">Pasos</span>Abrir <code>/admin/</code> sin sesión</div><div class="campo"><span class="etq">Esperado</span>Redirige a <code>/login/?next=/admin/</code>, no al login de Django</div></div></label>
+<label class="caso" for="c-AUT-09"><input type="checkbox" id="c-AUT-09" data-caso="AUT-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-09</span><span class="ctit"><strong>Quién está dentro</strong></span></div><div class="campo"><span class="etq">Pasos</span>Logueado con cualquier cuenta, mirar la esquina superior derecha</div><div class="campo"><span class="etq">Esperado</span>Muestra nombre y <strong>rol</strong> (Admin / PM / Ingeniero) y el botón de salir</div></div></label>
+<label class="caso" for="c-AUT-10"><input type="checkbox" id="c-AUT-10" data-caso="AUT-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUT-10</span><span class="ctit">El rol mostrado coincide</span></div><div class="campo"><span class="etq">Pasos</span>Repetir AUT-09 con las tres cuentas de distinto rol</div><div class="campo"><span class="etq">Esperado</span>La etiqueta cambia correctamente en cada una</div></div></label>
+</section>
+<section class="bloque" id="b-SSO">
+<div class="bloque-cab"><span class="sigla">SSO</span><h3>Entra ID</h3><span class="cuenta">12 casos</span></div>
+
+<label class="caso" for="c-SSO-01"><input type="checkbox" id="c-SSO-01" data-caso="SSO-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-01</span><span class="ctit">El botón aparece</span></div><div class="campo"><span class="etq">Pasos</span>Abrir <code>/login/</code> en Azure</div><div class="campo"><span class="etq">Esperado</span>Se ve &quot;Iniciar sesión con Microsoft&quot; <strong>y</strong> el formulario de usuario/contraseña</div></div></label>
+<label class="caso" for="c-SSO-02"><input type="checkbox" id="c-SSO-02" data-caso="SSO-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-02</span><span class="ctit">Redirección a Microsoft</span></div><div class="campo"><span class="etq">Pasos</span>Pulsar el botón</div><div class="campo"><span class="etq">Esperado</span>Lleva a <code>login.microsoftonline.com</code>, <strong>sin</strong> pantalla de &quot;se necesita aprobación del administrador&quot;</div></div></label>
+<label class="caso" for="c-SSO-03"><input type="checkbox" id="c-SSO-03" data-caso="SSO-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-03</span><span class="ctit">Primer inicio pide cambiar contraseña</span></div><div class="campo"><span class="etq">Pasos</span>Entrar con una cuenta nueva</div><div class="campo"><span class="etq">Esperado</span>Microsoft obliga a cambiarla antes de continuar</div></div></label>
+<label class="caso" for="c-SSO-04"><input type="checkbox" id="c-SSO-04" data-caso="SSO-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-04</span><span class="ctit"><strong>Alias de dominio</strong></span></div><div class="campo"><span class="etq">Pasos</span>Entrar con tu cuenta <code>erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com</code></div><div class="campo"><span class="etq">Esperado</span>Entras en tu cuenta <strong>existente</strong> <code>erika.castiblanco-monroy@inetum.com</code>, con tu historial. <strong>No</strong> se crea un usuario nuevo</div></div></label>
+<label class="caso" for="c-SSO-05"><input type="checkbox" id="c-SSO-05" data-caso="SSO-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-05</span><span class="ctit">El total de usuarios no crece</span></div><div class="campo"><span class="etq">Pasos</span>Contar usuarios en <code>/admin/auth/user/</code> antes y después de SSO-04</div><div class="campo"><span class="etq">Esperado</span>El número <strong>no cambia</strong></div></div></label>
+<label class="caso" for="c-SSO-06"><input type="checkbox" id="c-SSO-06" data-caso="SSO-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-06</span><span class="ctit"><strong>Alias de usuario</strong></span></div><div class="campo"><span class="etq">Pasos</span>Entrar como <code>admin@inetumoffshore.onmicrosoft.com</code></div><div class="campo"><span class="etq">Esperado</span>Entra como <code>inetum_admin</code>; su email sigue siendo <code>jose.barrera-cocunubo@inetum.com</code>, <strong>no</strong> <code>admin@inetum.com</code></div></div></label>
+<label class="caso" for="c-SSO-07"><input type="checkbox" id="c-SSO-07" data-caso="SSO-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-07</span><span class="ctit">Rol sincronizado desde Entra</span></div><div class="campo"><span class="etq">Pasos</span>Entrar como <code>qa.pm@…</code></div><div class="campo"><span class="etq">Esperado</span>Queda en el grupo <strong>PM</strong>; ve Solicitudes, Cesiones, Liberaciones y Aprobar horas</div></div></label>
+<label class="caso" for="c-SSO-08"><input type="checkbox" id="c-SSO-08" data-caso="SSO-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-08</span><span class="ctit">Sin rol en Entra no se entra</span></div><div class="campo"><span class="etq">Pasos</span>Quitar el rol a <code>test.ingeniero</code> en Entra e intentar entrar</div><div class="campo"><span class="etq">Esperado</span>Microsoft impide el acceso a la aplicación</div></div></label>
+<label class="caso" for="c-SSO-09"><input type="checkbox" id="c-SSO-09" data-caso="SSO-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-09</span><span class="ctit">Cambio de rol en Entra manda</span></div><div class="campo"><span class="etq">Pasos</span>Cambiar en Entra el rol de una cuenta de Ingeniero a PM y volver a entrar</div><div class="campo"><span class="etq">Esperado</span>En Django cambia de grupo; el menú se ajusta</div></div></label>
+<label class="caso" for="c-SSO-10"><input type="checkbox" id="c-SSO-10" data-caso="SSO-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-10</span><span class="ctit">El login local sobrevive</span></div><div class="campo"><span class="etq">Pasos</span>Con SSO activo, entrar con usuario y contraseña locales</div><div class="campo"><span class="etq">Esperado</span>Funciona igual</div></div></label>
+<label class="caso" for="c-SSO-11"><input type="checkbox" id="c-SSO-11" data-caso="SSO-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-11</span><span class="ctit">El usuario SSO no queda atrapado</span></div><div class="campo"><span class="etq">Pasos</span>Entrar por SSO con una cuenta que tuviera cambio de contraseña pendiente</div><div class="campo"><span class="etq">Esperado</span>Entra normalmente; <strong>no</strong> lo manda al formulario de cambio</div></div></label>
+<label class="caso" for="c-SSO-12"><input type="checkbox" id="c-SSO-12" data-caso="SSO-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SSO-12</span><span class="ctit">Aviso de caducidad</span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, mirar la cabecera</div><div class="campo"><span class="etq">Esperado</span>Solo aparece la franja si faltan menos de 60 días para que caduque el secreto. Hoy <strong>no</strong> debe verse (caduca 2028-08-25)</div></div></label>
+</section>
+<section class="bloque" id="b-RBAC">
+<div class="bloque-cab"><span class="sigla">RBAC</span><h3>Control de acceso</h3><span class="cuenta">9 casos</span></div>
+
+<label class="caso" for="c-RBAC-01"><input type="checkbox" id="c-RBAC-01" data-caso="RBAC-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-01</span><span class="ctit"><strong>El Ingeniero nunca ve costos</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, recorrer dashboard, detalle de recurso, <code>/horas/</code> y las APIs accesibles</div><div class="campo"><span class="etq">Esperado</span>En <strong>ninguna</strong> pantalla aparece tarifa ni costo</div></div></label>
+<label class="caso" for="c-RBAC-02"><input type="checkbox" id="c-RBAC-02" data-caso="RBAC-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-02</span><span class="ctit">El Ingeniero no ve emails ajenos</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, GET <code>/api/dashboard/ocupacion/</code></div><div class="campo"><span class="etq">Esperado</span>La respuesta no trae <code>email</code></div></div></label>
+<label class="caso" for="c-RBAC-03"><input type="checkbox" id="c-RBAC-03" data-caso="RBAC-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-03</span><span class="ctit">Menú por rol</span></div><div class="campo"><span class="etq">Pasos</span>Comparar el menú superior como Ingeniero, PM y Admin</div><div class="campo"><span class="etq">Esperado</span>El Ingeniero <strong>no</strong> ve Solicitudes, Cesiones, Liberaciones ni Aprobar horas. Nadie ve enlaces que devuelvan 403</div></div></label>
+<label class="caso" for="c-RBAC-04"><input type="checkbox" id="c-RBAC-04" data-caso="RBAC-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-04</span><span class="ctit">Vistas de PM cerradas al Ingeniero</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, abrir <code>/solicitud/</code>, <code>/cesion/</code>, <code>/liberacion/</code>, <code>/horas/aprobar/</code></div><div class="campo"><span class="etq">Esperado</span>403 en las cuatro</div></div></label>
+<label class="caso" for="c-RBAC-05"><input type="checkbox" id="c-RBAC-05" data-caso="RBAC-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-05</span><span class="ctit">Revisar novedades es solo de Admin</span></div><div class="campo"><span class="etq">Pasos</span>Abrir <code>/novedades/revisar/</code> como PM</div><div class="campo"><span class="etq">Esperado</span>403</div></div></label>
+<label class="caso" for="c-RBAC-06"><input type="checkbox" id="c-RBAC-06" data-caso="RBAC-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-06</span><span class="ctit"><strong>El Ingeniero solo se ve a sí mismo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, abrir <code>/dashboard/</code></div><div class="campo"><span class="etq">Esperado</span>Aparece <strong>una sola fila</strong>: la suya. No ve la ocupación ni el bench del equipo</div></div></label>
+<label class="caso" for="c-RBAC-07"><input type="checkbox" id="c-RBAC-07" data-caso="RBAC-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-07</span><span class="ctit">El PM ve a todo el equipo</span></div><div class="campo"><span class="etq">Pasos</span>Mismo dashboard como PM</div><div class="campo"><span class="etq">Esperado</span>Aparecen todos los recursos asignables</div></div></label>
+<label class="caso" for="c-RBAC-08"><input type="checkbox" id="c-RBAC-08" data-caso="RBAC-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-08</span><span class="ctit">El PM no aprueba asignaciones</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, intentar aprobar una asignación desde <code>/admin/</code></div><div class="campo"><span class="etq">Esperado</span>Error &quot;Se requiere rol Admin&quot;; el estado no cambia</div></div></label>
+<label class="caso" for="c-RBAC-09"><input type="checkbox" id="c-RBAC-09" data-caso="RBAC-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">RBAC-09</span><span class="ctit">Solo Admin escribe catálogos</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, POST <code>/api/recursos/</code></div><div class="campo"><span class="etq">Esperado</span>403. Como Admin → 201</div></div></label>
+</section>
+<section class="bloque" id="b-MAE">
+<div class="bloque-cab"><span class="sigla">MAE</span><h3>Datos maestros</h3><span class="cuenta">12 casos</span></div>
+
+<label class="caso" for="c-MAE-01"><input type="checkbox" id="c-MAE-01" data-caso="MAE-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-01</span><span class="ctit">Crear recurso</span></div><div class="campo"><span class="etq">Pasos</span><code>/admin/core/recurso/add/</code> con nombre, email y banda</div><div class="campo"><span class="etq">Esperado</span>Se crea y aparece en el dashboard</div></div></label>
+<label class="caso" for="c-MAE-02"><input type="checkbox" id="c-MAE-02" data-caso="MAE-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-02</span><span class="ctit">Email único</span></div><div class="campo"><span class="etq">Pasos</span>Crear otro recurso con un email ya usado</div><div class="campo"><span class="etq">Esperado</span>Error de validación</div></div></label>
+<label class="caso" for="c-MAE-03"><input type="checkbox" id="c-MAE-03" data-caso="MAE-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-03</span><span class="ctit"><strong>Crear proyecto de cliente</strong></span></div><div class="campo"><span class="etq">Pasos</span><code>/admin/core/proyecto/add/</code>, código con formato SAP, <code>facturable</code> marcado</div><div class="campo"><span class="etq">Esperado</span>Se crea; aparece en el buscador de solicitudes</div></div></label>
+<label class="caso" for="c-MAE-04"><input type="checkbox" id="c-MAE-04" data-caso="MAE-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-04</span><span class="ctit"><strong>Crear proyecto interno</strong></span></div><div class="campo"><span class="etq">Pasos</span>Igual pero <strong>desmarcando <code>facturable</code></strong></div><div class="campo"><span class="etq">Esperado</span>Se crea; aparece en <code>/horas/</code> para <strong>todos</strong>, incluso sin asignación</div></div></label>
+<label class="caso" for="c-MAE-05"><input type="checkbox" id="c-MAE-05" data-caso="MAE-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-05</span><span class="ctit">Código SAP no válido solo avisa</span></div><div class="campo"><span class="etq">Pasos</span>Crear con código <code>PRUEBA-1</code></div><div class="campo"><span class="etq">Esperado</span>Se guarda con aviso (<code>SAP_VALIDACION_ESTRICTA=False</code>)</div></div></label>
+<label class="caso" for="c-MAE-06"><input type="checkbox" id="c-MAE-06" data-caso="MAE-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-06</span><span class="ctit">Editar estado y facturable desde la lista</span></div><div class="campo"><span class="etq">Pasos</span>En <code>/admin/core/proyecto/</code>, cambiar <code>estado</code> y <code>facturable</code> sin entrar al detalle</div><div class="campo"><span class="etq">Esperado</span>Se guardan los cambios</div></div></label>
+<label class="caso" for="c-MAE-07"><input type="checkbox" id="c-MAE-07" data-caso="MAE-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-07</span><span class="ctit">Tarifa con vigencia</span></div><div class="campo"><span class="etq">Pasos</span>Añadir una <code>TarifaVigente</code> a un recurso con <code>fecha_desde</code> futura</div><div class="campo"><span class="etq">Esperado</span>Se guarda; el costo de asignaciones activas se recomputa (aviso en pantalla)</div></div></label>
+<label class="caso" for="c-MAE-08"><input type="checkbox" id="c-MAE-08" data-caso="MAE-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-08</span><span class="ctit">La tarifa es append-only</span></div><div class="campo"><span class="etq">Pasos</span>Intentar <strong>editar</strong> una tarifa ya registrada</div><div class="campo"><span class="etq">Esperado</span>No se puede modificar, solo añadir otra</div></div></label>
+<label class="caso" for="c-MAE-09"><input type="checkbox" id="c-MAE-09" data-caso="MAE-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-09</span><span class="ctit"><strong>Soft-delete individual</strong></span></div><div class="campo"><span class="etq">Pasos</span>Borrar un recurso desde su ficha</div><div class="campo"><span class="etq">Esperado</span>Desaparece de las listas pero la fila sigue en la base (<code>deleted_at</code> con fecha)</div></div></label>
+<label class="caso" for="c-MAE-10"><input type="checkbox" id="c-MAE-10" data-caso="MAE-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-10</span><span class="ctit"><strong>Soft-delete masivo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Anota el código de un proyecto de prueba. Selecciónalo en la lista y usa &quot;Eliminar seleccionados&quot;. Después intenta <strong>crear uno nuevo con ese mismo código</strong></div><div class="campo"><span class="etq">Esperado</span>Desaparece de la lista, pero el código <strong>sigue ocupado</strong>: al crearlo da error de duplicado. Eso demuestra que la fila no se borró de verdad</div></div></label>
+<label class="caso" for="c-MAE-11"><input type="checkbox" id="c-MAE-11" data-caso="MAE-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-11</span><span class="ctit">Un recurso que sale de la empresa</span></div><div class="campo"><span class="etq">Pasos</span>Marcar <code>activo = False</code> en su ficha</div><div class="campo"><span class="etq">Esperado</span>Deja de aparecer como asignable; su historial se conserva</div></div></label>
+<label class="caso" for="c-MAE-12"><input type="checkbox" id="c-MAE-12" data-caso="MAE-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-12</span><span class="ctit">Catálogo de actividades</span></div><div class="campo"><span class="etq">Pasos</span><code>/admin/legalizacion/tipoactividad/</code></div><div class="campo"><span class="etq">Esperado</span>Se ven Proyecto, Entrenamiento y Estudio activos, y Formación <strong>inactiva</strong></div></div></label>
+</section>
+<section class="bloque" id="b-CAL">
+<div class="bloque-cab"><span class="sigla">CAL</span><h3>Calendario y jornada</h3><span class="cuenta">8 casos</span></div>
+
+<label class="caso" for="c-CAL-01"><input type="checkbox" id="c-CAL-01" data-caso="CAL-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-01</span><span class="ctit">Feriados de Colombia</span></div><div class="campo"><span class="etq">Pasos</span>GET <code>/api/calendario/feriados/?year=2026</code></div><div class="campo"><span class="etq">Esperado</span>Incluye <code>2026-07-20</code> y <code>2026-08-07</code></div></div></label>
+<label class="caso" for="c-CAL-02"><input type="checkbox" id="c-CAL-02" data-caso="CAL-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-02</span><span class="ctit">Año inválido</span></div><div class="campo"><span class="etq">Pasos</span><code>?year=abc</code> y <code>?year=1800</code></div><div class="campo"><span class="etq">Esperado</span>400 con mensaje, no error 500</div></div></label>
+<label class="caso" for="c-CAL-03"><input type="checkbox" id="c-CAL-03" data-caso="CAL-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-03</span><span class="ctit">Fecha fin salta fin de semana</span></div><div class="campo"><span class="etq">Pasos</span>Solicitud por horas: inicio lunes, 40 h, intensidad 8</div><div class="campo"><span class="etq">Esperado</span>Termina el viernes de esa semana</div></div></label>
+<label class="caso" for="c-CAL-04"><input type="checkbox" id="c-CAL-04" data-caso="CAL-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-04</span><span class="ctit">Fecha fin salta feriado</span></div><div class="campo"><span class="etq">Pasos</span>Inicio jueves 2026-07-16, 24 h, intensidad 8</div><div class="campo"><span class="etq">Esperado</span>Termina el 21; <strong>salta el lunes 20</strong></div></div></label>
+<label class="caso" for="c-CAL-05"><input type="checkbox" id="c-CAL-05" data-caso="CAL-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-05</span><span class="ctit">Día no laborable global</span></div><div class="campo"><span class="etq">Pasos</span>Crear uno y repetir un cálculo que lo cruce</div><div class="campo"><span class="etq">Esperado</span>Ese día no cuenta</div></div></label>
+<label class="caso" for="c-CAL-06"><input type="checkbox" id="c-CAL-06" data-caso="CAL-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-06</span><span class="ctit"><strong>Jornada lunes a jueves</strong></span></div><div class="campo"><span class="etq">Pasos</span>En <code>/horas/</code>, abrir un miércoles</div><div class="campo"><span class="etq">Esperado</span>La jornada exigida es <strong>8,5 h</strong></div></div></label>
+<label class="caso" for="c-CAL-07"><input type="checkbox" id="c-CAL-07" data-caso="CAL-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-07</span><span class="ctit"><strong>Jornada del viernes</strong></span></div><div class="campo"><span class="etq">Pasos</span>En <code>/horas/</code>, abrir un viernes</div><div class="campo"><span class="etq">Esperado</span>La jornada exigida es <strong>8 h</strong></div></div></label>
+<label class="caso" for="c-CAL-08"><input type="checkbox" id="c-CAL-08" data-caso="CAL-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CAL-08</span><span class="ctit">La semana suma 42 h</span></div><div class="campo"><span class="etq">Pasos</span>Sumar las jornadas de lunes a viernes</div><div class="campo"><span class="etq">Esperado</span>42 h exactas</div></div></label>
+</section>
+<section class="bloque" id="b-SOL">
+<div class="bloque-cab"><span class="sigla">SOL</span><h3>Solicitud de asignaciones (PM)</h3><span class="cuenta">10 casos</span></div>
+
+<label class="caso" for="c-SOL-01"><input type="checkbox" id="c-SOL-01" data-caso="SOL-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-01</span><span class="ctit">Buscar disponibilidad</span></div><div class="campo"><span class="etq">Pasos</span><code>/solicitud/</code> con un rango de fechas</div><div class="campo"><span class="etq">Esperado</span>Lista de recursos con días y horas disponibles</div></div></label>
+<label class="caso" for="c-SOL-02"><input type="checkbox" id="c-SOL-02" data-caso="SOL-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-02</span><span class="ctit">Crear por horas</span></div><div class="campo"><span class="etq">Pasos</span>Modo &quot;por horas&quot;: 40 h, intensidad 8</div><div class="campo"><span class="etq">Esperado</span>Calcula fecha fin sobre días hábiles; queda <strong>SOLICITADA</strong></div></div></label>
+<label class="caso" for="c-SOL-03"><input type="checkbox" id="c-SOL-03" data-caso="SOL-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-03</span><span class="ctit">Crear por días</span></div><div class="campo"><span class="etq">Pasos</span>Modo &quot;por días hábiles&quot;</div><div class="campo"><span class="etq">Esperado</span>Igual, calculando desde los días</div></div></label>
+<label class="caso" for="c-SOL-04"><input type="checkbox" id="c-SOL-04" data-caso="SOL-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-04</span><span class="ctit">Crear por rango</span></div><div class="campo"><span class="etq">Pasos</span>Modo &quot;por rango de fechas&quot;</div><div class="campo"><span class="etq">Esperado</span>Usa las fechas dadas</div></div></label>
+<label class="caso" for="c-SOL-05"><input type="checkbox" id="c-SOL-05" data-caso="SOL-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-05</span><span class="ctit">Jornada completa</span></div><div class="campo"><span class="etq">Pasos</span>Marcar &quot;jornada completa&quot;</div><div class="campo"><span class="etq">Esperado</span>Consume el tope de cada día (8,5 / 8), no una intensidad fija</div></div></label>
+<label class="caso" for="c-SOL-06"><input type="checkbox" id="c-SOL-06" data-caso="SOL-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-06</span><span class="ctit"><strong>Solicitud recurrente</strong></span></div><div class="campo"><span class="etq">Pasos</span><code>/solicitud/recurrente/</code>, varias semanas</div><div class="campo"><span class="etq">Esperado</span>Crea una <strong>serie</strong> de asignaciones de un día; todas comparten identificador de serie</div></div></label>
+<label class="caso" for="c-SOL-07"><input type="checkbox" id="c-SOL-07" data-caso="SOL-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-07</span><span class="ctit">Tope de semanas</span></div><div class="campo"><span class="etq">Pasos</span>Pedir más semanas de las permitidas</div><div class="campo"><span class="etq">Esperado</span>Error de validación</div></div></label>
+<label class="caso" for="c-SOL-08"><input type="checkbox" id="c-SOL-08" data-caso="SOL-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-08</span><span class="ctit"><strong>Capacidad cruzada 8 h/día</strong></span></div><div class="campo"><span class="etq">Pasos</span>Asignar a alguien que ya tiene 8,5 h aprobadas ese día</div><div class="campo"><span class="etq">Esperado</span>Rechaza indicando el día y las horas en conflicto</div></div></label>
+<label class="caso" for="c-SOL-09"><input type="checkbox" id="c-SOL-09" data-caso="SOL-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-09</span><span class="ctit">Costo estimado</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, ver el resumen antes de crear</div><div class="campo"><span class="etq">Esperado</span>Muestra costo estimado con la tarifa vigente de cada día</div></div></label>
+<label class="caso" for="c-SOL-10"><input type="checkbox" id="c-SOL-10" data-caso="SOL-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">SOL-10</span><span class="ctit">Solicitar no consume capacidad</span></div><div class="campo"><span class="etq">Pasos</span>Crear una solicitud y mirar el dashboard</div><div class="campo"><span class="etq">Esperado</span>La ocupación <strong>no cambia</strong> hasta aprobarla</div></div></label>
+</section>
+<section class="bloque" id="b-APR">
+<div class="bloque-cab"><span class="sigla">APR</span><h3>Aprobación de asignaciones (Admin)</h3><span class="cuenta">7 casos</span></div>
+
+<label class="caso" for="c-APR-01"><input type="checkbox" id="c-APR-01" data-caso="APR-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-01</span><span class="ctit">Aprobar</span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, aprobar una solicitud</div><div class="campo"><span class="etq">Esperado</span>Pasa a <strong>APROBADA</strong>; la ocupación aparece en el dashboard</div></div></label>
+<label class="caso" for="c-APR-02"><input type="checkbox" id="c-APR-02" data-caso="APR-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-02</span><span class="ctit">Snapshot de tarifa</span></div><div class="campo"><span class="etq">Pasos</span>Tras APR-01, mirar la asignación</div><div class="campo"><span class="etq">Esperado</span><code>tarifa_aplicada</code> y <code>costo_estimado</code> quedan rellenos</div></div></label>
+<label class="caso" for="c-APR-03"><input type="checkbox" id="c-APR-03" data-caso="APR-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-03</span><span class="ctit"><strong>Rechazar</strong></span></div><div class="campo"><span class="etq">Pasos</span>Rechazar una solicitud</div><div class="campo"><span class="etq">Esperado</span>Pasa a RECHAZADA; no consume capacidad</div></div></label>
+<label class="caso" for="c-APR-04"><input type="checkbox" id="c-APR-04" data-caso="APR-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-04</span><span class="ctit"><strong>Revocar (cancelar)</strong></span></div><div class="campo"><span class="etq">Pasos</span>Revocar una asignación ya aprobada</div><div class="campo"><span class="etq">Esperado</span>Pasa a REVOCADA; libera la capacidad; queda en auditoría</div></div></label>
+<label class="caso" for="c-APR-05"><input type="checkbox" id="c-APR-05" data-caso="APR-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-05</span><span class="ctit"><strong>Primero en aprobar gana</strong></span></div><div class="campo"><span class="etq">Pasos</span>Con dos solicitudes que se solapan para el mismo recurso, aprobar ambas</div><div class="campo"><span class="etq">Esperado</span>La primera pasa; la segunda es rechazada por capacidad</div></div></label>
+<label class="caso" for="c-APR-06"><input type="checkbox" id="c-APR-06" data-caso="APR-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-06</span><span class="ctit">Recomputo por cambio de tarifa</span></div><div class="campo"><span class="etq">Pasos</span>Registrar una tarifa nueva para un recurso con asignaciones activas</div><div class="campo"><span class="etq">Esperado</span>Se recalcula el costo; queda <code>RECOMPUTO_TARIFA</code> en auditoría con actor vacío</div></div></label>
+<label class="caso" for="c-APR-07"><input type="checkbox" id="c-APR-07" data-caso="APR-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">APR-07</span><span class="ctit">Reajustar la fecha fin</span></div><div class="campo"><span class="etq">Pasos</span>Provocar un recomputo (p. ej. aprobando una ausencia con política RECOMPUTAR)</div><div class="campo"><span class="etq">Esperado</span>La fecha fin se empuja; las horas se conservan</div></div></label>
+</section>
+<section class="bloque" id="b-CES">
+<div class="bloque-cab"><span class="sigla">CES</span><h3>Cesión de horas</h3><span class="cuenta">5 casos</span></div>
+
+<label class="caso" for="c-CES-01"><input type="checkbox" id="c-CES-01" data-caso="CES-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CES-01</span><span class="ctit">Ceder horas</span></div><div class="campo"><span class="etq">Pasos</span><code>/cesion/</code>, ceder horas de una asignación aprobada a otra</div><div class="campo"><span class="etq">Esperado</span>Crea la cesión y una asignación destino SOLICITADA</div></div></label>
+<label class="caso" for="c-CES-02"><input type="checkbox" id="c-CES-02" data-caso="CES-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CES-02</span><span class="ctit">Las horas quedan reservadas</span></div><div class="campo"><span class="etq">Pasos</span>Mirar el dashboard antes de aprobar el destino</div><div class="campo"><span class="etq">Esperado</span>La carga bruta <strong>no baja</strong> para terceros: nadie puede ocupar ese cupo</div></div></label>
+<label class="caso" for="c-CES-03"><input type="checkbox" id="c-CES-03" data-caso="CES-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CES-03</span><span class="ctit">Aprobar el destino</span></div><div class="campo"><span class="etq">Pasos</span>Aprobar la asignación destino</div><div class="campo"><span class="etq">Esperado</span>Ahora sí se descuentan de la original</div></div></label>
+<label class="caso" for="c-CES-04"><input type="checkbox" id="c-CES-04" data-caso="CES-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CES-04</span><span class="ctit"><strong>Anular la cesión</strong></span></div><div class="campo"><span class="etq">Pasos</span>Rechazar o revocar el destino</div><div class="campo"><span class="etq">Esperado</span>Las horas vuelven a la asignación original</div></div></label>
+<label class="caso" for="c-CES-05"><input type="checkbox" id="c-CES-05" data-caso="CES-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">CES-05</span><span class="ctit">No se cede más de lo que hay</span></div><div class="campo"><span class="etq">Pasos</span>Ceder más horas de las disponibles ese día</div><div class="campo"><span class="etq">Esperado</span>Error de validación</div></div></label>
+</section>
+<section class="bloque" id="b-LIB">
+<div class="bloque-cab"><span class="sigla">LIB</span><h3>Liberación de recursos</h3><span class="cuenta">7 casos</span></div>
+
+<label class="caso" for="c-LIB-01"><input type="checkbox" id="c-LIB-01" data-caso="LIB-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-01</span><span class="ctit">Solicitar liberación</span></div><div class="campo"><span class="etq">Pasos</span><code>/liberacion/</code>, elegir asignación y ventana</div><div class="campo"><span class="etq">Esperado</span>Queda <strong>SOLICITADA</strong>; no libera cupo todavía</div></div></label>
+<label class="caso" for="c-LIB-02"><input type="checkbox" id="c-LIB-02" data-caso="LIB-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-02</span><span class="ctit">Una solicitud no libera nada</span></div><div class="campo"><span class="etq">Pasos</span>Mirar el dashboard</div><div class="campo"><span class="etq">Esperado</span>La ocupación no cambia</div></div></label>
+<label class="caso" for="c-LIB-03"><input type="checkbox" id="c-LIB-03" data-caso="LIB-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-03</span><span class="ctit"><strong>Aprobar con RECOMPUTAR</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, aprobar con esa política</div><div class="campo"><span class="etq">Esperado</span>La ventana se congela; la <strong>fecha fin se empuja</strong>; las horas se conservan</div></div></label>
+<label class="caso" for="c-LIB-04"><input type="checkbox" id="c-LIB-04" data-caso="LIB-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-04</span><span class="ctit"><strong>Aprobar con REDUCIR</strong></span></div><div class="campo"><span class="etq">Pasos</span>Igual con la otra política</div><div class="campo"><span class="etq">Esperado</span>La ventana se congela; <strong>bajan las horas</strong>; la fecha fin no cambia</div></div></label>
+<label class="caso" for="c-LIB-05"><input type="checkbox" id="c-LIB-05" data-caso="LIB-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-05</span><span class="ctit">Rechazar</span></div><div class="campo"><span class="etq">Pasos</span>Rechazar una solicitud</div><div class="campo"><span class="etq">Esperado</span>No surte ningún efecto</div></div></label>
+<label class="caso" for="c-LIB-06"><input type="checkbox" id="c-LIB-06" data-caso="LIB-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-06</span><span class="ctit"><strong>Anular una aprobada</strong></span></div><div class="campo"><span class="etq">Pasos</span>Anular una liberación ya aprobada</div><div class="campo"><span class="etq">Esperado</span>Revierte los efectos; si otro proyecto ocupó la ventana, <strong>falla</strong> con mensaje claro</div></div></label>
+<label class="caso" for="c-LIB-07"><input type="checkbox" id="c-LIB-07" data-caso="LIB-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">LIB-07</span><span class="ctit">Solo Admin aprueba</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, intentar aprobar</div><div class="campo"><span class="etq">Esperado</span>No puede</div></div></label>
+</section>
+<section class="bloque" id="b-NOV">
+<div class="bloque-cab"><span class="sigla">NOV</span><h3>Novedades (vacaciones y permisos)</h3><span class="cuenta">16 casos</span></div>
+
+<label class="caso" for="c-NOV-01"><input type="checkbox" id="c-NOV-01" data-caso="NOV-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-01</span><span class="ctit">Registrar vacaciones</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, <code>/novedades/</code>, tipo Vacaciones</div><div class="campo"><span class="etq">Esperado</span>Queda <strong>pendiente de aprobación</strong></div></div></label>
+<label class="caso" for="c-NOV-02"><input type="checkbox" id="c-NOV-02" data-caso="NOV-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-02</span><span class="ctit">El motivo solo en permisos</span></div><div class="campo"><span class="etq">Pasos</span>Cambiar el tipo entre Vacaciones y Permiso</div><div class="campo"><span class="etq">Esperado</span>El campo &quot;Motivo&quot; solo aparece con <strong>Permiso</strong></div></div></label>
+<label class="caso" for="c-NOV-03"><input type="checkbox" id="c-NOV-03" data-caso="NOV-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-03</span><span class="ctit"><strong>Pendiente no bloquea capacidad</strong></span></div><div class="campo"><span class="etq">Pasos</span>Con la novedad pendiente, mirar el dashboard</div><div class="campo"><span class="etq">Esperado</span>Los días siguen apareciendo disponibles</div></div></label>
+<label class="caso" for="c-NOV-04"><input type="checkbox" id="c-NOV-04" data-caso="NOV-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-04</span><span class="ctit">Cada quien ve solo las suyas</span></div><div class="campo"><span class="etq">Pasos</span>Como otro Ingeniero, abrir <code>/novedades/</code></div><div class="campo"><span class="etq">Esperado</span>No ve las de nadie más</div></div></label>
+<label class="caso" for="c-NOV-05"><input type="checkbox" id="c-NOV-05" data-caso="NOV-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-05</span><span class="ctit">Cancelar una pendiente</span></div><div class="campo"><span class="etq">Pasos</span>Cancelar la propia novedad</div><div class="campo"><span class="etq">Esperado</span>Desaparece del listado; la fila se conserva en base</div></div></label>
+<label class="caso" for="c-NOV-06"><input type="checkbox" id="c-NOV-06" data-caso="NOV-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-06</span><span class="ctit">No se cancela una aprobada</span></div><div class="campo"><span class="etq">Pasos</span>Intentar cancelar tras aprobarla</div><div class="campo"><span class="etq">Esperado</span>Lo impide con mensaje claro</div></div></label>
+<label class="caso" for="c-NOV-07"><input type="checkbox" id="c-NOV-07" data-caso="NOV-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-07</span><span class="ctit">Sin solape</span></div><div class="campo"><span class="etq">Pasos</span>Pedir dos novedades que se crucen</div><div class="campo"><span class="etq">Esperado</span>Rechaza la segunda</div></div></label>
+<label class="caso" for="c-NOV-08"><input type="checkbox" id="c-NOV-08" data-caso="NOV-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-08</span><span class="ctit">Retroactividad limitada</span></div><div class="campo"><span class="etq">Pasos</span>Pedir una novedad de hace más de 60 días</div><div class="campo"><span class="etq">Esperado</span>La rechaza</div></div></label>
+<label class="caso" for="c-NOV-09"><input type="checkbox" id="c-NOV-09" data-caso="NOV-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-09</span><span class="ctit"><strong>Aprobar (Admin)</strong></span></div><div class="campo"><span class="etq">Pasos</span><code>/novedades/revisar/</code>, aprobar una que no cruce asignaciones</div><div class="campo"><span class="etq">Esperado</span>Pasa a Aprobada; los días dejan de ser hábiles</div></div></label>
+<label class="caso" for="c-NOV-10"><input type="checkbox" id="c-NOV-10" data-caso="NOV-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-10</span><span class="ctit">Rechazar con motivo</span></div><div class="campo"><span class="etq">Pasos</span>Rechazar indicando motivo</div><div class="campo"><span class="etq">Esperado</span>El solicitante ve el motivo en su historial</div></div></label>
+<label class="caso" for="c-NOV-11"><input type="checkbox" id="c-NOV-11" data-caso="NOV-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-11</span><span class="ctit"><strong>Ausencia al 100 % en el dashboard</strong></span></div><div class="campo"><span class="etq">Pasos</span>Tras NOV-09, mirar esos días en el dashboard</div><div class="campo"><span class="etq">Esperado</span>Salen con trama morada y <strong>&quot;100 %&quot;</strong>, no como día libre</div></div></label>
+<label class="caso" for="c-NOV-12"><input type="checkbox" id="c-NOV-12" data-caso="NOV-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-12</span><span class="ctit">El fin de semana no es ausencia</span></div><div class="campo"><span class="etq">Pasos</span>Mirar un sábado</div><div class="campo"><span class="etq">Esperado</span>Sigue gris y al <strong>0 %</strong></div></div></label>
+<label class="caso" for="c-NOV-13"><input type="checkbox" id="c-NOV-13" data-caso="NOV-13"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-13</span><span class="ctit"><strong>Cruce con asignación: hay que elegir</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pedir una novedad sobre días con asignación aprobada e intentar aprobarla</div><div class="campo"><span class="etq">Esperado</span><strong>No</strong> aparece el botón &quot;Aprobar&quot; suelto: obliga a elegir RECOMPUTAR o REDUCIR por cada asignación</div></div></label>
+<label class="caso" for="c-NOV-14"><input type="checkbox" id="c-NOV-14" data-caso="NOV-14"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-14</span><span class="ctit">Aprobar y ajustar</span></div><div class="campo"><span class="etq">Pasos</span>Elegir RECOMPUTAR y confirmar</div><div class="campo"><span class="etq">Esperado</span>La novedad queda aprobada y la fecha fin de la asignación se empuja</div></div></label>
+<label class="caso" for="c-NOV-15"><input type="checkbox" id="c-NOV-15" data-caso="NOV-15"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-15</span><span class="ctit">Rastro en auditoría</span></div><div class="campo"><span class="etq">Pasos</span>Tras NOV-14, revisar el log de la asignación</div><div class="campo"><span class="etq">Esperado</span>Aparecen <code>SOLICITAR_LIBERACION</code> y <code>LIBERAR</code></div></div></label>
+<label class="caso" for="c-NOV-16"><input type="checkbox" id="c-NOV-16" data-caso="NOV-16"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-16</span><span class="ctit">El PM no aprueba novedades</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, abrir <code>/novedades/revisar/</code></div><div class="campo"><span class="etq">Esperado</span>403</div></div></label>
+</section>
+<section class="bloque" id="b-HOR">
+<div class="bloque-cab"><span class="sigla">HOR</span><h3>Legalización de horas (Ingeniero)</h3><span class="cuenta">28 casos</span></div>
+
+<label class="caso" for="c-HOR-01"><input type="checkbox" id="c-HOR-01" data-caso="HOR-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-01</span><span class="ctit">Abrir la pantalla</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, <code>/horas/</code></div><div class="campo"><span class="etq">Esperado</span>Muestra el día de hoy, el selector con flechas y la lista de días sin registrar</div></div></label>
+<label class="caso" for="c-HOR-02"><input type="checkbox" id="c-HOR-02" data-caso="HOR-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-02</span><span class="ctit">Navegar entre días</span></div><div class="campo"><span class="etq">Pasos</span>Usar las flechas ← →</div><div class="campo"><span class="etq">Esperado</span>Cambia de día; la flecha &quot;siguiente&quot; está inactiva en el día de hoy</div></div></label>
+<label class="caso" for="c-HOR-03"><input type="checkbox" id="c-HOR-03" data-caso="HOR-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-03</span><span class="ctit">No se legaliza el futuro</span></div><div class="campo"><span class="etq">Pasos</span>Elegir una fecha futura</div><div class="campo"><span class="etq">Esperado</span>No lo permite</div></div></label>
+<label class="caso" for="c-HOR-04"><input type="checkbox" id="c-HOR-04" data-caso="HOR-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-04</span><span class="ctit"><strong>Fin de semana</strong></span></div><div class="campo"><span class="etq">Pasos</span>Abrir un sábado</div><div class="campo"><span class="etq">Esperado</span>Mensaje &quot;no hay horas que registrar&quot;; <strong>sin</strong> formulario</div></div></label>
+<label class="caso" for="c-HOR-05"><input type="checkbox" id="c-HOR-05" data-caso="HOR-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-05</span><span class="ctit"><strong>Festivo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Abrir el 2026-08-07</div><div class="campo"><span class="etq">Esperado</span>Igual, indicando que es festivo</div></div></label>
+<label class="caso" for="c-HOR-06"><input type="checkbox" id="c-HOR-06" data-caso="HOR-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-06</span><span class="ctit"><strong>Día con vacaciones aprobadas</strong></span></div><div class="campo"><span class="etq">Pasos</span>Abrir un día con una novedad aprobada</div><div class="campo"><span class="etq">Esperado</span>Mensaje de vacaciones/permiso; sin formulario. <strong>No hay que teclear nada</strong></div></div></label>
+<label class="caso" for="c-HOR-07"><input type="checkbox" id="c-HOR-07" data-caso="HOR-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-07</span><span class="ctit">Ayuda de cada actividad</span></div><div class="campo"><span class="etq">Pasos</span>Cambiar el desplegable de Actividad</div><div class="campo"><span class="etq">Esperado</span>Bajo él aparece una frase distinta explicando cuándo usar cada una</div></div></label>
+<label class="caso" for="c-HOR-08"><input type="checkbox" id="c-HOR-08" data-caso="HOR-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-08</span><span class="ctit">Formación no aparece</span></div><div class="campo"><span class="etq">Pasos</span>Revisar el desplegable</div><div class="campo"><span class="etq">Esperado</span>Solo Proyecto, Entrenamiento y Estudio</div></div></label>
+<label class="caso" for="c-HOR-09"><input type="checkbox" id="c-HOR-09" data-caso="HOR-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-09</span><span class="ctit">El proyecto solo cuando aplica</span></div><div class="campo"><span class="etq">Pasos</span>Elegir Estudio y luego Proyecto</div><div class="campo"><span class="etq">Esperado</span>El campo Proyecto <strong>se oculta</strong> con Estudio y aparece con Proyecto</div></div></label>
+<label class="caso" for="c-HOR-10"><input type="checkbox" id="c-HOR-10" data-caso="HOR-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-10</span><span class="ctit"><strong>Proyectos filtrados (sin asignación)</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como <code>test.ingeniero</code>, abrir el desplegable</div><div class="campo"><span class="etq">Esperado</span>Solo <code>INT-DEPART</code> e <code>INT-MGMT</code>. <strong>Ningún proyecto de cliente</strong></div></div></label>
+<label class="caso" for="c-HOR-11"><input type="checkbox" id="c-HOR-11" data-caso="HOR-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-11</span><span class="ctit"><strong>Proyectos filtrados (con asignación)</strong></span></div><div class="campo"><span class="etq">Pasos</span>Con tu cuenta, abrir un día <strong>del 06 de agosto en adelante</strong></div><div class="campo"><span class="etq">Esperado</span>Además de los internos, aparece <strong><code>QA-001</code></strong></div></div></label>
+<label class="caso" for="c-HOR-12b"><input type="checkbox" id="c-HOR-12b" data-caso="HOR-12b"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-12b</span><span class="ctit">Un proyecto cerrado no aparece</span></div><div class="campo"><span class="etq">Pasos</span>Buscar <code>QA-003</code> en el desplegable</div><div class="campo"><span class="etq">Esperado</span><strong>No</strong> aparece: está cerrado</div></div></label>
+<label class="caso" for="c-HOR-12"><input type="checkbox" id="c-HOR-12" data-caso="HOR-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-12</span><span class="ctit">El filtro depende del día</span></div><div class="campo"><span class="etq">Pasos</span>Con tu cuenta, abrir un día <strong>anterior al 06 de agosto</strong></div><div class="campo"><span class="etq">Esperado</span><code>QA-001</code> <strong>desaparece</strong>; quedan solo los internos</div></div></label>
+<label class="caso" for="c-HOR-13"><input type="checkbox" id="c-HOR-13" data-caso="HOR-13"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-13</span><span class="ctit"><strong>Nada se guarda al añadir</strong></span></div><div class="campo"><span class="etq">Pasos</span>Añadir dos actividades a la lista y <strong>recargar la página sin guardar</strong></div><div class="campo"><span class="etq">Esperado</span>La lista se pierde: no se guardó nada</div></div></label>
+<label class="caso" for="c-HOR-14"><input type="checkbox" id="c-HOR-14" data-caso="HOR-14"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-14</span><span class="ctit">El contador avanza</span></div><div class="campo"><span class="etq">Pasos</span>Ir añadiendo actividades</div><div class="campo"><span class="etq">Esperado</span>El marcador sube (<code>x / 8,5 h</code>) y la barra se llena</div></div></label>
+<label class="caso" for="c-HOR-15"><input type="checkbox" id="c-HOR-15" data-caso="HOR-15"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-15</span><span class="ctit"><strong>Decimales correctos</strong></span></div><div class="campo"><span class="etq">Pasos</span>Con 4 h puestas, añadir 4,5 h en un día de 8,5</div><div class="campo"><span class="etq">Esperado</span>Lo acepta y el día cuadra. <strong>No</strong> debe decir &quot;quedan 4 h&quot;</div></div></label>
+<label class="caso" for="c-HOR-16"><input type="checkbox" id="c-HOR-16" data-caso="HOR-16"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-16</span><span class="ctit">No se pasa de la jornada</span></div><div class="campo"><span class="etq">Pasos</span>Intentar añadir más horas de las que caben</div><div class="campo"><span class="etq">Esperado</span>Avisa cuántas quedan por asignar</div></div></label>
+<label class="caso" for="c-HOR-17"><input type="checkbox" id="c-HOR-17" data-caso="HOR-17"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-17</span><span class="ctit">Media hora</span></div><div class="campo"><span class="etq">Pasos</span>Intentar añadir 1,3 h</div><div class="campo"><span class="etq">Esperado</span>Lo rechaza: solo bloques de media hora</div></div></label>
+<label class="caso" for="c-HOR-18"><input type="checkbox" id="c-HOR-18" data-caso="HOR-18"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-18</span><span class="ctit">El detalle es obligatorio</span></div><div class="campo"><span class="etq">Pasos</span>Añadir sin escribir qué se hizo</div><div class="campo"><span class="etq">Esperado</span>Lo rechaza</div></div></label>
+<label class="caso" for="c-HOR-19"><input type="checkbox" id="c-HOR-19" data-caso="HOR-19"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-19</span><span class="ctit">Guardar el día</span></div><div class="campo"><span class="etq">Pasos</span>Con la lista completa, pulsar &quot;Guardar día&quot;</div><div class="campo"><span class="etq">Esperado</span>Guarda y <strong>muestra el resumen</strong>; el día sigue <strong>abierto</strong></div></div></label>
+<label class="caso" for="c-HOR-20"><input type="checkbox" id="c-HOR-20" data-caso="HOR-20"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-20</span><span class="ctit">Corregir antes de aceptar</span></div><div class="campo"><span class="etq">Pasos</span>En el resumen, pulsar &quot;Corregir&quot;</div><div class="campo"><span class="etq">Esperado</span>Vuelve al formulario</div></div></label>
+<label class="caso" for="c-HOR-21"><input type="checkbox" id="c-HOR-21" data-caso="HOR-21"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-21</span><span class="ctit">Guardar reemplaza</span></div><div class="campo"><span class="etq">Pasos</span>Corregir, cambiar las actividades y guardar otra vez</div><div class="campo"><span class="etq">Esperado</span>Quedan <strong>solo</strong> las nuevas, no se suman a las anteriores</div></div></label>
+<label class="caso" for="c-HOR-22"><input type="checkbox" id="c-HOR-22" data-caso="HOR-22"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-22</span><span class="ctit"><strong>No se acepta si no cuadra</strong></span></div><div class="campo"><span class="etq">Pasos</span>Guardar solo 6 h de una jornada de 8,5 y mirar el resumen</div><div class="campo"><span class="etq">Esperado</span>Dice cuántas faltan y <strong>no ofrece</strong> &quot;Aceptar día&quot;</div></div></label>
+<label class="caso" for="c-HOR-23"><input type="checkbox" id="c-HOR-23" data-caso="HOR-23"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-23</span><span class="ctit"><strong>Aceptar el día</strong></span></div><div class="campo"><span class="etq">Pasos</span>Con el día cuadrado, pulsar &quot;Aceptar día&quot; y confirmar</div><div class="campo"><span class="etq">Esperado</span>Queda <strong>Registrado</strong>, pendiente de aprobación</div></div></label>
+<label class="caso" for="c-HOR-24"><input type="checkbox" id="c-HOR-24" data-caso="HOR-24"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-24</span><span class="ctit"><strong>Inmutable tras aceptar</strong></span></div><div class="campo"><span class="etq">Pasos</span>Volver a ese día</div><div class="campo"><span class="etq">Esperado</span>Se ve en solo lectura, sin formulario ni botón de corregir</div></div></label>
+<label class="caso" for="c-HOR-25"><input type="checkbox" id="c-HOR-25" data-caso="HOR-25"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-25</span><span class="ctit">Facturable vs interno</span></div><div class="campo"><span class="etq">Pasos</span>En el resumen, mirar el desglose</div><div class="campo"><span class="etq">Esperado</span>Separa horas facturables de no facturables; las internas y las de estudio <strong>no</strong> son facturables</div></div></label>
+<label class="caso" for="c-HOR-26"><input type="checkbox" id="c-HOR-26" data-caso="HOR-26"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-26</span><span class="ctit">Días pendientes</span></div><div class="campo"><span class="etq">Pasos</span>Mirar la lista inferior</div><div class="campo"><span class="etq">Esperado</span>Solo días <strong>hábiles</strong> sin registrar; los que ya se aceptaron desaparecen</div></div></label>
+<label class="caso" for="c-HOR-27"><input type="checkbox" id="c-HOR-27" data-caso="HOR-27"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-27</span><span class="ctit">Un PM también legaliza</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, abrir <code>/horas/</code></div><div class="campo"><span class="etq">Esperado</span>Puede registrar sus propias horas</div></div></label>
+</section>
+<section class="bloque" id="b-HAP">
+<div class="bloque-cab"><span class="sigla">HAP</span><h3>Aprobación de horas (PM y Admin)</h3><span class="cuenta">17 casos</span></div>
+<div class="nota"><strong>Quién aprueba qué.</strong> El PM aprueba los días que tocan <strong>sus</strong> proyectos. El Admin ve <strong>todos</strong> — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la <strong>única</strong> vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita <code>qa.pm</code>, <code>qa.admin</code> y <code>carmen.leon</code> (como PM ajeno).</div>
+<label class="caso" for="c-HAP-01"><input type="checkbox" id="c-HAP-01" data-caso="HAP-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-01</span><span class="ctit">El PM ve lo suyo</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>qa.pm</code>, abrir <code>/horas/aprobar/</code> tras registrar días con horas de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>Ve esos días: es el PM del proyecto</div></div></label>
+<label class="caso" for="c-HAP-02"><input type="checkbox" id="c-HAP-02" data-caso="HAP-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-02</span><span class="ctit">Un PM ajeno no lo ve</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>carmen.leon</code>, que es PM de <code>QA-002</code> pero <strong>no</strong> de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>La cola <strong>no</strong> incluye esos días</div></div></label>
+<label class="caso" for="c-HAP-03"><input type="checkbox" id="c-HAP-03" data-caso="HAP-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-03</span><span class="ctit"><strong>El Admin lo ve todo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, abrir la misma pantalla</div><div class="campo"><span class="etq">Esperado</span>Ve todos los días pendientes, también los de proyectos ajenos</div></div></label>
+<label class="caso" for="c-HAP-04"><input type="checkbox" id="c-HAP-04" data-caso="HAP-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-04</span><span class="ctit">Al Admin se le avisa</span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, mirar arriba de la cola</div><div class="campo"><span class="etq">Esperado</span>Franja explicando que ve todo y que sirve de respaldo</div></div></label>
+<label class="caso" for="c-HAP-05"><input type="checkbox" id="c-HAP-05" data-caso="HAP-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-05</span><span class="ctit">Al PM no se le muestra esa nota</span></div><div class="campo"><span class="etq">Pasos</span>Como PM</div><div class="campo"><span class="etq">Esperado</span>No aparece esa franja</div></div></label>
+<label class="caso" for="c-HAP-06"><input type="checkbox" id="c-HAP-06" data-caso="HAP-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-06</span><span class="ctit"><strong>Día sin proyecto: solo Admin</strong></span></div><div class="campo"><span class="etq">Pasos</span>Registrar un día entero de Estudio y mirar la cola</div><div class="campo"><span class="etq">Esperado</span>El PM <strong>no</strong> lo ve; el Admin <strong>sí</strong>. Es la única vía para aprobarlo</div></div></label>
+<label class="caso" for="c-HAP-07"><input type="checkbox" id="c-HAP-07" data-caso="HAP-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-07</span><span class="ctit">Desglose visible</span></div><div class="campo"><span class="etq">Pasos</span>Mirar una tarjeta de la cola</div><div class="campo"><span class="etq">Esperado</span>Muestra cada actividad, su detalle y sus horas — no solo el total</div></div></label>
+<label class="caso" for="c-HAP-08"><input type="checkbox" id="c-HAP-08" data-caso="HAP-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-08</span><span class="ctit">Marca de proyecto propio</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, mirar las líneas</div><div class="campo"><span class="etq">Esperado</span>Sus proyectos llevan la etiqueta &quot;Tu proyecto&quot;</div></div></label>
+<label class="caso" for="c-HAP-09"><input type="checkbox" id="c-HAP-09" data-caso="HAP-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-09</span><span class="ctit"><strong>Aprobar</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pulsar Aprobar y confirmar</div><div class="campo"><span class="etq">Esperado</span>Pasa a Aprobado; el ingeniero lo ve con la firma de quien aprobó</div></div></label>
+<label class="caso" for="c-HAP-10"><input type="checkbox" id="c-HAP-10" data-caso="HAP-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-10</span><span class="ctit"><strong>El Admin aprueba en lugar del PM</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como Admin, aprobar un día de un proyecto ajeno</div><div class="campo"><span class="etq">Esperado</span>Lo aprueba; queda su nombre como aprobador</div></div></label>
+<label class="caso" for="c-HAP-11"><input type="checkbox" id="c-HAP-11" data-caso="HAP-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-11</span><span class="ctit">No se aprueba dos veces</span></div><div class="campo"><span class="etq">Pasos</span>Intentar aprobar un día ya aprobado</div><div class="campo"><span class="etq">Esperado</span>Error diciendo <strong>&quot;ya está aprobado&quot;</strong> (no un mensaje de permisos)</div></div></label>
+<label class="caso" for="c-HAP-12"><input type="checkbox" id="c-HAP-12" data-caso="HAP-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-12</span><span class="ctit">El Ingeniero no aprueba</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, abrir <code>/horas/aprobar/</code></div><div class="campo"><span class="etq">Esperado</span>403</div></div></label>
+<label class="caso" for="c-HAP-13"><input type="checkbox" id="c-HAP-13" data-caso="HAP-13"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-13</span><span class="ctit"><strong>Devolver exige motivo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pulsar &quot;Devolver&quot; y enviar sin texto</div><div class="campo"><span class="etq">Esperado</span>No lo permite</div></div></label>
+<label class="caso" for="c-HAP-14"><input type="checkbox" id="c-HAP-14" data-caso="HAP-14"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-14</span><span class="ctit"><strong>Devolver reabre el día</strong></span></div><div class="campo"><span class="etq">Pasos</span>Devolver con motivo</div><div class="campo"><span class="etq">Esperado</span>El día vuelve a estar abierto para su autor</div></div></label>
+<label class="caso" for="c-HAP-15"><input type="checkbox" id="c-HAP-15" data-caso="HAP-15"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-15</span><span class="ctit"><strong>El motivo se ve</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como el ingeniero, volver a ese día</div><div class="campo"><span class="etq">Esperado</span>Franja naranja &quot;Te devolvieron este día para corregir&quot; con el motivo</div></div></label>
+<label class="caso" for="c-HAP-16"><input type="checkbox" id="c-HAP-16" data-caso="HAP-16"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-16</span><span class="ctit">El aviso también en el resumen</span></div><div class="campo"><span class="etq">Pasos</span>Corregir, guardar y mirar el resumen</div><div class="campo"><span class="etq">Esperado</span>La franja <strong>sigue visible</strong>: no puede re-aceptarse a ciegas</div></div></label>
+<label class="caso" for="c-HAP-17"><input type="checkbox" id="c-HAP-17" data-caso="HAP-17"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-17</span><span class="ctit">Aprobar limpia el motivo</span></div><div class="campo"><span class="etq">Pasos</span>Corregir, aceptar y aprobar</div><div class="campo"><span class="etq">Esperado</span>El día queda aprobado <strong>sin</strong> el reproche pegado</div></div></label>
+</section>
+<section class="bloque" id="b-DASH">
+<div class="bloque-cab"><span class="sigla">DASH</span><h3>Dashboard</h3><span class="cuenta">5 casos</span></div>
+
+<label class="caso" for="c-DASH-01"><input type="checkbox" id="c-DASH-01" data-caso="DASH-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">DASH-01</span><span class="ctit">Heatmap</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, cargar un mes</div><div class="campo"><span class="etq">Esperado</span>Matriz recurso × día con porcentajes de ocupación</div></div></label>
+<label class="caso" for="c-DASH-02"><input type="checkbox" id="c-DASH-02" data-caso="DASH-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">DASH-02</span><span class="ctit">Bench</span></div><div class="campo"><span class="etq">Pasos</span>Mirar las tarjetas superiores</div><div class="campo"><span class="etq">Esperado</span>Totales de recursos, ocupados hoy y en bench</div></div></label>
+<label class="caso" for="c-DASH-03"><input type="checkbox" id="c-DASH-03" data-caso="DASH-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">DASH-03</span><span class="ctit">Rango máximo</span></div><div class="campo"><span class="etq">Pasos</span>Pedir más de 90 días</div><div class="campo"><span class="etq">Esperado</span>Error controlado</div></div></label>
+<label class="caso" for="c-DASH-04"><input type="checkbox" id="c-DASH-04" data-caso="DASH-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">DASH-04</span><span class="ctit">PM y Admin fuera del heatmap</span></div><div class="campo"><span class="etq">Pasos</span>Revisar la lista de recursos</div><div class="campo"><span class="etq">Esperado</span>Los recursos cuyo usuario es PM o Admin no aparecen</div></div></label>
+<label class="caso" for="c-DASH-05"><input type="checkbox" id="c-DASH-05" data-caso="DASH-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">DASH-05</span><span class="ctit">Jornada completa al 100 %</span></div><div class="campo"><span class="etq">Pasos</span>Mirar una asignación de jornada completa</div><div class="campo"><span class="etq">Esperado</span>Sale al 100 % todos los días, no al 94 %</div></div></label>
+</section>
+<section class="bloque" id="b-AUD">
+<div class="bloque-cab"><span class="sigla">AUD</span><h3>Auditoría y trazabilidad</h3><span class="cuenta">4 casos</span></div>
+
+<label class="caso" for="c-AUD-01"><input type="checkbox" id="c-AUD-01" data-caso="AUD-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUD-01</span><span class="ctit">Se registran los cambios de estado</span></div><div class="campo"><span class="etq">Pasos</span>Aprobar, rechazar y revocar asignaciones</div><div class="campo"><span class="etq">Esperado</span>Cada acción deja su entrada con actor y fecha</div></div></label>
+<label class="caso" for="c-AUD-02"><input type="checkbox" id="c-AUD-02" data-caso="AUD-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUD-02</span><span class="ctit"><strong>Append-only</strong></span></div><div class="campo"><span class="etq">Pasos</span>Intentar editar o borrar una entrada del log</div><div class="campo"><span class="etq">Esperado</span>No es posible</div></div></label>
+<label class="caso" for="c-AUD-03"><input type="checkbox" id="c-AUD-03" data-caso="AUD-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUD-03</span><span class="ctit">Actor del sistema</span></div><div class="campo"><span class="etq">Pasos</span>Revisar un <code>RECOMPUTO_TARIFA</code></div><div class="campo"><span class="etq">Esperado</span>El actor está vacío (acción automática)</div></div></label>
+<label class="caso" for="c-AUD-04"><input type="checkbox" id="c-AUD-04" data-caso="AUD-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">AUD-04</span><span class="ctit">Nada se borra de verdad</span></div><div class="campo"><span class="etq">Pasos</span>Tras MAE-09 y MAE-10, consultar la base</div><div class="campo"><span class="etq">Esperado</span>Las filas siguen ahí con <code>deleted_at</code></div></div></label>
+</section>
+<section class="bloque" id="b-INF">
+<div class="bloque-cab"><span class="sigla">INF</span><h3>Infraestructura y despliegue</h3><span class="cuenta">6 casos</span></div>
+
+<label class="caso" for="c-INF-01"><input type="checkbox" id="c-INF-01" data-caso="INF-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-01</span><span class="ctit">Salud</span></div><div class="campo"><span class="etq">Pasos</span>GET <code>/healthz/</code></div><div class="campo"><span class="etq">Esperado</span>200 con <code>{&quot;estado&quot;:&quot;ok&quot;,&quot;base_datos&quot;:&quot;ok&quot;}</code></div></div></label>
+<label class="caso" for="c-INF-02"><input type="checkbox" id="c-INF-02" data-caso="INF-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-02</span><span class="ctit">Redirección a HTTPS</span></div><div class="campo"><span class="etq">Pasos</span>GET por <code>http://</code></div><div class="campo"><span class="etq">Esperado</span>301 a <code>https://</code></div></div></label>
+<label class="caso" for="c-INF-03"><input type="checkbox" id="c-INF-03" data-caso="INF-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-03</span><span class="ctit">Estáticos</span></div><div class="campo"><span class="etq">Pasos</span>Cargar cualquier página</div><div class="campo"><span class="etq">Esperado</span>CSS y JS cargan; los estáticos llevan hash en el nombre</div></div></label>
+<label class="caso" for="c-INF-04"><input type="checkbox" id="c-INF-04" data-caso="INF-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-04</span><span class="ctit"><strong>Arranque en frío</strong></span></div><div class="campo"><span class="etq">Pasos</span>Dejar la app sin usar 10 min y volver a entrar</div><div class="campo"><span class="etq">Esperado</span>Tarda 10-30 s la primera vez. <strong>Es lo esperado</strong>, no un bug</div></div></label>
+<label class="caso" for="c-INF-05"><input type="checkbox" id="c-INF-05" data-caso="INF-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-05</span><span class="ctit">Guard de suscripción · <strong>lo ejecuta el equipo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pídeselo a quien mantiene el despliegue: lanza el plan de Terraform apuntando a otra suscripción</div><div class="campo"><span class="etq">Esperado</span>Falla con &quot;Suscripción no permitida&quot;. Anota el resultado que te reporten</div></div></label>
+<label class="caso" for="c-INF-06"><input type="checkbox" id="c-INF-06" data-caso="INF-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-06</span><span class="ctit">Migraciones idempotentes · <strong>lo ejecuta el equipo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pide que lancen el job de migraciones dos veces seguidas</div><div class="campo"><span class="etq">Esperado</span>Ambas terminan correctamente y no se duplican datos</div></div></label>
+</section>
+
+<footer>
+  Plataforma de Gestión de Recursos · Inetum · ronda de QA de agosto de 2026.<br>
+  Este archivo es autocontenido: no necesitas nada más para ejecutar la ronda.
+</footer>
+
+</div>
+
+<script>
+  // El progreso vive solo en este navegador. Es una comodidad para no perder
+  // la cuenta entre sesiones, no un informe compartido: lo que se reporta
+  // sigue siendo el registro de ejecución.
+  (function () {
+    var CLAVE = 'qa-inetum-progreso';
+    var cajas = Array.prototype.slice.call(document.querySelectorAll('.caso input'));
+    var hechos = document.getElementById('hechos');
+    var barra = document.getElementById('barra');
+
+    function leer() {
+      try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; }
+      catch (e) { return {}; }
+    }
+    function guardar(estado) {
+      try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch (e) { /* sin persistencia */ }
+    }
+    function pintar() {
+      var n = cajas.filter(function (c) { return c.checked; }).length;
+      hechos.textContent = n;
+      barra.style.width = (cajas.length ? (n / cajas.length) * 100 : 0) + '%';
+    }
+
+    var estado = leer();
+    cajas.forEach(function (caja) {
+      caja.checked = !!estado[caja.dataset.caso];
+      caja.addEventListener('change', function () {
+        var actual = leer();
+        if (caja.checked) { actual[caja.dataset.caso] = true; }
+        else { delete actual[caja.dataset.caso]; }
+        guardar(actual);
+        pintar();
+      });
+    });
+
+    document.getElementById('reiniciar').addEventListener('click', function () {
+      if (!confirm('¿Desmarcar los ' + cajas.length + ' casos?')) { return; }
+      cajas.forEach(function (c) { c.checked = false; });
+      guardar({});
+      pintar();
+    });
+
+    pintar();
+  })();
+</script>
+
+</body>
+</html>

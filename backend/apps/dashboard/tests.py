@@ -64,7 +64,12 @@ class RecursosAsignablesTests(TestCase):
     def test_api_ocupacion_excluye_pm(self):
         visible = self._recurso("visible", grupo=roles.INGENIERO)
         oculto = self._recurso("oculto_pm", grupo=roles.PM)
-        self.client.force_login(User.objects.create_user("viewer2", password="pass"))
+        # El heatmap completo es una vista de gestion: un ingeniero solo se ve
+        # a si mismo. Para comprobar a quien LISTA la API hay que consultarla
+        # como PM, que es quien tiene alcance sobre todo el equipo.
+        viewer = User.objects.create_user("viewer2", password="pass")
+        viewer.groups.add(Group.objects.get_or_create(name=roles.PM)[0])
+        self.client.force_login(viewer)
         resp = self.client.get("/api/dashboard/ocupacion/")
         ids = [r["id"] for r in resp.json()["recursos"]]
         self.assertIn(visible.pk, ids)
@@ -286,6 +291,8 @@ class OcupacionAPIJornadaCompletaTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user("viewer", password="pass")
+        # Como PM: el heatmap de todo el equipo solo lo ve quien gestiona.
+        self.user.groups.add(Group.objects.get_or_create(name=roles.PM)[0])
         self.client.force_login(self.user)
         self.pm = User.objects.create_user("pm_dash", password="pass")
         self.recurso = Recurso.objects.create(nombre="DevFull", email="devfull@test.com", banda="SR")

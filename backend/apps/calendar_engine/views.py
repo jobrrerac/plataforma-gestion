@@ -1,9 +1,19 @@
 from datetime import date
+
+from django.core.exceptions import (
+    PermissionDenied as DjangoPermissionDenied,
+    ValidationError as DjangoValidationError,
+)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import SoloLecturaOAdmin, EsAdminOPM
+
+from apps.accounts.roles import es_admin_o_pm
+from apps.core.permissions import SoloLecturaOAdmin, EsAdmin
+from . import novedades as novedades_svc
 from .models import DiaNoLaborable, Indisponibilidad
 from .serializers import DiaNoLaborableSerializer, IndisponibilidadSerializer
 from .services import feriados_en_rango
@@ -60,16 +70,90 @@ class DiaNoLaborableViewSet(viewsets.ModelViewSet):
 
 
 class IndisponibilidadViewSet(viewsets.ModelViewSet):
+    """Novedades por recurso (vacaciones y permisos).
+
+    Alcance según el rol:
+    - Admin y PM ven y gestionan las de todo el mundo; lo que crean nace ya
+      APROBADO, porque quien tiene autoridad no necesita aprobarse a sí mismo.
+    - El resto solo ve y crea las de SU propio recurso, y quedan PENDIENTES.
+
+    El permiso de Django (`add_indisponibilidad`) es por modelo, no por fila:
+    el alcance "solo las suyas" lo impone este ViewSet filtrando por el recurso
+    vinculado a la cuenta.
+    """
+
     serializer_class = IndisponibilidadSerializer
-    # Indisponibilidades por recurso: PM y Admin pueden gestionarlas
-    permission_classes = [EsAdminOPM]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = Indisponibilidad.objects.select_related("recurso").all()
+        qs = Indisponibilidad.objects.select_related("recurso")
+
+        if not es_admin_o_pm(self.request.user):
+            recurso = novedades_svc.recurso_de(self.request.user)
+            if recurso is None:
+                return qs.none()
+            qs = qs.filter(recurso=recurso)
+
         recurso_id = self.request.query_params.get("recurso")
         if recurso_id:
             qs = qs.filter(recurso_id=recurso_id)
         return qs
 
+    def perform_create(self, serializer):
+        datos = serializer.validated_data
+        try:
+            if es_admin_o_pm(self.request.user):
+                novedad = novedades_svc.registrar_por_autoridad(
+                    usuario=self.request.user,
+                    recurso=datos["recurso"],
+                    fecha_inicio=datos["fecha_inicio"],
+                    fecha_fin=datos["fecha_fin"],
+                    tipo=datos["tipo"],
+                    motivo=datos.get("motivo", ""),
+                )
+            else:
+                # `recurso` del payload se ignora a propósito: un ingeniero solo
+                # puede registrar novedades a su propio nombre, y aceptarlo del
+                # cliente permitiría pedir vacaciones para otra persona.
+                novedad = novedades_svc.registrar_novedad(
+                    usuario=self.request.user,
+                    fecha_inicio=datos["fecha_inicio"],
+                    fecha_fin=datos["fecha_fin"],
+                    tipo=datos["tipo"],
+                    motivo=datos.get("motivo", ""),
+                )
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages) from exc
+
+        serializer.instance = novedad
+
     def perform_destroy(self, instance):
-        instance.delete()
+        if es_admin_o_pm(self.request.user):
+            instance.delete()  # soft-delete
+            return
+        try:
+            novedades_svc.cancelar_novedad(instance, self.request.user)
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages) from exc
+        except DjangoPermissionDenied as exc:
+            raise PermissionDenied(str(exc)) from exc
+
+    @action(detail=True, methods=["post"], permission_classes=[EsAdmin])
+    def aprobar(self, request, pk=None):
+        novedad = self.get_object()
+        try:
+            novedades_svc.aprobar_novedad(novedad, request.user)
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages) from exc
+        return Response(self.get_serializer(novedad).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[EsAdmin])
+    def rechazar(self, request, pk=None):
+        novedad = self.get_object()
+        try:
+            novedades_svc.rechazar_novedad(
+                novedad, request.user, motivo=request.data.get("motivo_rechazo", "")
+            )
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages) from exc
+        return Response(self.get_serializer(novedad).data)
