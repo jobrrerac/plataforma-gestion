@@ -455,3 +455,16 @@ variable "dias_aviso_caducidad_secreto" {
   type        = number
   default     = 60
 }
+
+variable "github_environment" {
+  description = <<-EOT
+    Entorno de GitHub que declara el job de despliegue.
+
+    Importa porque cambia el subject del token OIDC: un job con `environment:`
+    presenta `repo:owner/repo:environment:<nombre>` en vez de la rama. Si este
+    valor no coincide con el del workflow, el despliegue falla con AADSTS700213
+    antes de tocar nada.
+  EOT
+  type        = string
+  default     = "produccion"
+}

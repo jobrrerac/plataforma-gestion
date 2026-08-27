@@ -32,6 +32,29 @@ resource "azurerm_federated_identity_credential" "github" {
   subject = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
 }
 
+# Segunda credencial para el mismo repositorio, con otro subject.
+#
+# No es redundante: cuando un job declara `environment:`, GitHub CAMBIA el
+# subject del token OIDC. Deja de presentar la rama y presenta el entorno:
+#
+#   sin environment:  repo:owner/repo:ref:refs/heads/main
+#   con environment:  repo:owner/repo:environment:produccion
+#
+# El workflow declara `environment: produccion` para poder exigir aprobacion
+# manual antes de desplegar, asi que es esta la que se usa en la practica. La
+# de la rama se conserva para `workflow_dispatch` y por si algun dia se quita
+# el entorno. Faltando esta, el despliegue falla con AADSTS700213 en el primer
+# paso, antes de tocar nada.
+resource "azurerm_federated_identity_credential" "github_entorno" {
+  count     = local.cicd_activo ? 1 : 0
+  name      = "github-entorno-${var.github_environment}"
+  parent_id = azurerm_user_assigned_identity.cicd[0].id
+
+  audience = ["api://AzureADTokenExchange"]
+  issuer   = "https://token.actions.githubusercontent.com"
+  subject  = "repo:${var.github_repo}:environment:${var.github_environment}"
+}
+
 # Subir imagenes al registro. AcrPush no incluye borrar ni administrar el ACR.
 resource "azurerm_role_assignment" "cicd_acr_push" {
   count                = local.cicd_activo ? 1 : 0
