@@ -1,7 +1,12 @@
-"""Genera la página de QA a partir de los dos documentos del repositorio.
+"""Genera el material de QA a partir de los dos documentos del repositorio.
 
 Se genera en vez de escribirse a mano para que no existan dos versiones del
 mismo contenido que se desincronicen: la fuente son los .md del repo.
+
+    python docs/generar_pagina_qa.py docs/plantilla_qa.html docs/QA_Inetum.html
+
+Produce un HTML autocontenido: se abre con doble clic, funciona sin conexion
+(las tipografias caen a las del sistema) y se imprime a PDF con Ctrl+P.
 """
 
 import html
