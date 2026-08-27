@@ -237,6 +237,119 @@ def actividades_disponibles():
     return TipoActividad.objects.filter(activo=True)
 
 
+# ---------------------------------------------------------------------------
+# Aprobación
+# ---------------------------------------------------------------------------
+
+
+def dias_por_aprobar(usuario):
+    """Días registrados que este usuario puede aprobar.
+
+    - **Admin**: todos. Es la válvula de escape — si un PM está de vacaciones,
+      se va de la empresa o simplemente tarda, las horas de su gente no pueden
+      quedarse bloqueadas para siempre.
+    - **PM**: los días que tocan alguno de sus proyectos.
+    - **Cualquier otro**: ninguno.
+
+    Un día puede mezclar proyectos de varios PM. Basta con que uno de ellos sea
+    suyo para poder aprobarlo entero: exigir la firma de todos convertiría un
+    trámite diario en una cadena de esperas, y el dato que se valida —cuántas
+    horas dedicó esa persona— es el mismo para todos.
+
+    Un día sin ningún proyecto (solo estudio o entrenamiento) no tiene PM que lo
+    reclame. Ahí el Admin es el único que puede aprobarlo, y por eso su alcance
+    total no es un lujo: sin él, esos días no se aprobarían nunca.
+    """
+    from apps.accounts.roles import es_admin, es_admin_o_pm
+
+    pendientes = DiaLegalizado.objects.filter(
+        estado=DiaLegalizado.REGISTRADO
+    ).select_related("recurso").order_by("fecha", "recurso__nombre")
+
+    if es_admin(usuario):
+        return pendientes
+    if not es_admin_o_pm(usuario):
+        return pendientes.none()
+
+    return pendientes.filter(registros__proyecto__pm=usuario).distinct()
+
+
+def puede_aprobar(usuario, dia) -> bool:
+    """Si este día cae dentro de lo que esta persona puede revisar.
+
+    Mira el alcance, no el estado. Son dos preguntas distintas y mezclarlas
+    produce mensajes falsos: al intentar aprobar un día ya aprobado, un PM
+    legítimo leía «no eres PM de ninguno de sus proyectos», que es mentira y
+    manda a buscar el problema donde no está.
+    """
+    from apps.accounts.roles import es_admin, es_admin_o_pm
+
+    if es_admin(usuario):
+        return True
+    if not es_admin_o_pm(usuario):
+        return False
+    return dia.registros.filter(proyecto__pm=usuario).exists()
+
+
+def _exigir_aprobador(usuario, dia):
+    if not puede_aprobar(usuario, dia):
+        raise PermissionDenied(
+            "No puedes revisar este día: no eres PM de ninguno de sus proyectos."
+        )
+
+
+def _exigir_registrado(dia):
+    if dia.estado != DiaLegalizado.REGISTRADO:
+        estados = {
+            DiaLegalizado.ABIERTO: "todavía no lo ha aceptado quien lo registra",
+            DiaLegalizado.APROBADO: "ya está aprobado",
+        }
+        raise ValidationError(f"Este día {estados.get(dia.estado, 'no se puede revisar')}.")
+
+
+@transaction.atomic
+def aprobar_dia(dia, usuario):
+    """Da el día por bueno. Sus horas pasan a contar como legalizadas."""
+    _exigir_aprobador(usuario, dia)
+
+    # Se relee bajo bloqueo: si un PM y un Admin aprueban a la vez, sin esto el
+    # segundo pisaría la firma del primero.
+    dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
+    _exigir_registrado(dia)
+
+    dia.estado = DiaLegalizado.APROBADO
+    dia.aprobado_por = usuario
+    dia.aprobado_en = timezone.now()
+    dia.motivo_devolucion = ""
+    dia.save(update_fields=[
+        "estado", "aprobado_por", "aprobado_en", "motivo_devolucion", "updated_at",
+    ])
+    return dia
+
+
+@transaction.atomic
+def devolver_dia(dia, usuario, motivo):
+    """Reabre el día para que quien lo registró lo corrija.
+
+    Es la única forma de deshacer un cierre, y exige motivo: devolver sin decir
+    qué está mal solo produce un segundo intento a ciegas.
+    """
+    _exigir_aprobador(usuario, dia)
+
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ValidationError("Explica qué hay que corregir; el motivo lo verá quien lo registró.")
+
+    dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
+    _exigir_registrado(dia)
+
+    dia.estado = DiaLegalizado.ABIERTO
+    dia.registrado_en = None
+    dia.motivo_devolucion = motivo[:300]
+    dia.save(update_fields=["estado", "registrado_en", "motivo_devolucion", "updated_at"])
+    return dia
+
+
 def proyectos_disponibles(recurso, fecha: date):
     """Proyectos a los que esa persona puede imputar horas ese día.
 

@@ -108,6 +108,50 @@
       gap: 4px;
     }
 
+    /* Identidad de quien esta dentro */
+    .inet-usuario {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 14px;
+      margin-left: 8px;
+      border-left: 1px solid rgba(255, 255, 255, .18);
+    }
+    .inet-usuario-datos {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+      text-align: right;
+    }
+    .inet-usuario-nombre {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .78rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .inet-usuario-rol {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--inet-yellow);
+    }
+    .inet-salir {
+      color: rgba(255, 255, 255, .6);
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      transition: color .15s;
+    }
+    .inet-salir:hover { color: var(--inet-pink); }
+
+    @media (max-width: 900px) {
+      .inet-usuario-datos { display: none; }
+    }
+
     /* ─── FOOTER ────────────────────────────────────────────────── */
     .inet-footer {
       background: var(--inet-dark);
@@ -239,6 +283,12 @@
          class="inet-nav-link {% block active_novedades %}{% endblock %}">
         <i class="bi bi-calendar-heart"></i> Novedades
       </a>
+      {% if es_admin_o_pm %}
+      <a href="/horas/aprobar/"
+         class="inet-nav-link {% block active_horas_aprobar %}{% endblock %}">
+        <i class="bi bi-clipboard-check"></i> Aprobar horas
+      </a>
+      {% endif %}
       {% if es_admin %}
       <a href="/novedades/revisar/"
          class="inet-nav-link {% block active_novedades_revisar %}{% endblock %}">
@@ -259,6 +309,26 @@
       <a href="/admin/" class="inet-nav-link {% block active_admin %}{% endblock %}">
         <i class="bi bi-gear"></i> Admin
       </a>
+      {% endif %}
+
+      {% if user.is_authenticated %}
+      {% comment %}
+        Quien esta dentro y con que rol. Importa porque la misma pantalla
+        muestra cosas distintas segun el rol, y porque hay cuentas de prueba:
+        sin esto, no se sabe si lo que se ve es lo que ve un ingeniero de
+        verdad o lo que ve un administrador.
+      {% endcomment %}
+      <div class="inet-usuario">
+        <div class="inet-usuario-datos">
+          <span class="inet-usuario-nombre">{{ user.get_full_name|default:user.username }}</span>
+          <span class="inet-usuario-rol">
+            {% if es_admin %}Admin{% elif es_admin_o_pm %}PM{% else %}Ingeniero{% endif %}
+          </span>
+        </div>
+        <a href="/logout/" class="inet-salir" title="Cerrar sesión">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
       {% endif %}
     </div>
 

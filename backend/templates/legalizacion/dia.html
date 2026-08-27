@@ -60,6 +60,7 @@
     padding-left:9px; border-left:2px solid #e0d6f5; min-height:1.1rem;
   }
   .ayuda-actividad:empty { display:none; }
+  .devuelto { background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:13px 16px; font-size:.86rem; color:#9a3412; margin-bottom:14px; }
 </style>
 {% endblock %}
 
@@ -119,6 +120,18 @@
              class="form-control form-control-sm" onchange="this.form.submit()">
     </form>
   </div>
+
+  {% if dia.motivo_devolucion and dia.editable %}
+  {% comment %}
+    Va fuera de la bifurcacion a proposito: se ve tanto al corregir como en el
+    resumen. Un dia devuelto que muestre "Aceptar dia" sin avisar se vuelve a
+    aceptar igual, sin arreglar nada.
+  {% endcomment %}
+  <div class="devuelto">
+    <strong><i class="bi bi-arrow-counterclockwise me-1"></i>Te devolvieron este día para corregir</strong>
+    <div class="mt-1">{{ dia.motivo_devolucion }}</div>
+  </div>
+  {% endif %}
 
   {% if not estado_dia.habil %}
   {# Fin de semana, festivo o ausencia aprobada: no hay nada que legalizar. #}

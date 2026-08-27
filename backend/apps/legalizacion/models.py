@@ -106,6 +106,13 @@ class DiaLegalizado(SoftDeleteModel):
         related_name="dias_aprobados",
     )
     aprobado_en = models.DateTimeField(null=True, blank=True)
+    motivo_devolucion = models.CharField(
+        max_length=300, blank=True,
+        help_text=(
+            "Por qué se devolvió el día para corregir. Lo ve quien lo registró: "
+            "devolver sin decir qué está mal solo genera un segundo intento a ciegas."
+        ),
+    )
 
     class Meta:
         verbose_name = "Día legalizado"
