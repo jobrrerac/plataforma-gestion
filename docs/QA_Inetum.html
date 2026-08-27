@@ -3,58 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QA — Plataforma de Gestión de Recursos (Inetum)</title>
-
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@500;700&display=swap">
+<title>QA — Plataforma de Gestion de Recursos (Inetum)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
 
 <style>
+  /* Paleta neutra de documento tecnico. El magenta de Inetum aparece solo en
+     los filetes y los identificadores: es la marca, no el fondo. */
   :root {
-    --tinta:      #110d26;
-    --magenta:    #e0178a;
-    --lima:       #8a9400;
-    --papel:      #fbfafd;
+    --tinta:      #16191d;
+    --texto:      #2b3036;
+    --tenue:      #5f666e;
+    --papel:      #f5f6f7;
     --superficie: #ffffff;
-    --linea:      #e6e1ee;
-    --suave:      #f4f1f8;
-    --texto:      #241c3d;
-    --tenue:      #6b6480;
-    --ok:         #0f766e;
-    --aviso:      #b45309;
-    --alerta:     #b91c1c;
-    --sombra:     0 1px 3px rgba(17,13,38,.06), 0 8px 24px rgba(17,13,38,.05);
+    --linea:      #d8dbdf;
+    --linea-sutil:#e8eaec;
+    --suave:      #f0f1f3;
+    --marca:      #d10f7d;
+    --ok:         #0b6b52;
+    --aviso:      #8a5a00;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --tinta:      #f4f1f8;
-      --magenta:    #ff4da6;
-      --lima:       #d5e500;
-      --papel:      #0d0a1a;
-      --superficie: #171130;
-      --linea:      #2e2450;
-      --suave:      #1e1738;
-      --texto:      #e8e4f2;
-      --tenue:      #a49bc4;
-      --ok:         #2dd4bf;
-      --aviso:      #fbbf24;
-      --alerta:     #fca5a5;
-      --sombra:     0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+      --tinta:      #eef0f2;
+      --texto:      #d2d6da;
+      --tenue:      #9aa2ab;
+      --papel:      #15181b;
+      --superficie: #1c2024;
+      --linea:      #333940;
+      --linea-sutil:#272c31;
+      --suave:      #22272b;
+      --marca:      #ff5fb0;
+      --ok:         #4ec9a8;
+      --aviso:      #e0a33c;
     }
   }
   :root[data-theme="dark"] {
-    --tinta:      #f4f1f8;
-    --magenta:    #ff4da6;
-    --lima:       #d5e500;
-    --papel:      #0d0a1a;
-    --superficie: #171130;
-    --linea:      #2e2450;
-    --suave:      #1e1738;
-    --texto:      #e8e4f2;
-    --tenue:      #a49bc4;
-    --ok:         #2dd4bf;
-    --aviso:      #fbbf24;
-    --alerta:     #fca5a5;
-    --sombra:     0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    --tinta:      #eef0f2;
+    --texto:      #d2d6da;
+    --tenue:      #9aa2ab;
+    --papel:      #15181b;
+    --superficie: #1c2024;
+    --linea:      #333940;
+    --linea-sutil:#272c31;
+    --suave:      #22272b;
+    --marca:      #ff5fb0;
+    --ok:         #4ec9a8;
+    --aviso:      #e0a33c;
   }
 
   * { box-sizing: border-box; }
@@ -62,169 +57,173 @@
   body {
     background: var(--papel);
     color: var(--texto);
-    font-family: "Source Serif 4", Georgia, serif;
-    font-size: 16.5px;
-    line-height: 1.65;
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
     margin: 0;
-    padding: 0 1.5rem 6rem;
+    padding: 0 1.5rem 5rem;
   }
-  .envoltura { max-width: 1000px; margin: 0 auto; }
-  .prosa { max-width: 70ch; }
+  .envoltura { max-width: 1020px; margin: 0 auto; }
+  .prosa { max-width: 78ch; }
 
+  /* ── Cabecera ───────────────────────────────────────────── */
   header {
-    padding: 3.5rem 0 2rem;
-    border-bottom: 3px solid var(--magenta);
+    padding: 3rem 0 1.6rem;
+    border-bottom: 1px solid var(--linea);
     margin-bottom: 2rem;
   }
+  .filete { width: 44px; height: 3px; background: var(--marca); margin-bottom: 1.4rem; }
   .marca {
-    font-family: Montserrat, system-ui, sans-serif;
-    font-size: .66rem; font-weight: 700; letter-spacing: .16em;
-    text-transform: uppercase; color: var(--tenue); margin-bottom: 1rem;
+    font-size: .7rem; font-weight: 600; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--tenue); margin-bottom: .9rem;
   }
-  .marca b { color: var(--magenta); }
   h1 {
-    font-family: Montserrat, system-ui, sans-serif;
-    font-size: clamp(1.9rem, 4.5vw, 2.7rem);
-    font-weight: 800; letter-spacing: -.035em; line-height: 1.07;
-    margin: 0 0 .8rem; color: var(--tinta); text-wrap: balance;
+    font-size: clamp(1.6rem, 3.6vw, 2.15rem);
+    font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+    margin: 0 0 .7rem; color: var(--tinta); text-wrap: balance;
   }
-  h1 em { font-style: normal; color: var(--magenta); }
-  .bajada { font-size: 1.1rem; color: var(--tenue); max-width: 58ch; margin: 0; }
+  .bajada { font-size: 1rem; color: var(--tenue); max-width: 62ch; margin: 0; }
 
   h2 {
-    font-family: Montserrat, system-ui, sans-serif;
-    font-size: 1.32rem; font-weight: 800; letter-spacing: -.02em;
-    color: var(--tinta); margin: 2.8rem 0 .6rem; text-wrap: balance;
+    font-size: 1.16rem; font-weight: 600; letter-spacing: -.01em;
+    color: var(--tinta); margin: 2.6rem 0 .6rem;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--linea-sutil);
+    text-wrap: balance;
   }
-  h3 {
-    font-family: Montserrat, system-ui, sans-serif;
-    font-size: 1rem; font-weight: 700; color: var(--tinta); margin: 1.8rem 0 .4rem;
-  }
-  p { margin: 0 0 .95rem; }
+  h3 { font-size: .98rem; font-weight: 600; color: var(--tinta); margin: 1.7rem 0 .4rem; }
+  p { margin: 0 0 .85rem; }
   strong { font-weight: 600; color: var(--tinta); }
-  ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
-  li { margin-bottom: .4rem; }
-  hr { border: none; border-top: 1px solid var(--linea); margin: 2.5rem 0; }
+  ul, ol { margin: 0 0 .9rem; padding-left: 1.25rem; }
+  li { margin-bottom: .35rem; }
+  hr { border: none; border-top: 1px solid var(--linea); margin: 2.4rem 0; }
   code {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: .84em; background: var(--suave);
-    border: 1px solid var(--linea); border-radius: 4px; padding: .06em .36em;
-  }
-  pre {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: .78rem; line-height: 1.7; background: var(--superficie);
-    border: 1px solid var(--linea); border-radius: 10px;
-    padding: 1.1rem 1.3rem; overflow-x: auto; margin: 1.2rem 0;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .86em; background: var(--suave);
+    border: 1px solid var(--linea-sutil); border-radius: 2px; padding: .05em .32em;
   }
 
-  .scroll { overflow-x: auto; margin: 1.2rem 0; }
+  pre {
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: .8rem; line-height: 1.65; background: var(--superficie);
+    border: 1px solid var(--linea); border-left: 3px solid var(--linea);
+    padding: 1rem 1.2rem; overflow-x: auto; margin: 1.1rem 0;
+    color: var(--texto);
+  }
+
+  /* ── Tablas ─────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; margin: 1.1rem 0; }
   table {
-    width: 100%; border-collapse: collapse;
-    font-family: Montserrat, system-ui, sans-serif; font-size: .82rem;
+    width: 100%; border-collapse: collapse; font-size: .86rem;
     background: var(--superficie); border: 1px solid var(--linea);
-    border-radius: 10px; overflow: hidden;
   }
   th {
-    text-align: left; font-weight: 700; font-size: .64rem; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--tenue); padding: .75rem .95rem;
+    text-align: left; font-weight: 600; font-size: .68rem; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue); padding: .6rem .85rem;
     border-bottom: 1px solid var(--linea); background: var(--suave); white-space: nowrap;
   }
-  td { padding: .72rem .95rem; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  td { padding: .6rem .85rem; border-bottom: 1px solid var(--linea-sutil); vertical-align: top; }
   tbody tr:last-child td { border-bottom: none; }
 
   .nota {
     background: var(--superficie); border: 1px solid var(--linea);
-    border-left: 3px solid var(--magenta); border-radius: 8px;
-    padding: .9rem 1.2rem; margin: 1.1rem 0; font-size: .93rem;
+    border-left: 3px solid var(--marca);
+    padding: .8rem 1.1rem; margin: 1rem 0; font-size: .9rem;
   }
 
   /* ── Índice ─────────────────────────────────────────────── */
-  .indice { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.4rem 0 0; }
-  .indice a {
-    display: flex; align-items: baseline; gap: .4rem;
-    font-family: Montserrat, sans-serif; font-size: .74rem; font-weight: 700;
-    text-decoration: none; color: var(--texto);
-    background: var(--superficie); border: 1px solid var(--linea);
-    border-radius: 20px; padding: .35rem .8rem;
+  .indice {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border: 1px solid var(--linea); background: var(--superficie); margin: 1.2rem 0 0;
   }
-  .indice a:hover { border-color: var(--magenta); color: var(--magenta); }
-  .indice b { color: var(--tenue); font-weight: 600; font-size: .68rem; }
+  .indice a {
+    display: flex; align-items: baseline; gap: .35rem;
+    font-size: .74rem; font-weight: 600; text-decoration: none; color: var(--texto);
+    padding: .45rem .8rem; border-right: 1px solid var(--linea-sutil);
+  }
+  .indice a:last-child { border-right: none; }
+  .indice a:hover { background: var(--suave); color: var(--marca); }
+  .indice b { color: var(--tenue); font-weight: 500; font-size: .68rem; }
 
   /* ── Progreso ───────────────────────────────────────────── */
   .progreso {
     position: sticky; top: 0; z-index: 10;
     background: var(--papel); border-bottom: 1px solid var(--linea);
-    padding: .7rem 0; margin: 0 0 1.5rem;
-    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    padding: .65rem 0; margin: 0 0 1.4rem;
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
   }
   .progreso .barra {
-    flex: 1; min-width: 160px; height: 8px; background: var(--suave);
-    border-radius: 20px; overflow: hidden; border: 1px solid var(--linea);
+    flex: 1; min-width: 150px; height: 6px; background: var(--suave);
+    border: 1px solid var(--linea); overflow: hidden;
   }
-  .progreso .barra span { display: block; height: 100%; background: var(--magenta); width: 0; transition: width .2s; }
+  .progreso .barra span { display: block; height: 100%; background: var(--marca); width: 0; transition: width .2s; }
   .progreso .cifra {
-    font-family: Montserrat, sans-serif; font-weight: 800; font-size: .88rem;
-    color: var(--tinta); white-space: nowrap; font-variant-numeric: tabular-nums;
+    font-weight: 600; font-size: .84rem; color: var(--tinta);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
   }
   .progreso button {
-    font-family: Montserrat, sans-serif; font-size: .7rem; font-weight: 700;
-    background: none; border: 1px solid var(--linea); color: var(--tenue);
-    border-radius: 20px; padding: .3rem .8rem; cursor: pointer;
+    font-family: inherit; font-size: .72rem; font-weight: 600;
+    background: var(--superficie); border: 1px solid var(--linea); color: var(--tenue);
+    padding: .28rem .75rem; cursor: pointer;
   }
-  .progreso button:hover { border-color: var(--magenta); color: var(--magenta); }
+  .progreso button:hover { border-color: var(--marca); color: var(--marca); }
 
   /* ── Casos ──────────────────────────────────────────────── */
-  .bloque { margin: 2.4rem 0; scroll-margin-top: 4rem; }
-  .bloque-cab { display: flex; align-items: baseline; gap: .7rem; margin-bottom: .8rem; flex-wrap: wrap; }
-  .bloque-cab h3 { margin: 0; }
-  .sigla {
-    font-family: "JetBrains Mono", monospace; font-size: .72rem; font-weight: 700;
-    background: var(--magenta); color: #fff; border-radius: 5px; padding: .15rem .5rem;
+  .bloque { margin: 2.2rem 0; scroll-margin-top: 3.5rem; }
+  .bloque-cab {
+    display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
+    padding-bottom: .45rem; border-bottom: 1px solid var(--linea); margin-bottom: .7rem;
   }
-  .cuenta { font-family: Montserrat, sans-serif; font-size: .7rem; color: var(--tenue); margin-left: auto; }
+  .bloque-cab h3 { margin: 0; font-size: 1.02rem; }
+  .sigla {
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem; font-weight: 600;
+    color: var(--marca); border: 1px solid var(--marca); padding: .08rem .4rem;
+  }
+  .cuenta { font-size: .72rem; color: var(--tenue); margin-left: auto; }
 
   .caso {
-    display: flex; gap: .8rem; align-items: flex-start;
-    background: var(--superficie); border: 1px solid var(--linea);
-    border-radius: 9px; padding: .8rem 1rem; margin-bottom: .5rem; cursor: pointer;
+    display: flex; gap: .75rem; align-items: flex-start;
+    background: var(--superficie); border: 1px solid var(--linea-sutil);
+    border-left: 2px solid var(--linea);
+    padding: .7rem .9rem; margin-bottom: .3rem; cursor: pointer;
   }
-  .caso:hover { border-color: var(--magenta); }
-  .caso input { margin-top: .3rem; width: 16px; height: 16px; accent-color: var(--magenta); flex: none; cursor: pointer; }
-  .caso:has(input:checked) { opacity: .5; background: var(--suave); }
+  .caso:hover { border-left-color: var(--marca); }
+  .caso input { margin-top: .25rem; width: 15px; height: 15px; accent-color: var(--marca); flex: none; cursor: pointer; }
+  .caso:has(input:checked) { opacity: .48; background: var(--suave); border-left-color: var(--ok); }
   .caso-cuerpo { flex: 1; min-width: 0; }
-  .caso-cab { display: flex; gap: .55rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .3rem; }
+  .caso-cab { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; margin-bottom: .25rem; }
   .cid {
-    font-family: "JetBrains Mono", monospace; font-size: .7rem; font-weight: 700;
-    color: var(--magenta); white-space: nowrap;
+    font-family: "IBM Plex Mono", Consolas, monospace; font-size: .72rem;
+    font-weight: 600; color: var(--marca); white-space: nowrap;
   }
-  .ctit { font-family: Montserrat, sans-serif; font-size: .88rem; font-weight: 700; color: var(--tinta); }
-  .campo { font-size: .87rem; margin-top: .2rem; }
+  .ctit { font-size: .88rem; font-weight: 600; color: var(--tinta); }
+  .campo { font-size: .85rem; margin-top: .15rem; display: flex; gap: .5rem; }
   .etq {
-    font-family: Montserrat, sans-serif; font-size: .6rem; font-weight: 700;
-    letter-spacing: .1em; text-transform: uppercase; color: var(--tenue);
-    display: inline-block; min-width: 4.6rem;
+    font-size: .62rem; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--tenue);
+    flex: none; min-width: 4.4rem; padding-top: .18rem;
   }
 
   footer {
-    margin-top: 3.5rem; padding-top: 1.6rem; border-top: 1px solid var(--linea);
-    font-family: Montserrat, sans-serif; font-size: .74rem; color: var(--tenue);
+    margin-top: 3rem; padding-top: 1.3rem; border-top: 1px solid var(--linea);
+    font-size: .76rem; color: var(--tenue);
   }
 
   @media (max-width: 620px) {
-    body { font-size: 15.5px; padding: 0 1rem 4rem; }
-    .etq { display: block; min-width: 0; }
+    body { font-size: 14.5px; padding: 0 1rem 3.5rem; }
+    .campo { display: block; }
+    .etq { display: block; min-width: 0; padding-top: 0; }
   }
 
   @media print {
-    body { background: #fff; color: #000; font-size: 10.5pt; padding: 0; }
+    body { background: #fff; color: #000; font-size: 10pt; padding: 0; }
     header { padding-top: 0; }
     .progreso, .indice, #reiniciar { display: none !important; }
-    .caso { break-inside: avoid; page-break-inside: avoid; border-color: #ccc; }
+    .caso { break-inside: avoid; page-break-inside: avoid; border-color: #bbb; }
     .bloque-cab, h2, h3 { break-after: avoid; page-break-after: avoid; }
     table, pre, .nota { break-inside: avoid; }
     a { text-decoration: none; color: inherit; }
     .caso input { -webkit-appearance: none; appearance: none;
-                  border: 1px solid #666; border-radius: 3px; }
+                  border: 1px solid #555; border-radius: 0; }
     .caso:has(input:checked) { opacity: 1; background: #fff; }
   }
 </style>
@@ -232,11 +231,12 @@
 <div class="envoltura">
 
 <header>
-  <div class="marca">inetum<b>.</b> &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
-  <h1>Ronda de QA: <em>156 casos</em> y cómo pensar el sistema</h1>
+  <div class="filete"></div>
+  <div class="marca">Inetum &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
+  <h1>Ronda de QA — 156 casos de prueba</h1>
   <p class="bajada">
-    Primero cómo funciona la plataforma y dónde ya han aparecido errores. Después
-    los casos, marcables a medida que los ejecutas.
+    Primero cómo funciona la plataforma y dónde ya han aparecido errores.
+    Después los casos, marcables a medida que se ejecutan.
   </p>
 </header>
 
@@ -570,7 +570,8 @@
 </section>
 
 <footer>
-  Plataforma de Gestión de Recursos · Inetum · ronda de QA de agosto de 2026.<br>Este archivo es autocontenido: no necesitas nada más para ejecutar la ronda.
+  Plataforma de Gestión de Recursos · Inetum · ronda de QA de agosto de 2026.<br>
+  Este archivo es autocontenido: no necesitas nada más para ejecutar la ronda.
 </footer>
 
 </div>

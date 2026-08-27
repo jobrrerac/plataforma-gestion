@@ -159,16 +159,27 @@ def main():
     )
 
     plantilla = io.open(sys.argv[1], encoding="utf-8").read()
-    pagina = (
+    cuerpo = (
         plantilla
         .replace("{{TOTAL}}", str(total))
         .replace("{{INDICE}}", indice)
         .replace("{{ENTORNO}}", a_html(entorno))
         .replace("{{MANUAL}}", a_html(manual))
         .replace("{{CASOS}}", render_casos(bloques))
+        .replace("<title>Ronda de QA</title>\n", "", 1)
     )
+
+    # Documento completo: la plantilla no lleva <html> ni <head> para poder
+    # reutilizarse, pero el archivo que se envia tiene que ser autonomo.
+    cabecera = (
+        '<!DOCTYPE html>\n<html lang="es">\n<head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        "<title>QA — Plataforma de Gestion de Recursos (Inetum)</title>\n"
+    )
+    pagina = f"{cabecera}{cuerpo}\n</body>\n</html>\n"
     io.open(sys.argv[2], "w", encoding="utf-8").write(pagina)
-    print(f"generado: {total} casos en {len(bloques)} bloques")
+    print(f"generado: {total} casos en {len(bloques)} bloques -> {sys.argv[2]}")
 
 
 if __name__ == "__main__":
