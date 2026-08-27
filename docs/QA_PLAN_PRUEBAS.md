@@ -27,26 +27,47 @@ docker compose exec web python manage.py setup_actividades
 docker compose exec web python manage.py createsuperuser
 ```
 
-### 1.2 Cuentas de prueba en Azure
+### 1.2 Tus cuentas
 
-Las contraseñas iniciales fuerzan cambio en el primer inicio de sesión (salvo la de QA).
+El plan recorre los tres roles, así que hacen falta tres accesos. Todas entran por **"Iniciar sesión con Microsoft"**.
 
-| Cuenta (UPN de Entra) | Rol | Para qué sirve |
+| Cuenta (UPN de Entra) | Rol | Cuándo usarla |
 |---|---|---|
-| `admin@inetumoffshore.onmicrosoft.com` | Admin | Entra como el superusuario `inetum_admin` mediante alias de usuario |
-| `jose.barrera-cocunubo@inetumoffshore.onmicrosoft.com` | Admin | Misma cuenta de Django, alcanzada por alias de **dominio** |
-| `carmen.leon@inetumoffshore.onmicrosoft.com` | PM | Es PM de varios proyectos: aprueba horas |
-| `sandra.chavarria-romero@inetumoffshore.onmicrosoft.com` | Ingeniero | **Con asignación aprobada** — ve proyectos de cliente |
-| `test.ingeniero@inetumoffshore.onmicrosoft.com` | Ingeniero | **Sin asignaciones** — solo ve proyectos internos |
+| `erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com` | Ingeniero | **Tu cuenta.** Bloques AUT, SSO, RBAC, NOV y HOR |
+| `qa.pm@inetumoffshore.onmicrosoft.com` | PM | Bloques SOL, CES, LIB y la parte de PM en HAP |
+| `qa.admin@inetumoffshore.onmicrosoft.com` | Admin | Bloques MAE, APR, la aprobación de novedades y la parte de Admin en HAP |
 
-> Las dos últimas prueban caminos distintos y **hay que usar las dos**: el filtro de proyectos por asignación solo se valida comparándolas.
+> **`qa.pm` y `qa.admin` son cuentas de prueba creadas para esta ronda.** Se usan para no tener que cambiarle el rol a nadie de verdad. **`qa.admin` puede aprobar y revocar asignaciones reales**, así que hay que desactivarlas en Entra cuando termine la ronda.
 
-### 1.3 Datos de referencia ya cargados
+Cuentas de apoyo, para casos concretos:
 
-- Proyectos internos: `INT-DEPART`, `INT-MGMT` (no facturables).
-- Proyectos de cliente: `V-00869252/D`, `V-25188808/Q` y otros.
-- Actividades sin proyecto: **Entrenamiento** y **Estudio**. (`Formación` está retirada: no debe aparecer en los desplegables.)
-- Jornada: **lunes a jueves 8,5 h · viernes 8 h** (42 h semanales, vigente desde 2026-07-15).
+| Cuenta | Rol | Para qué |
+|---|---|---|
+| `test.ingeniero@inetumoffshore.onmicrosoft.com` | Ingeniero | **Sin asignaciones**: solo para HOR-10 |
+| `carmen.leon@inetumoffshore.onmicrosoft.com` | PM | **PM ajeno** a `QA-DEMO`: solo para HAP-02 |
+
+### 1.3 Datos preparados para ti
+
+- **Proyecto `QA-DEMO`** (facturable), cuyo PM es `qa.pm`.
+- **Asignación aprobada tuya a `QA-DEMO`**, del **2026-08-06 al 2026-08-26**. Es la que hace que `QA-DEMO` te aparezca en el desplegable de `/horas/` esos días — y que **desaparezca** fuera de ese rango (HOR-11 y HOR-12).
+- Proyectos internos: `INT-DEPART`, `INT-MGMT` (no facturables). Salen siempre, tengas o no asignación.
+- Actividades sin proyecto: **Entrenamiento** y **Estudio**. `Formación` está retirada y **no debe aparecer**.
+- Jornada: **lunes a jueves 8,5 h · viernes 8 h** (42 h semanales desde 2026-07-15).
+
+> Al terminar, la asignación a `QA-DEMO` y el propio proyecto deberían revocarse: son datos de prueba dentro de la base real y hoy suman ocupación en tu fila del dashboard.
+
+### 1.4 Orden sugerido
+
+El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.
+
+1. **AUT y SSO** con tu cuenta — confirma que entras y con qué rol.
+2. **RBAC** alternando las tres cuentas.
+3. **MAE y CAL** con `qa.admin` — deja los datos listos.
+4. **SOL, CES, LIB** con `qa.pm`; sus aprobaciones con `qa.admin`.
+5. **NOV** con tu cuenta; las aprobaciones con `qa.admin`.
+6. **HOR** con tu cuenta — es el bloque más largo.
+7. **HAP** con `qa.pm` y `qa.admin`, sobre los días que registraste en el paso 6.
+8. **DASH, AUD, INF** al final.
 
 ---
 
@@ -76,10 +97,10 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | SSO-01 | El botón aparece | Abrir `/login/` en Azure | Se ve "Iniciar sesión con Microsoft" **y** el formulario de usuario/contraseña |
 | SSO-02 | Redirección a Microsoft | Pulsar el botón | Lleva a `login.microsoftonline.com`, **sin** pantalla de "se necesita aprobación del administrador" |
 | SSO-03 | Primer inicio pide cambiar contraseña | Entrar con una cuenta nueva | Microsoft obliga a cambiarla antes de continuar |
-| SSO-04 | **Alias de dominio** | Entrar como `sandra.chavarria-romero@inetumoffshore.onmicrosoft.com` | Entra en la cuenta **existente** `sandra.chavarria-romero@inetum.com`, con su historial. **No** se crea un usuario nuevo |
+| SSO-04 | **Alias de dominio** | Entrar con tu cuenta `erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com` | Entras en tu cuenta **existente** `erika.castiblanco-monroy@inetum.com`, con tu historial. **No** se crea un usuario nuevo |
 | SSO-05 | El total de usuarios no crece | Contar usuarios en `/admin/auth/user/` antes y después de SSO-04 | El número **no cambia** |
 | SSO-06 | **Alias de usuario** | Entrar como `admin@inetumoffshore.onmicrosoft.com` | Entra como `inetum_admin`; su email sigue siendo `jose.barrera-cocunubo@inetum.com`, **no** `admin@inetum.com` |
-| SSO-07 | Rol sincronizado desde Entra | Entrar como `carmen.leon@…` | Queda en el grupo **PM**; ve Solicitudes, Cesiones, Liberaciones y Aprobar horas |
+| SSO-07 | Rol sincronizado desde Entra | Entrar como `qa.pm@…` | Queda en el grupo **PM**; ve Solicitudes, Cesiones, Liberaciones y Aprobar horas |
 | SSO-08 | Sin rol en Entra no se entra | Quitar el rol a `test.ingeniero` en Entra e intentar entrar | Microsoft impide el acceso a la aplicación |
 | SSO-09 | Cambio de rol en Entra manda | Cambiar en Entra el rol de una cuenta de Ingeniero a PM y volver a entrar | En Django cambia de grupo; el menú se ajusta |
 | SSO-10 | El login local sobrevive | Con SSO activo, entrar con usuario y contraseña locales | Funciona igual |
@@ -232,8 +253,8 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HOR-08 | Formación no aparece | Revisar el desplegable | Solo Proyecto, Entrenamiento y Estudio |
 | HOR-09 | El proyecto solo cuando aplica | Elegir Estudio y luego Proyecto | El campo Proyecto **se oculta** con Estudio y aparece con Proyecto |
 | HOR-10 | **Proyectos filtrados (sin asignación)** | Como `test.ingeniero`, abrir el desplegable | Solo `INT-DEPART` e `INT-MGMT`. **Ningún proyecto de cliente** |
-| HOR-11 | **Proyectos filtrados (con asignación)** | Como `sandra.chavarria-romero`, abrir un día cubierto por su asignación | Además de los internos, aparece **su proyecto de cliente** |
-| HOR-12 | El filtro depende del día | Como Sandra, abrir un día **fuera** del rango de su asignación | El proyecto de cliente **desaparece**; quedan los internos |
+| HOR-11 | **Proyectos filtrados (con asignación)** | Con tu cuenta, abrir un día **entre el 06 y el 26 de agosto** | Además de los internos, aparece **`QA-DEMO`** |
+| HOR-12 | El filtro depende del día | Con tu cuenta, abrir un día **anterior al 06 de agosto** | `QA-DEMO` **desaparece**; quedan solo los internos |
 | HOR-13 | **Nada se guarda al añadir** | Añadir dos actividades a la lista y **recargar la página sin guardar** | La lista se pierde: no se guardó nada |
 | HOR-14 | El contador avanza | Ir añadiendo actividades | El marcador sube (`x / 8,5 h`) y la barra se llena |
 | HOR-15 | **Decimales correctos** | Con 4 h puestas, añadir 4,5 h en un día de 8,5 | Lo acepta y el día cuadra. **No** debe decir "quedan 4 h" |
@@ -254,10 +275,13 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ## 13. HAP — Aprobación de horas (PM y Admin)
 
+> **Quién aprueba qué.** El PM aprueba los días que tocan **sus** proyectos. El Admin ve **todos** — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la **única** vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita `qa.pm`, `qa.admin` y `carmen.leon` (como PM ajeno).
+
+
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
-| HAP-01 | El PM ve lo suyo | Como Carmen (PM), abrir `/horas/aprobar/` | Ve los días que tocan **sus** proyectos |
-| HAP-02 | Un PM ajeno no lo ve | Como otro PM sin relación con ese proyecto | La cola no incluye ese día |
+| HAP-01 | El PM ve lo suyo | Como `qa.pm`, abrir `/horas/aprobar/` tras registrar días con horas de `QA-DEMO` | Ve esos días: es el PM del proyecto |
+| HAP-02 | Un PM ajeno no lo ve | Como `carmen.leon`, que no es PM de `QA-DEMO` | La cola **no** incluye esos días |
 | HAP-03 | **El Admin lo ve todo** | Como Admin, abrir la misma pantalla | Ve todos los días pendientes, también los de proyectos ajenos |
 | HAP-04 | Al Admin se le avisa | Como Admin, mirar arriba de la cola | Franja explicando que ve todo y que sirve de respaldo |
 | HAP-05 | Al PM no se le muestra esa nota | Como PM | No aparece esa franja |

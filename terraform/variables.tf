@@ -321,6 +321,15 @@ variable "roles_entra" {
     # las novedades funcionan igual, no dependen de `activo`.
     "test.ingeniero" = "Ingeniero"
 
+    # Cuentas para ejecutar el plan de pruebas (docs/QA_PLAN_PRUEBAS.md). Quien
+    # prueba necesita los tres roles para recorrerlo entero, y usar personas
+    # reales obligaria a cambiarles el rol de verdad.
+    #
+    # DESACTIVAR EN ENTRA AL TERMINAR LA RONDA DE QA: qa.admin puede aprobar y
+    # revocar asignaciones reales.
+    "qa.pm"    = "PM"
+    "qa.admin" = "Admin"
+
     "erika.castiblanco-monroy"  = "Ingeniero"
     "sandra.chavarria-romero"   = "Ingeniero"
     "gustavo.villazon-gonzalez" = "Ingeniero"
