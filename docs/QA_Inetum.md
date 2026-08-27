@@ -2,17 +2,15 @@
 
 **Para:** Erika Castiblanco-Monroy · **Fecha:** 2026-08-26
 
-Este documento tiene dos partes:
-
-1. **Manual** — cómo funciona el sistema, las reglas que no deben romperse y
-   dónde ya han aparecido errores. Léelo antes de empezar.
-2. **Plan de pruebas** — 156 casos con pasos y resultado esperado.
+Dos partes: primero el **manual** (cómo funciona el sistema y dónde ya han
+aparecido errores) y después el **plan** con 156 casos. Todo lo que necesitas
+está aquí; no hace falta acceso al repositorio ni instalar nada.
 
 ---
 
 # Parte 1 · Manual
 
-Este documento no lista casos de prueba: explica **cómo está pensado el sistema** para que puedas diseñar los tuyos. Los casos están en [`QA_PLAN_PRUEBAS.md`](QA_PLAN_PRUEBAS.md).
+Esta primera parte no lista casos de prueba: explica **cómo está pensado el sistema** para que puedas diseñar los tuyos. Los casos vienen después.
 
 Lo escribe quien construyó la aplicación, así que incluye lo que normalmente no se cuenta: dónde ya han aparecido errores y qué partes son frágiles.
 
@@ -184,19 +182,13 @@ Cada caso indica pasos y resultado esperado. QA registra **PASS / FAIL / BLOQUEA
 
 ### 1.1 Dónde se prueba
 
-| Entorno | URL | Notas |
-|---|---|---|
-| **Producción (Azure)** | `https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io` | Único entorno con SSO real. **Ojo:** con `min-replicas 0` la primera petición tras un rato de inactividad tarda 10-30 s. No es un fallo. |
-| **Local** | `http://localhost:8000` | Sin SSO. Sirve para todo lo demás. |
+**Todo se prueba aquí**, desde el navegador. No hace falta instalar nada.
 
-```bash
-# Local, desde cero
-docker compose up -d
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py setup_grupos
-docker compose exec web python manage.py setup_actividades
-docker compose exec web python manage.py createsuperuser
-```
+> ### https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io
+
+**La primera carga tarda 10-30 segundos** si nadie ha usado la aplicación en un rato: se apaga sola cuando está ociosa para no gastar. A partir de ahí va rápida. **No es un fallo** — es lo primero con lo que te vas a topar.
+
+Tres casos del bloque INF y la limpieza final los ejecuta el equipo de desarrollo, no tú; están marcados como tales.
 
 ### 1.2 Tus cuentas
 
@@ -233,11 +225,7 @@ Tres proyectos de prueba, cada uno con un papel distinto:
 - Actividades sin proyecto: **Entrenamiento** y **Estudio**. `Formación` está retirada y **no debe aparecer**.
 - Jornada: **lunes a jueves 8,5 h · viernes 8 h** (42 h semanales desde 2026-07-15).
 
-> **Al terminar la ronda**, todo esto se retira con un comando:
-> ```bash
-> python manage.py datos_qa limpiar
-> ```
-> Retira proyectos, asignaciones, las horas legalizadas contra ellos y desactiva las cuentas `qa.*` — todo por soft-delete. Lo único que queda a mano es **desactivar `qa.pm` y `qa.admin` en Entra ID**.
+> **Al terminar la ronda**, avisa al equipo: retiran los proyectos de prueba, tus asignaciones a ellos y las cuentas `qa.*` con un solo comando. No tienes que deshacer nada tú.
 
 ### 1.4 Orden sugerido
 
@@ -321,7 +309,7 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | MAE-07 | Tarifa con vigencia | Añadir una `TarifaVigente` a un recurso con `fecha_desde` futura | Se guarda; el costo de asignaciones activas se recomputa (aviso en pantalla) |
 | MAE-08 | La tarifa es append-only | Intentar **editar** una tarifa ya registrada | No se puede modificar, solo añadir otra |
 | MAE-09 | **Soft-delete individual** | Borrar un recurso desde su ficha | Desaparece de las listas pero la fila sigue en la base (`deleted_at` con fecha) |
-| MAE-10 | **Soft-delete masivo** | Seleccionar 2-3 proyectos en la lista y usar "Eliminar seleccionados" | Igual que MAE-09: **la fila NO se borra de verdad**. Verificar en base de datos |
+| MAE-10 | **Soft-delete masivo** | Anota el código de un proyecto de prueba. Selecciónalo en la lista y usa "Eliminar seleccionados". Después intenta **crear uno nuevo con ese mismo código** | Desaparece de la lista, pero el código **sigue ocupado**: al crearlo da error de duplicado. Eso demuestra que la fila no se borró de verdad |
 | MAE-11 | Un recurso que sale de la empresa | Marcar `activo = False` en su ficha | Deja de aparecer como asignable; su historial se conserva |
 | MAE-12 | Catálogo de actividades | `/admin/legalizacion/tipoactividad/` | Se ven Proyecto, Entrenamiento y Estudio activos, y Formación **inactiva** |
 
@@ -515,8 +503,8 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | INF-02 | Redirección a HTTPS | GET por `http://` | 301 a `https://` |
 | INF-03 | Estáticos | Cargar cualquier página | CSS y JS cargan; los estáticos llevan hash en el nombre |
 | INF-04 | **Arranque en frío** | Dejar la app sin usar 10 min y volver a entrar | Tarda 10-30 s la primera vez. **Es lo esperado**, no un bug |
-| INF-05 | Guard de suscripción | `cd terraform && terraform plan -var="subscription_id=00000000-0000-0000-0000-000000000000"` | Falla con "Suscripción no permitida" |
-| INF-06 | Migraciones idempotentes | Lanzar el job de migraciones dos veces | Ambas terminan `Succeeded` sin duplicar datos |
+| INF-05 | Guard de suscripción · **lo ejecuta el equipo** | Pídeselo a quien mantiene el despliegue: lanza el plan de Terraform apuntando a otra suscripción | Falla con "Suscripción no permitida". Anota el resultado que te reporten |
+| INF-06 | Migraciones idempotentes · **lo ejecuta el equipo** | Pide que lancen el job de migraciones dos veces seguidas | Ambas terminan correctamente y no se duplican datos |
 
 ---
 

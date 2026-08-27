@@ -220,9 +220,7 @@
     header { padding-top: 0; }
     .progreso, .indice, #reiniciar { display: none !important; }
     .caso { break-inside: avoid; page-break-inside: avoid; border-color: #ccc; }
-    .bloque { break-before: auto; }
-    .bloque-cab { break-after: avoid; page-break-after: avoid; }
-    h2, h3 { break-after: avoid; page-break-after: avoid; }
+    .bloque-cab, h2, h3 { break-after: avoid; page-break-after: avoid; }
     table, pre, .nota { break-inside: avoid; }
     a { text-decoration: none; color: inherit; }
     .caso input { -webkit-appearance: none; appearance: none;
@@ -244,13 +242,10 @@
 
 <div class="prosa">
 <h3>1.1 Dónde se prueba</h3>
-<div class="scroll"><table><thead><tr><th>Entorno</th><th>URL</th><th>Notas</th></tr></thead><tbody><tr><td><strong>Producción (Azure)</strong></td><td><code>https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io</code></td><td>Único entorno con SSO real. <strong>Ojo:</strong> con <code>min-replicas 0</code> la primera petición tras un rato de inactividad tarda 10-30 s. No es un fallo.</td></tr><tr><td><strong>Local</strong></td><td><code>http://localhost:8000</code></td><td>Sin SSO. Sirve para todo lo demás.</td></tr></tbody></table></div>
-<pre># Local, desde cero
-docker compose up -d
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py setup_grupos
-docker compose exec web python manage.py setup_actividades
-docker compose exec web python manage.py createsuperuser</pre>
+<p><strong>Todo se prueba aquí</strong>, desde el navegador. No hace falta instalar nada.</p>
+<div class="nota">### https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io</div>
+<p><strong>La primera carga tarda 10-30 segundos</strong> si nadie ha usado la aplicación en un rato: se apaga sola cuando está ociosa para no gastar. A partir de ahí va rápida. <strong>No es un fallo</strong> — es lo primero con lo que te vas a topar.</p>
+<p>Tres casos del bloque INF y la limpieza final los ejecuta el equipo de desarrollo, no tú; están marcados como tales.</p>
 <h3>1.2 Tus cuentas</h3>
 <p>El plan recorre los tres roles, así que hacen falta tres accesos. Todas entran por <strong>&quot;Iniciar sesión con Microsoft&quot;</strong>.</p>
 <div class="scroll"><table><thead><tr><th>Cuenta (UPN de Entra)</th><th>Rol</th><th>Cuándo usarla</th></tr></thead><tbody><tr><td><code>erika.castiblanco-monroy@inetumoffshore.onmicrosoft.com</code></td><td>Ingeniero</td><td><strong>Tu cuenta.</strong> Bloques AUT, SSO, RBAC, NOV y HOR</td></tr><tr><td><code>qa.pm@inetumoffshore.onmicrosoft.com</code></td><td>PM</td><td>Bloques SOL, CES, LIB y la parte de PM en HAP</td></tr><tr><td><code>qa.admin@inetumoffshore.onmicrosoft.com</code></td><td>Admin</td><td>Bloques MAE, APR, la aprobación de novedades y la parte de Admin en HAP</td></tr></tbody></table></div>
@@ -261,7 +256,7 @@ docker compose exec web python manage.py createsuperuser</pre>
 <p>Tres proyectos de prueba, cada uno con un papel distinto:</p>
 <div class="scroll"><table><thead><tr><th>Proyecto</th><th>PM</th><th>Estado</th><th>Para qué</th></tr></thead><tbody><tr><td><code>QA-001</code> Portal de Clientes QA</td><td><code>qa.pm</code></td><td>Activo</td><td><strong>Estás asignada.</strong> Aparece en <code>/horas/</code> dentro del rango</td></tr><tr><td><code>QA-002</code> Migración SAP QA</td><td><code>carmen.leon</code></td><td>Activo</td><td>PM distinto: sirve para comprobar que la cola de aprobación filtra</td></tr><tr><td><code>QA-003</code> Mantenimiento Legacy QA</td><td><code>qa.pm</code></td><td><strong>Cerrado</strong></td><td>Comprobar que un proyecto cerrado <strong>no</strong> aparece donde no debe</td></tr></tbody></table></div>
 <ul><li><strong>Tu asignación aprobada a <code>QA-001</code></strong> va del <strong>2026-08-06 a hoy</strong>. Ese rango es lo que hace verificable el filtro: dentro, <code>QA-001</code> aparece en el desplegable de <code>/horas/</code>; fuera, desaparece (HOR-11 y HOR-12).</li><li><code>qa.pm</code> también tiene recurso y asignación, para poder probar que un PM legaliza sus propias horas (HOR-27).</li><li>Proyectos internos: <code>INT-DEPART</code>, <code>INT-MGMT</code> (no facturables). Salen <strong>siempre</strong>, con o sin asignación.</li><li>Actividades sin proyecto: <strong>Entrenamiento</strong> y <strong>Estudio</strong>. <code>Formación</code> está retirada y <strong>no debe aparecer</strong>.</li><li>Jornada: <strong>lunes a jueves 8,5 h · viernes 8 h</strong> (42 h semanales desde 2026-07-15).</li></ul>
-<div class="nota"><strong>Al terminar la ronda</strong>, todo esto se retira con un comando: ``<code>bash python manage.py datos_qa limpiar </code>`<code> Retira proyectos, asignaciones, las horas legalizadas contra ellos y desactiva las cuentas </code>qa.*<code> — todo por soft-delete. Lo único que queda a mano es <strong>desactivar </code>qa.pm<code> y </code>qa.admin` en Entra ID</strong>.</div>
+<div class="nota"><strong>Al terminar la ronda</strong>, avisa al equipo: retiran los proyectos de prueba, tus asignaciones a ellos y las cuentas <code>qa.*</code> con un solo comando. No tienes que deshacer nada tú.</div>
 <h3>1.4 Orden sugerido</h3>
 <p>El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.</p>
 <ol><li>1. <strong>AUT y SSO</strong> con tu cuenta — confirma que entras y con qué rol.</li><li>2. <strong>RBAC</strong> alternando las tres cuentas.</li><li>3. <strong>MAE y CAL</strong> con <code>qa.admin</code> — deja los datos listos.</li><li>4. <strong>SOL, CES, LIB</strong> con <code>qa.pm</code>; sus aprobaciones con <code>qa.admin</code>.</li><li>5. <strong>NOV</strong> con tu cuenta; las aprobaciones con <code>qa.admin</code>.</li><li>6. <strong>HOR</strong> con tu cuenta — es el bloque más largo.</li><li>7. <strong>HAP</strong> con <code>qa.pm</code> y <code>qa.admin</code>, sobre los días que registraste en el paso 6.</li><li>8. <strong>DASH, AUD, INF</strong> al final.</li></ol>
@@ -271,7 +266,7 @@ docker compose exec web python manage.py createsuperuser</pre>
 <hr>
 
 <div class="prosa">
-<p>Este documento no lista casos de prueba: explica <strong>cómo está pensado el sistema</strong> para que puedas diseñar los tuyos. Los casos están en <code>QA_PLAN_PRUEBAS.md</code>.</p>
+<p>Esta primera parte no lista casos de prueba: explica <strong>cómo está pensado el sistema</strong> para que puedas diseñar los tuyos. Los casos vienen después.</p>
 <p>Lo escribe quien construyó la aplicación, así que incluye lo que normalmente no se cuenta: dónde ya han aparecido errores y qué partes son frágiles.</p>
 <hr>
 <h2>1. Qué es esto</h2>
@@ -412,7 +407,7 @@ docker compose exec web python manage.py createsuperuser</pre>
 <label class="caso" for="c-MAE-07"><input type="checkbox" id="c-MAE-07" data-caso="MAE-07"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-07</span><span class="ctit">Tarifa con vigencia</span></div><div class="campo"><span class="etq">Pasos</span>Añadir una <code>TarifaVigente</code> a un recurso con <code>fecha_desde</code> futura</div><div class="campo"><span class="etq">Esperado</span>Se guarda; el costo de asignaciones activas se recomputa (aviso en pantalla)</div></div></label>
 <label class="caso" for="c-MAE-08"><input type="checkbox" id="c-MAE-08" data-caso="MAE-08"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-08</span><span class="ctit">La tarifa es append-only</span></div><div class="campo"><span class="etq">Pasos</span>Intentar <strong>editar</strong> una tarifa ya registrada</div><div class="campo"><span class="etq">Esperado</span>No se puede modificar, solo añadir otra</div></div></label>
 <label class="caso" for="c-MAE-09"><input type="checkbox" id="c-MAE-09" data-caso="MAE-09"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-09</span><span class="ctit"><strong>Soft-delete individual</strong></span></div><div class="campo"><span class="etq">Pasos</span>Borrar un recurso desde su ficha</div><div class="campo"><span class="etq">Esperado</span>Desaparece de las listas pero la fila sigue en la base (<code>deleted_at</code> con fecha)</div></div></label>
-<label class="caso" for="c-MAE-10"><input type="checkbox" id="c-MAE-10" data-caso="MAE-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-10</span><span class="ctit"><strong>Soft-delete masivo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Seleccionar 2-3 proyectos en la lista y usar &quot;Eliminar seleccionados&quot;</div><div class="campo"><span class="etq">Esperado</span>Igual que MAE-09: <strong>la fila NO se borra de verdad</strong>. Verificar en base de datos</div></div></label>
+<label class="caso" for="c-MAE-10"><input type="checkbox" id="c-MAE-10" data-caso="MAE-10"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-10</span><span class="ctit"><strong>Soft-delete masivo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Anota el código de un proyecto de prueba. Selecciónalo en la lista y usa &quot;Eliminar seleccionados&quot;. Después intenta <strong>crear uno nuevo con ese mismo código</strong></div><div class="campo"><span class="etq">Esperado</span>Desaparece de la lista, pero el código <strong>sigue ocupado</strong>: al crearlo da error de duplicado. Eso demuestra que la fila no se borró de verdad</div></div></label>
 <label class="caso" for="c-MAE-11"><input type="checkbox" id="c-MAE-11" data-caso="MAE-11"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-11</span><span class="ctit">Un recurso que sale de la empresa</span></div><div class="campo"><span class="etq">Pasos</span>Marcar <code>activo = False</code> en su ficha</div><div class="campo"><span class="etq">Esperado</span>Deja de aparecer como asignable; su historial se conserva</div></div></label>
 <label class="caso" for="c-MAE-12"><input type="checkbox" id="c-MAE-12" data-caso="MAE-12"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">MAE-12</span><span class="ctit">Catálogo de actividades</span></div><div class="campo"><span class="etq">Pasos</span><code>/admin/legalizacion/tipoactividad/</code></div><div class="campo"><span class="etq">Esperado</span>Se ven Proyecto, Entrenamiento y Estudio activos, y Formación <strong>inactiva</strong></div></div></label>
 </section>
@@ -570,13 +565,12 @@ docker compose exec web python manage.py createsuperuser</pre>
 <label class="caso" for="c-INF-02"><input type="checkbox" id="c-INF-02" data-caso="INF-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-02</span><span class="ctit">Redirección a HTTPS</span></div><div class="campo"><span class="etq">Pasos</span>GET por <code>http://</code></div><div class="campo"><span class="etq">Esperado</span>301 a <code>https://</code></div></div></label>
 <label class="caso" for="c-INF-03"><input type="checkbox" id="c-INF-03" data-caso="INF-03"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-03</span><span class="ctit">Estáticos</span></div><div class="campo"><span class="etq">Pasos</span>Cargar cualquier página</div><div class="campo"><span class="etq">Esperado</span>CSS y JS cargan; los estáticos llevan hash en el nombre</div></div></label>
 <label class="caso" for="c-INF-04"><input type="checkbox" id="c-INF-04" data-caso="INF-04"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-04</span><span class="ctit"><strong>Arranque en frío</strong></span></div><div class="campo"><span class="etq">Pasos</span>Dejar la app sin usar 10 min y volver a entrar</div><div class="campo"><span class="etq">Esperado</span>Tarda 10-30 s la primera vez. <strong>Es lo esperado</strong>, no un bug</div></div></label>
-<label class="caso" for="c-INF-05"><input type="checkbox" id="c-INF-05" data-caso="INF-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-05</span><span class="ctit">Guard de suscripción</span></div><div class="campo"><span class="etq">Pasos</span><code>cd terraform &amp;&amp; terraform plan -var=&quot;subscription_id=00000000-0000-0000-0000-000000000000&quot;</code></div><div class="campo"><span class="etq">Esperado</span>Falla con &quot;Suscripción no permitida&quot;</div></div></label>
-<label class="caso" for="c-INF-06"><input type="checkbox" id="c-INF-06" data-caso="INF-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-06</span><span class="ctit">Migraciones idempotentes</span></div><div class="campo"><span class="etq">Pasos</span>Lanzar el job de migraciones dos veces</div><div class="campo"><span class="etq">Esperado</span>Ambas terminan <code>Succeeded</code> sin duplicar datos</div></div></label>
+<label class="caso" for="c-INF-05"><input type="checkbox" id="c-INF-05" data-caso="INF-05"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-05</span><span class="ctit">Guard de suscripción · <strong>lo ejecuta el equipo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pídeselo a quien mantiene el despliegue: lanza el plan de Terraform apuntando a otra suscripción</div><div class="campo"><span class="etq">Esperado</span>Falla con &quot;Suscripción no permitida&quot;. Anota el resultado que te reporten</div></div></label>
+<label class="caso" for="c-INF-06"><input type="checkbox" id="c-INF-06" data-caso="INF-06"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">INF-06</span><span class="ctit">Migraciones idempotentes · <strong>lo ejecuta el equipo</strong></span></div><div class="campo"><span class="etq">Pasos</span>Pide que lancen el job de migraciones dos veces seguidas</div><div class="campo"><span class="etq">Esperado</span>Ambas terminan correctamente y no se duplican datos</div></div></label>
 </section>
 
 <footer>
-  Generado desde <code>docs/QA_MANUAL.md</code> y <code>docs/QA_PLAN_PRUEBAS.md</code>.
-  Esos archivos son la fuente: si cambian, esta página se regenera.
+  Plataforma de Gestión de Recursos · Inetum · ronda de QA de agosto de 2026.<br>Este archivo es autocontenido: no necesitas nada más para ejecutar la ronda.
 </footer>
 
 </div>

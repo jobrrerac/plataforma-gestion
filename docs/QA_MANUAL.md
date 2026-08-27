@@ -1,6 +1,6 @@
 # Manual de QA — cómo funciona la plataforma
 
-Este documento no lista casos de prueba: explica **cómo está pensado el sistema** para que puedas diseñar los tuyos. Los casos están en [`QA_PLAN_PRUEBAS.md`](QA_PLAN_PRUEBAS.md).
+Esta primera parte no lista casos de prueba: explica **cómo está pensado el sistema** para que puedas diseñar los tuyos. Los casos vienen después.
 
 Lo escribe quien construyó la aplicación, así que incluye lo que normalmente no se cuenta: dónde ya han aparecido errores y qué partes son frágiles.
 
