@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+Alta de usuarios en Entra ID para la plataforma de gestión de recursos.
+
+Crea la cuenta en Entra ID con contraseña temporal y cambio obligatorio en el
+primer inicio de sesión, y le asigna el app role que corresponda. Todo el acceso
+a la plataforma es por SSO: la cuenta de Entra es la que importa.
+
+Uso:
+    python scripts/crear_usuario_entra.py daniel.guzman@inetum.com
+    python scripts/crear_usuario_entra.py ana.perez@inetum.com --rol PM
+    python scripts/crear_usuario_entra.py a@inetum.com b@inetum.com --simular
+
+Por qué existe: hasta ahora cada alta se hacía a mano por el portal, que son
+cinco pantallas y dos pasos fáciles de olvidar (el app role y el aviso de
+cambio de contraseña). Sin el app role la persona ve "se necesita aprobación
+del administrador" y no entra: la aplicación exige asignación explícita.
+"""
+
+import argparse
+import csv
+import json
+import secrets
+import shutil
+import string
+import subprocess
+import sys
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parent.parent
+
+# ---------------------------------------------------------------------------
+# Constantes del entorno. Coinciden con terraform/ y con las variables de
+# entorno de la Container App (OIDC_RP_CLIENT_ID, OIDC_DOMINIO_ALIAS).
+# ---------------------------------------------------------------------------
+TENANT_ESPERADO = "fdb323c6-1c3c-47a4-9144-2cabbc82699c"  # inetumoffshore.onmicrosoft.com
+APP_ID = "d47ef129-5910-49e1-be94-36f20be7b7f5"  # Plataforma Gestion de Recursos (prod)
+
+# El tenant no tiene verificado el dominio corporativo, así que los UPN de Entra
+# van en onmicrosoft.com. La aplicación traduce el dominio al entrar
+# (OIDC_DOMINIO_ALIAS), y por eso la parte local tiene que coincidir EXACTAMENTE
+# con la del correo corporativo: es lo único que enlaza la cuenta de Entra con
+# el usuario que ya existe en la plataforma. Si no coincide, el primer login
+# crea un usuario nuevo y vacío, sin ningún error visible.
+DOMINIO_CORPORATIVO = "inetum.com"
+DOMINIO_ENTRA = "inetumoffshore.onmicrosoft.com"
+
+PLANTILLA_RECURSOS = RAIZ / "docs" / "plantillas" / "recursos.csv"
+SALIDA_CREDENCIALES = RAIZ / "credenciales_entra.csv"  # cubierto por .gitignore: credenciales*.csv
+
+AZ = shutil.which("az") or shutil.which("az.cmd") or "az"
+
+
+class Fallo(Exception):
+    """Error esperado: se muestra limpio, sin traza."""
+
+
+# ---------------------------------------------------------------------------
+# Utilidades
+# ---------------------------------------------------------------------------
+def az(*args, entrada_json=None):
+    """Ejecuta `az` y devuelve la salida como JSON (o None si no la hay)."""
+    cmd = [AZ, *args]
+    if entrada_json is not None:
+        cmd += ["--body", json.dumps(entrada_json)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc.returncode != 0:
+        raise Fallo(f"falló `az {' '.join(args[:3])}...`:\n{proc.stderr.strip()}")
+    salida = (proc.stdout or "").strip()
+    return json.loads(salida) if salida else None
+
+
+def generar_password(longitud=16):
+    """Contraseña temporal que cumple la política de Entra (3 de 4 familias).
+
+    Se excluyen comillas, barras y comas: la contraseña viaja por línea de
+    comandos y acaba en un CSV, y esos caracteres rompen ambas cosas.
+    """
+    simbolos = "!#%&*+-=?@_"
+    familias = [string.ascii_lowercase, string.ascii_uppercase, string.digits, simbolos]
+    alfabeto = "".join(familias)
+    while True:
+        clave = [secrets.choice(f) for f in familias]
+        clave += [secrets.choice(alfabeto) for _ in range(longitud - len(familias))]
+        secrets.SystemRandom().shuffle(clave)
+        candidata = "".join(clave)
+        # Comprobación explícita en vez de confiar en el barajado.
+        if all(any(c in f for c in candidata) for f in familias):
+            return candidata
+
+
+# ---------------------------------------------------------------------------
+# Guardas
+# ---------------------------------------------------------------------------
+def verificar_tenant():
+    """No crear identidades en el directorio equivocado.
+
+    La cuenta tiene varias suscripciones repartidas en tres tenants. Crear un
+    usuario en el directorio que no es no da error: da una cuenta huérfana en
+    una organización ajena. Mismo criterio que terraform/guard.tf.
+    """
+    ctx = az("account", "show", "-o", "json")
+    if ctx["tenantId"] != TENANT_ESPERADO:
+        raise Fallo(
+            f"credenciales apuntando al tenant {ctx['tenantId']}, se esperaba {TENANT_ESPERADO}\n"
+            f"  suscripción activa: {ctx.get('name')}\n"
+            f"  corrige con: az login --tenant {DOMINIO_ENTRA}"
+        )
+    return ctx
+
+
+def roles_de_la_app():
+    """Lee los app roles del registro en vivo, no de una lista escrita a mano.
+
+    Si algún día se añade o renombra un rol en Entra, este script lo sigue sin
+    tocar nada; y un rol mal escrito se detecta antes de crear la cuenta.
+    """
+    app = az("ad", "app", "show", "--id", APP_ID, "-o", "json")
+    roles = {r["value"]: r["id"] for r in app.get("appRoles", []) if r.get("isEnabled", True)}
+    if not roles:
+        raise Fallo(f"el registro {APP_ID} no tiene app roles definidos")
+    return roles
+
+
+# ---------------------------------------------------------------------------
+# Datos de la persona
+# ---------------------------------------------------------------------------
+def ficha_en_plantilla(email):
+    """Nombre y rol desde docs/plantillas/recursos.csv, que es la fuente de la
+    carga inicial. Evita teclear el nombre a mano y que quede distinto."""
+    if not PLANTILLA_RECURSOS.exists():
+        return None
+    with PLANTILLA_RECURSOS.open(encoding="utf-8-sig", newline="") as fh:
+        for fila in csv.DictReader(fh):
+            if (fila.get("email") or "").strip().lower() == email:
+                return {
+                    "nombre": (fila.get("nombre") or "").strip(),
+                    "rol": (fila.get("rol") or "").strip(),
+                }
+    return None
+
+
+def normalizar_email(valor):
+    email = valor.strip().lower()
+    if "@" not in email:
+        email = f"{email}@{DOMINIO_CORPORATIVO}"
+    local, _, dominio = email.partition("@")
+    if dominio not in (DOMINIO_CORPORATIVO, DOMINIO_ENTRA):
+        raise Fallo(f"{valor}: dominio no reconocido ({dominio})")
+    if not local:
+        raise Fallo(f"{valor}: falta la parte local del correo")
+    return local, f"{local}@{DOMINIO_CORPORATIVO}", f"{local}@{DOMINIO_ENTRA}"
+
+
+# ---------------------------------------------------------------------------
+# Operaciones en Entra
+# ---------------------------------------------------------------------------
+def buscar_usuario(upn):
+    filtro = f"userPrincipalName eq '{upn}'"
+    encontrados = az("ad", "user", "list", "--filter", filtro, "-o", "json")
+    return encontrados[0] if encontrados else None
+
+
+def crear_usuario(upn, nombre_visible, alias, password):
+    return az(
+        "ad", "user", "create",
+        "--display-name", nombre_visible,
+        "--user-principal-name", upn,
+        "--mail-nickname", alias,
+        "--password", password,
+        "--force-change-password-next-sign-in", "true",
+        "-o", "json",
+    )
+
+
+def asignar_rol(sp_id, usuario_id, rol_id):
+    """El app role no es opcional: el registro exige asignación explícita, así
+    que sin esto la persona ve "se necesita aprobación del administrador"."""
+    asignaciones = az(
+        "rest", "--method", "GET",
+        "--url", f"https://graph.microsoft.com/v1.0/users/{usuario_id}/appRoleAssignments",
+        "-o", "json",
+    )
+    for a in (asignaciones or {}).get("value", []):
+        if a.get("resourceId") == sp_id and a.get("appRoleId") == rol_id:
+            return False  # ya estaba
+    az(
+        "rest", "--method", "POST",
+        "--url", f"https://graph.microsoft.com/v1.0/users/{usuario_id}/appRoleAssignments",
+        "--headers", "Content-Type=application/json",
+        "-o", "json",
+        entrada_json={"principalId": usuario_id, "resourceId": sp_id, "appRoleId": rol_id},
+    )
+    return True
+
+
+def registrar_credencial(upn, email_corporativo, rol, password):
+    nuevo = not SALIDA_CREDENCIALES.exists()
+    with SALIDA_CREDENCIALES.open("a", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        if nuevo:
+            w.writerow(["upn_entra", "email_plataforma", "rol", "password_temporal"])
+        w.writerow([upn, email_corporativo, rol, password])
+
+
+# ---------------------------------------------------------------------------
+def procesar(entrada, rol_forzado, roles, sp_id, simular):
+    alias, email_corporativo, upn = normalizar_email(entrada)
+    ficha = ficha_en_plantilla(email_corporativo) or {}
+
+    rol = rol_forzado or ficha.get("rol")
+    if not rol:
+        raise Fallo(
+            f"{email_corporativo}: no está en {PLANTILLA_RECURSOS.name} y no se indicó --rol.\n"
+            f"  roles disponibles: {', '.join(sorted(roles))}"
+        )
+    if rol not in roles:
+        raise Fallo(f"{email_corporativo}: rol '{rol}' no existe. Disponibles: {', '.join(sorted(roles))}")
+
+    nombre_visible = ficha.get("nombre") or alias
+    existente = buscar_usuario(upn)
+
+    print(f"\n  {email_corporativo}")
+    print(f"    UPN de Entra   {upn}")
+    print(f"    nombre         {nombre_visible}")
+    print(f"    rol            {rol}")
+
+    if simular:
+        print(f"    accion         {'ya existe, solo se revisaría el rol' if existente else 'se crearía'} (simulacro)")
+        return None
+
+    password = None
+    if existente:
+        usuario_id = existente["id"]
+        print("    cuenta         ya existía, no se toca (ni la contraseña)")
+    else:
+        password = generar_password()
+        creado = crear_usuario(upn, nombre_visible, alias, password)
+        usuario_id = creado["id"]
+        print("    cuenta         creada, con cambio de contraseña obligatorio en el primer acceso")
+
+    if asignar_rol(sp_id, usuario_id, roles[rol]):
+        print(f"    app role       asignado ({rol})")
+    else:
+        print(f"    app role       ya lo tenía ({rol})")
+
+    if password:
+        registrar_credencial(upn, email_corporativo, rol, password)
+        return {"upn": upn, "password": password, "rol": rol}
+    return None
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description="Da de alta usuarios en Entra ID para la plataforma (SSO).",
+        epilog="Las contraseñas temporales se anexan a credenciales_entra.csv (ignorado por git).",
+    )
+    p.add_argument("emails", nargs="+", help="correo corporativo, p. ej. daniel.guzman@inetum.com")
+    p.add_argument("--rol", help="Admin | PM | Ingeniero. Por defecto, el de docs/plantillas/recursos.csv")
+    p.add_argument("--simular", action="store_true", help="muestra lo que haría sin tocar nada")
+    args = p.parse_args()
+
+    try:
+        ctx = verificar_tenant()
+        print(f"tenant   {ctx['tenantId']}  ({ctx.get('user', {}).get('name')})")
+        roles = roles_de_la_app()
+        sp_id = az("ad", "sp", "show", "--id", APP_ID, "--query", "id", "-o", "json")
+        print(f"registro {APP_ID}  roles: {', '.join(sorted(roles))}")
+
+        credenciales, errores = [], []
+        for entrada in args.emails:
+            try:
+                r = procesar(entrada, args.rol, roles, sp_id, args.simular)
+                if r:
+                    credenciales.append(r)
+            except Fallo as e:
+                errores.append(str(e))
+                print(f"    ERROR          {e}")
+
+        if credenciales:
+            print(f"\nContraseñas temporales (también en {SALIDA_CREDENCIALES.name}):\n")
+            for c in credenciales:
+                print(f"  {c['upn']}")
+                print(f"    contraseña   {c['password']}")
+                print("    la cambia al entrar por primera vez\n")
+
+        if errores:
+            print(f"\n{len(errores)} con error.", file=sys.stderr)
+            return 1
+        return 0
+    except Fallo as e:
+        print(f"\nERROR: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    # La consola de Windows por defecto es cp1252 y se come los acentos.
+    for flujo in (sys.stdout, sys.stderr):
+        if hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8", errors="replace")
+    sys.exit(main())
