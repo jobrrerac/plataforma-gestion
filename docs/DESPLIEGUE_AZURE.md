@@ -338,6 +338,38 @@ El login va por Entra; **todo lo demás** —cuenta de Django, `Recurso`,
 asignaciones, auditoría— sigue usando el email corporativo. Nadie cambia de
 cuenta.
 
+### Dar de alta a alguien nuevo
+
+```bash
+python scripts/crear_usuario_entra.py daniel.guzman@inetum.com
+python scripts/crear_usuario_entra.py ana.perez@inetum.com --rol PM
+python scripts/crear_usuario_entra.py a@inetum.com b@inetum.com --simular
+```
+
+Crea la cuenta en Entra con contraseña temporal y **cambio obligatorio en el
+primer acceso**, y le asigna el app role. El nombre y el rol salen de
+`docs/plantillas/recursos.csv`; `--rol` los sobreescribe para quien no esté ahí.
+
+Se hacía a mano por el portal, que son cinco pantallas y dos pasos fáciles de
+olvidar:
+
+- **El app role no es opcional.** El registro exige asignación explícita
+  (`app_role_assignment_required`), así que sin él la persona ve *"se necesita
+  aprobación del administrador"* y no entra. No es un fallo de configuración:
+  es la app rechazando a quien nadie ha autorizado.
+- **La parte local del UPN tiene que coincidir con la del correo corporativo.**
+  Es lo único que enlaza la cuenta de Entra con el usuario que ya existe (ver
+  *Dos dominios, una identidad* más arriba). Un dedazo ahí no da error: crea un
+  usuario nuevo y vacío.
+
+El script comprueba el tenant antes de tocar nada —crear una identidad en el
+directorio equivocado tampoco da error, da una cuenta huérfana en una
+organización ajena— y es idempotente: si la cuenta ya existe no la toca ni le
+resetea la contraseña.
+
+Las contraseñas temporales se anexan a `credenciales_entra.csv`, que está en
+`.gitignore` junto con cualquier otro `credenciales*.csv`.
+
 ### Cuentas cuyo UPN no deriva de un email
 
 `admin@inetumoffshore.onmicrosoft.com` es la cuenta administrativa del tenant:
