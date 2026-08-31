@@ -394,3 +394,73 @@ class AliasDeUsuarioTests(TestCase):
         upn = "luisa.acosta-pelaez@inetumoffshore.onmicrosoft.com"
         encontrados = self.backend.filter_users_by_claims({"preferred_username": upn})
         self.assertEqual(list(encontrados), [otro])
+
+
+@override_settings(OIDC_DOMINIO_ALIAS={"inetumoffshore.onmicrosoft.com": "inetum.com"})
+class InvitadosB2BTests(TestCase):
+    """Un invitado B2B tiene que entrar en su cuenta, no estrenar una.
+
+    Entra fabrica el UPN de un invitado deformando su dirección real:
+
+        erika.castiblanco-monroy@inetum.com
+        -> erika.castiblanco-monroy_inetum.com#EXT#@inetumoffshore.onmicrosoft.com
+
+    Como termina en el dominio del tenant, el alias de dominio lo tomaría por
+    una cuenta local y lo traduciría a
+    `erika.castiblanco-monroy_inetum.com#EXT#@inetum.com`, que no es de nadie.
+    Se crearía un usuario nuevo y vacío **sin ningún error visible**, dejando
+    huérfano todo el historial. Es el mismo modo de fallo que motivó el alias,
+    entrando por la puerta de al lado.
+    """
+
+    def setUp(self):
+        for nombre in (roles.ADMIN, roles.PM, roles.INGENIERO):
+            Group.objects.get_or_create(name=nombre)
+        self.backend = EntraOIDCBackend()
+        self.existente = User.objects.create_user(
+            username="erika.castiblanco-monroy@inetum.com",
+            email="erika.castiblanco-monroy@inetum.com",
+            password="Clave2026!",
+        )
+
+    UPN_INVITADA = "erika.castiblanco-monroy_inetum.com#EXT#@inetumoffshore.onmicrosoft.com"
+
+    def test_el_upn_deformado_se_traduce_al_correo_real(self):
+        self.assertEqual(
+            self.backend._email({"upn": self.UPN_INVITADA}),
+            "erika.castiblanco-monroy@inetum.com",
+        )
+
+    def test_el_alias_de_dominio_no_destroza_el_upn_de_invitado(self):
+        # Sin la guarda esto daba "..._inetum.com#EXT#@inetum.com".
+        self.assertNotIn("#ext#", self.backend._email({"upn": self.UPN_INVITADA}))
+
+    def test_entra_en_su_cuenta_existente_y_no_crea_otra(self):
+        antes = User.objects.count()
+        encontrados = self.backend.filter_users_by_claims({"upn": self.UPN_INVITADA})
+        self.assertEqual(list(encontrados), [self.existente])
+        self.assertEqual(User.objects.count(), antes)
+
+    def test_cuando_el_token_trae_email_se_usa_ese(self):
+        # El caso normal: `mail` está puesto en el objeto invitado y Entra emite
+        # el claim `email` con la dirección buena.
+        resuelto = self.backend._email({
+            "email": "erika.castiblanco-monroy@inetum.com",
+            "upn": self.UPN_INVITADA,
+        })
+        self.assertEqual(resuelto, "erika.castiblanco-monroy@inetum.com")
+
+    def test_un_nombre_con_guiones_bajos_sobrevive(self):
+        # El separador es el ÚLTIMO '_', no el primero: partir por el primero
+        # rompería cualquier cuenta que lleve guion bajo.
+        resuelto = self.backend._email(
+            {"upn": "juan_carlos_perez_inetum.com#EXT#@inetumoffshore.onmicrosoft.com"}
+        )
+        self.assertEqual(resuelto, "juan_carlos_perez@inetum.com")
+
+    def test_una_cuenta_local_normal_sigue_usando_el_alias(self):
+        # La guarda no puede alterar el camino de siempre.
+        self.assertEqual(
+            self.backend._email({"upn": "ana.perez@inetumoffshore.onmicrosoft.com"}),
+            "ana.perez@inetum.com",
+        )
