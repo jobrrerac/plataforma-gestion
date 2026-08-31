@@ -42,6 +42,18 @@ jobs:
           pip install ruff
           ruff check backend
 
+      # Las dependencias van por rangos (>=5.2,<6), asi que una instalacion
+      # nueva puede traer una version distinta de la probada. Sin esto, un CVE
+      # publicado entra en el siguiente despliegue sin que nadie se entere.
+      # No bloquea el build a proposito: avisa. Convertirlo en bloqueante el dia
+      # que un aviso pare un despliegue urgente solo lograria que alguien lo
+      # desactive.
+      - name: Auditoria de dependencias (pip-audit)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --desc
+
       - name: Run tests
         working-directory: backend
         env:

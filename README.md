@@ -112,4 +112,17 @@ El stack Docker sigue siendo portable. Para producción fuera de Azure:
 2. Setear `DJANGO_DEBUG=False`
 3. Setear `DJANGO_ALLOWED_HOSTS` con el dominio o IP del servidor
 4. Usar una `DJANGO_SECRET_KEY` larga y aleatoria (50+ caracteres)
-5. Usar `docker-compose.prod.yml`, que ya incluye nginx como reverse proxy
+5. Usar `docker-compose.prod.yml`, que incluye nginx como reverse proxy
+
+> **Ojo con TLS.** `docker-compose.prod.yml` publica **solo el puerto 80** — la
+> configuracion de 443 y los certificados estan comentados. Y en produccion las
+> cookies van con `Secure`, asi que sobre HTTP plano **la sesion no se llega a
+> establecer**: se entra al login y se vuelve al login, sin ningun error que lo
+> explique.
+>
+> Antes de usarlo hace falta o bien montar certificados y descomentar el 443, o
+> bien poner delante un proxy corporativo que termine TLS y reenvie
+> `X-Forwarded-Proto: https`.
+>
+> El despliegue actual es Azure Container Apps, que ya termina TLS en el
+> ingress; este camino es solo para VM o intranet.

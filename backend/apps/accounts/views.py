@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.cache import cache
@@ -7,6 +9,8 @@ from django.urls import reverse_lazy
 from django.views.decorators.cache import never_cache
 
 from apps.accounts.models import CambioPasswordPendiente
+
+logger = logging.getLogger(__name__)
 
 _MAX_INTENTOS = 5
 _BLOQUEO_SEGUNDOS = 15 * 60  # 15 minutos
@@ -123,8 +127,13 @@ def salud(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
-    except Exception as exc:  # noqa: BLE001 - cualquier fallo aquí es "no sano"
-        return JsonResponse({"estado": "degradado", "base_datos": str(exc)}, status=503)
+    except Exception:  # noqa: BLE001 - cualquier fallo aquí es "no sano"
+        # El detalle va al log, no a la respuesta. Este endpoint es publico —la
+        # Container App tiene ingress externo— y `str(exc)` de psycopg filtra el
+        # host, el usuario y la base de datos a quien pregunte. La sonda solo
+        # necesita saber si esta sano; quien diagnostica tiene los logs.
+        logger.exception("healthz: la base de datos no responde")
+        return JsonResponse({"estado": "degradado"}, status=503)
 
     return JsonResponse({"estado": "ok", "base_datos": "ok"})
 

@@ -3,9 +3,16 @@ from django.contrib.auth.models import User
 from apps.core.models import SoftDeleteModel, Recurso
 
 
-class DiaNoLaborable(models.Model):
-    """Día no laborable global (aplica a todos los recursos)."""
-    fecha = models.DateField(unique=True)
+class DiaNoLaborable(SoftDeleteModel):
+    """Día no laborable global (aplica a todos los recursos).
+
+    Con soft-delete como el resto de entidades. Antes heredaba de
+    `models.Model`, asi que un DELETE por API o por el admin lo borraba de
+    verdad: desaparecia la razon por la que un dia no computo en asignaciones
+    ya aprobadas, y con ella la trazabilidad de por que una ventana acabo
+    cuando acabo.
+    """
+    fecha = models.DateField()
     descripcion = models.CharField(max_length=200)
     creado_por = models.ForeignKey(User, on_delete=models.PROTECT)
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -14,6 +21,16 @@ class DiaNoLaborable(models.Model):
         verbose_name = "Día No Laborable"
         verbose_name_plural = "Días No Laborables"
         ordering = ["fecha"]
+        constraints = [
+            # La unicidad tiene que ignorar lo borrado. Con `unique=True` a
+            # secas, un dia eliminado seguiria ocupando su fecha para siempre y
+            # volver a darlo de alta fallaria sin explicacion visible.
+            models.UniqueConstraint(
+                fields=["fecha"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="un_dia_no_laborable_por_fecha",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.fecha} — {self.descripcion}"
