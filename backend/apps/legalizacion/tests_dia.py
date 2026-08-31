@@ -652,3 +652,70 @@ class DiaAprobadoConservaLaFirmaTests(BaseLegalizacion):
         self.client.force_login(self.ing)
         resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
         self.assertEqual(resp.status_code, 200)
+
+
+class FechasNoLegalizablesTests(BaseLegalizacion):
+    """No se puede registrar un día futuro, ni uno más viejo que el límite.
+
+    BUG-HOR-004, reportado en QA: la flecha de avanzar se deshabilita en hoy,
+    pero el selector de fecha la sorteaba.
+
+    La causa era fina. El input ya llevaba `max`, pero navegaba con
+    `onchange="this.form.submit()"`, y **el método `submit()` de JavaScript se
+    salta la validación HTML5 por completo**: el navegador nunca miraba el
+    `max`. Con `requestSubmit()` sí valida.
+
+    Guardar siempre estuvo bloqueado en el servicio, así que no había riesgo
+    para los datos. Lo que faltaba era decirlo **antes** de que alguien
+    rellenara el día entero para nada.
+    """
+
+    def _futuro(self):
+        return date.today() + timedelta(days=3)
+
+    def _demasiado_atras(self):
+        return date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 10)
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.ing)
+
+    def test_un_dia_futuro_no_ofrece_formulario(self):
+        resp = self.client.get(reverse("horas"), {"fecha": self._futuro().isoformat()})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context["modo_edicion"])
+        self.assertIn("todavía no ha pasado", resp.context["fecha_no_legalizable"])
+
+    def test_un_dia_demasiado_antiguo_tampoco(self):
+        resp = self.client.get(reverse("horas"), {"fecha": self._demasiado_atras().isoformat()})
+        self.assertFalse(resp.context["modo_edicion"])
+        self.assertIn("últimos", resp.context["fecha_no_legalizable"])
+
+    def test_guardar_un_dia_futuro_sigue_bloqueado(self):
+        """La puerta de verdad: aunque alguien arme el POST a mano."""
+        futuro = self._futuro()
+        resp = self.client.post(reverse("horas"), {
+            "accion": "guardar", "fecha": futuro.isoformat(),
+            "renglon_tipo": str(self.t_estudio.pk), "renglon_proyecto": "",
+            "renglon_horas": "8.5", "renglon_detalle": "no deberia entrar",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("todavía no ha pasado", resp.context["error"])
+        self.assertFalse(DiaLegalizado.objects.filter(fecha=futuro).exists())
+
+    def test_el_selector_acota_el_rango(self):
+        resp = self.client.get(reverse("horas"))
+        html = resp.content.decode()
+        self.assertIn(f'max="{date.today().isoformat()}"', html)
+        self.assertIn(f'min="{(date.today() - timedelta(days=svc.DIAS_ATRAS_MAX)).isoformat()}"', html)
+
+    def test_el_selector_valida_al_navegar(self):
+        """`submit()` se salta la validación HTML5; `requestSubmit()` no."""
+        html = self.client.get(reverse("horas")).content.decode()
+        self.assertIn("requestSubmit", html)
+
+    def test_hoy_sigue_funcionando(self):
+        """Lo que no puede romperse al cerrar la puerta."""
+        resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
+        self.assertTrue(resp.context["modo_edicion"])
+        self.assertFalse(resp.context["fecha_no_legalizable"])

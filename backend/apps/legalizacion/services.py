@@ -73,19 +73,39 @@ def obtener_o_crear_dia(recurso, fecha: date) -> DiaLegalizado:
     return dia
 
 
-def _validar_fecha_legalizable(recurso, fecha: date):
+def motivo_no_legalizable(recurso, fecha: date) -> str:
+    """Por qué ese día no se puede legalizar, o cadena vacía si sí se puede.
+
+    Devuelve el motivo en vez de lanzar para que la pantalla pueda decidir qué
+    enseñar. Antes esto solo existía en forma de excepción, así que la vista
+    pintaba el formulario completo para una fecha futura y la persona se
+    enteraba al pulsar Guardar, con el día ya relleno.
+    """
     hoy = date.today()
     if fecha > hoy:
-        raise ValidationError("No se pueden legalizar horas de un día que todavía no ha pasado.")
+        return "Ese día todavía no ha pasado: no hay horas que legalizar."
     if fecha < hoy - timedelta(days=DIAS_ATRAS_MAX):
-        raise ValidationError(
+        return (
             f"Solo se pueden legalizar los últimos {DIAS_ATRAS_MAX} días. "
             "Para algo más antiguo, pídeselo a un administrador."
         )
 
     estado = estado_del_dia(recurso, fecha)
     if not estado["habil"]:
-        raise ValidationError(_texto_no_habil(estado))
+        return _texto_no_habil(estado)
+    return ""
+
+
+def rango_legalizable() -> tuple[date, date]:
+    """Primer y último día que la pantalla debe dejar elegir."""
+    hoy = date.today()
+    return hoy - timedelta(days=DIAS_ATRAS_MAX), hoy
+
+
+def _validar_fecha_legalizable(recurso, fecha: date):
+    motivo = motivo_no_legalizable(recurso, fecha)
+    if motivo:
+        raise ValidationError(motivo)
 
 
 def _texto_no_habil(estado) -> str:

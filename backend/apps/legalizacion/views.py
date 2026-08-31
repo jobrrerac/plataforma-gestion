@@ -57,7 +57,18 @@ class LegalizarDiaView(LoginRequiredMixin, View):
             "proyectos": [],
         }
 
+        # Limites del selector de fecha. La flecha de avanzar ya se deshabilita
+        # en hoy, pero el `input type=date` la sorteaba: se podia teclear o
+        # elegir del calendario un dia futuro.
+        ctx["fecha_min"], ctx["fecha_max"] = svc.rango_legalizable()
+
         if recurso and fecha:
+            # La puerta de verdad esta aqui, no en el atributo `max` del input:
+            # ese solo evita el error accidental. Guardar ya estaba bloqueado en
+            # el servicio, pero la pantalla pintaba el formulario completo y la
+            # persona se enteraba al pulsar Guardar, con el dia ya relleno.
+            ctx["fecha_no_legalizable"] = svc.motivo_no_legalizable(recurso, fecha)
+
             estado = svc.estado_del_dia(recurso, fecha)
             ctx["estado_dia"] = estado
             ctx["pendientes"] = svc.dias_pendientes(recurso)[:10]
@@ -78,7 +89,7 @@ class LegalizarDiaView(LoginRequiredMixin, View):
                 devuelto = bool(datos and datos["hay_devueltos"])
                 ctx["modo_edicion"] = (
                     not hay_guardado or devuelto or request.GET.get("editar") == "1"
-                ) and (dia is None or dia.editable)
+                ) and (dia is None or dia.editable) and not ctx["fecha_no_legalizable"]
 
                 # El editor tiene que arrancar con lo que ya estaba guardado.
                 # Guardar hace un reemplazo completo de lo editable, así que un

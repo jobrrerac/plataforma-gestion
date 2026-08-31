@@ -116,8 +116,19 @@
 
     <form method="get" class="nav-dia ms-auto">
       <label class="fw-semibold mb-0" style="font-size:.82rem;color:#6b7280">Ir a</label>
-      <input type="date" name="fecha" value="{{ fecha|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}"
-             class="form-control form-control-sm" onchange="this.form.submit()">
+      {% comment %}
+        `requestSubmit()` y no `submit()`: el metodo submit() de JavaScript se
+        salta la validacion HTML5 por completo, asi que el `max` estaba aqui
+        pero el navegador no lo miraba nunca. Se podia teclear una fecha futura
+        y navegaba tan tranquilo. Con requestSubmit el navegador valida antes.
+
+        Aun asi, la puerta de verdad esta en el servidor (`fecha_no_legalizable`
+        mas abajo): esto solo evita el error accidental.
+      {% endcomment %}
+      <input type="date" name="fecha" value="{{ fecha|date:'Y-m-d' }}"
+             min="{{ fecha_min|date:'Y-m-d' }}" max="{{ fecha_max|date:'Y-m-d' }}"
+             class="form-control form-control-sm"
+             onchange="if (this.form.requestSubmit) { this.form.requestSubmit(); } else { this.form.submit(); }">
     </form>
   </div>
 
@@ -133,7 +144,21 @@
   </div>
   {% endif %}
 
-  {% if not estado_dia.habil %}
+  {% if fecha_no_legalizable and estado_dia.habil %}
+  {% comment %}
+    Fecha fuera de la ventana que se puede legalizar: futura, o mas atras del
+    limite. Antes se pintaba el formulario completo y la persona se enteraba al
+    pulsar Guardar, con el dia ya relleno. Guardar siempre estuvo bloqueado en
+    el servicio; lo que faltaba era decirlo antes de hacer trabajar a nadie.
+  {% endcomment %}
+  <div class="aviso-dia">
+    <i class="bi bi-calendar-x" style="font-size:2rem;color:var(--inet-tenue)"></i>
+    <h5 class="fw-bold mt-2 mb-2" style="font-family:'Montserrat',sans-serif">Este día no se puede registrar</h5>
+    <p class="text-muted mb-3" style="font-size:.92rem">{{ fecha_no_legalizable }}</p>
+    <a href="?fecha={{ hoy|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary">Ir a hoy</a>
+  </div>
+
+  {% elif not estado_dia.habil %}
   {# Fin de semana, festivo o ausencia aprobada: no hay nada que legalizar. #}
   <div class="aviso-dia">
     <div class="emo">{% if estado_dia.motivo_no_habil == "AUSENCIA" %}🌴{% else %}🗓️{% endif %}</div>
