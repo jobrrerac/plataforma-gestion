@@ -5,6 +5,7 @@ from decimal import Decimal
 from apps.core.models import Recurso, Proyecto, TarifaVigente
 from .models import Asignacion, LogAuditoria
 from .services import (
+    revocar_asignacion,
     calcular_fecha_fin, puede_asignar, aprobar_asignacion,
     analizar_recurrencia, crear_solicitudes_recurrentes,
     ceder_horas, rechazar_asignacion, horas_cedibles, carga_en_fecha,
@@ -811,3 +812,211 @@ class CesionViewTests(TestCase):
         # Se creó una asignación destino SOLICITADA (gate de aprobación del Admin)
         self.assertEqual(cesion.asignacion_destino.estado, "SOLICITADA")
         self.assertEqual(cesion.asignacion_destino.proyecto, self.destino)
+
+
+class TransicionesDeEstadoTests(TestCase):
+    """Aprobar, rechazar y revocar exigen que la transición sea legal.
+
+    Hallazgo de la revisión de seguridad: los servicios cambiaban el estado sin
+    mirar el estado de partida. La API sí lo comprobaba antes de llamar, pero el
+    admin no, y cualquier consumidor nuevo dependía de acordarse.
+
+    Consecuencia concreta: se podía aprobar dos veces la misma asignación y
+    dejar dos entradas de auditoría contando lo mismo, o revocar una que ya
+    estaba rechazada.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root_trans", "rt@test.com", "pass")
+        self.recurso = Recurso.objects.create(nombre="DevTrans", email="devtrans@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-TRANS", nombre="T", cliente="X", fecha_inicio=date(2025, 1, 1), pm=self.admin,
+        )
+
+    def _asignacion(self, estado="SOLICITADA"):
+        return Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 17),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado=estado, solicitada_por=self.admin,
+        )
+
+    def test_no_se_aprueba_dos_veces(self):
+        asig = self._asignacion()
+        aprobar_asignacion(asig, self.admin)
+        with self.assertRaises(ValueError) as ctx:
+            aprobar_asignacion(asig, self.admin)
+        self.assertIn("APROBADA", str(ctx.exception))
+
+    def test_aprobar_dos_veces_no_duplica_la_auditoria(self):
+        asig = self._asignacion()
+        aprobar_asignacion(asig, self.admin)
+        with self.assertRaises(ValueError):
+            aprobar_asignacion(asig, self.admin)
+        self.assertEqual(LogAuditoria.objects.filter(asignacion=asig, accion="APROBAR").count(), 1)
+
+    def test_no_se_rechaza_una_aprobada(self):
+        # Para deshacer una aprobada existe revocar, que además libera la
+        # capacidad y anula las cesiones recibidas.
+        asig = self._asignacion(estado="APROBADA")
+        with self.assertRaises(ValueError):
+            rechazar_asignacion(asig, self.admin)
+
+    def test_no_se_revoca_una_solicitada(self):
+        asig = self._asignacion()
+        with self.assertRaises(ValueError):
+            revocar_asignacion(asig, self.admin)
+
+    def test_no_se_revoca_dos_veces(self):
+        asig = self._asignacion(estado="APROBADA")
+        revocar_asignacion(asig, self.admin)
+        with self.assertRaises(ValueError):
+            revocar_asignacion(asig, self.admin)
+
+    def test_el_estado_se_lee_de_la_base_no_del_objeto_en_memoria(self):
+        """Dos pestañas abiertas: la segunda no puede pisar a la primera."""
+        asig = self._asignacion()
+        copia_vieja = Asignacion.objects.get(pk=asig.pk)  # otra pestaña, aún SOLICITADA
+        aprobar_asignacion(asig, self.admin)
+
+        # La copia sigue diciendo SOLICITADA en memoria, pero la base ya no.
+        self.assertEqual(copia_vieja.estado, "SOLICITADA")
+        with self.assertRaises(ValueError):
+            aprobar_asignacion(copia_vieja, self.admin)
+
+    def test_las_transiciones_legales_siguen_funcionando(self):
+        aprobar_asignacion(self._asignacion(), self.admin)
+        rechazar_asignacion(self._asignacion(), self.admin)
+        revocar_asignacion(self._asignacion(estado="APROBADA"), self.admin)
+
+
+class AccionesAdminExigenPostTests(TestCase):
+    """Las acciones del admin no pueden cambiar datos con un GET.
+
+    Hallazgo de la revisión de seguridad: aprobar, rechazar y revocar se
+    ejecutaban directamente desde el enlace del listado. Bastaba con que un
+    Admin abriera una página con `<img src=".../revocar/5/">` —o que el
+    navegador hiciera prefetch, o que pasara un escáner interno— para cambiar el
+    estado de una asignación sin que nadie lo pidiera. Un GET no lleva token
+    CSRF, así que no hay nada que impida falsificarlo desde fuera.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root_csrf", "rc@test.com", "pass")
+        self.client.force_login(self.admin)
+        self.recurso = Recurso.objects.create(nombre="DevCsrf", email="devcsrf@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-CSRF", nombre="C", cliente="X", fecha_inicio=date(2025, 1, 1), pm=self.admin,
+        )
+
+    def _asignacion(self, estado="SOLICITADA"):
+        return Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 17),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado=estado, solicitada_por=self.admin,
+        )
+
+    def test_get_a_aprobar_no_aprueba(self):
+        asig = self._asignacion()
+        resp = self.client.get(f"/admin/assignments/asignacion/aprobar/{asig.pk}/")
+        self.assertEqual(resp.status_code, 200)
+        asig.refresh_from_db()
+        self.assertEqual(asig.estado, "SOLICITADA")
+
+    def test_get_a_revocar_no_revoca(self):
+        asig = self._asignacion(estado="APROBADA")
+        self.client.get(f"/admin/assignments/asignacion/revocar/{asig.pk}/")
+        asig.refresh_from_db()
+        self.assertEqual(asig.estado, "APROBADA")
+
+    def test_get_a_rechazar_no_rechaza(self):
+        asig = self._asignacion()
+        self.client.get(f"/admin/assignments/asignacion/rechazar/{asig.pk}/")
+        asig.refresh_from_db()
+        self.assertEqual(asig.estado, "SOLICITADA")
+
+    def test_el_get_muestra_una_confirmacion_con_formulario(self):
+        asig = self._asignacion()
+        resp = self.client.get(f"/admin/assignments/asignacion/aprobar/{asig.pk}/")
+        self.assertContains(resp, "csrfmiddlewaretoken")
+        self.assertContains(resp, "Aprobar")
+
+    def test_el_post_si_aprueba(self):
+        asig = self._asignacion()
+        self.client.post(f"/admin/assignments/asignacion/aprobar/{asig.pk}/")
+        asig.refresh_from_db()
+        self.assertEqual(asig.estado, "APROBADA")
+
+    def test_el_post_revoca_y_guarda_el_motivo(self):
+        asig = self._asignacion(estado="APROBADA")
+        self.client.post(
+            f"/admin/assignments/asignacion/revocar/{asig.pk}/",
+            {"motivo": "El cliente cancelo el proyecto"},
+        )
+        asig.refresh_from_db()
+        self.assertEqual(asig.estado, "REVOCADA")
+        log = LogAuditoria.objects.get(asignacion=asig, accion="REVOCAR")
+        self.assertIn("cancelo", log.detalle["motivo"])
+
+
+class EdicionPorApiTests(TestCase):
+    """La API no puede editar una asignación ya aprobada.
+
+    Hallazgo de la revisión de seguridad: `AsignacionViewSet` es un
+    `ModelViewSet` completo y el serializer deja editables `recurso`,
+    `horas_totales`, `intensidad_diaria` y `fecha_inicio`. Como `fecha_fin` es
+    de solo lectura, cambiar las horas la dejaba mintiendo — y encima sin
+    revalidar capacidad ni rehacer el snapshot de tarifa y costo.
+
+    Un Admin podía así convertir una asignación aprobada en una
+    sobreasignación, o dejar los datos financieros incoherentes, sin que nada
+    fallara ni quedara rastro.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root_api", "ra@test.com", "pass")
+        self.client.force_login(self.admin)
+        self.recurso = Recurso.objects.create(nombre="DevApi", email="devapi@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-API", nombre="A", cliente="X", fecha_inicio=date(2025, 1, 1), pm=self.admin,
+        )
+
+    def _asignacion(self, estado="SOLICITADA"):
+        return Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 17),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado=estado, solicitada_por=self.admin,
+        )
+
+    def _url(self, asig):
+        return f"/api/asignaciones/{asig.pk}/"
+
+    def test_no_se_edita_una_aprobada(self):
+        asig = self._asignacion(estado="APROBADA")
+        resp = self.client.patch(
+            self._url(asig), {"horas_totales": 400}, content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 409)
+        asig.refresh_from_db()
+        self.assertEqual(float(asig.horas_totales), 40.0)
+
+    def test_no_se_edita_una_revocada(self):
+        asig = self._asignacion(estado="REVOCADA")
+        resp = self.client.patch(
+            self._url(asig), {"horas_totales": 400}, content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_editar_una_solicitada_recalcula_la_fecha_fin(self):
+        """`fecha_fin` es derivada: no puede quedarse con el valor viejo."""
+        asig = self._asignacion()
+        resp = self.client.patch(
+            self._url(asig), {"horas_totales": 80}, content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        asig.refresh_from_db()
+        self.assertEqual(float(asig.horas_totales), 80.0)
+        # 80 h a 8 h/día son 10 días hábiles: la ventana ya no puede acabar el 17.
+        self.assertGreater(asig.fecha_fin, date(2025, 1, 17))

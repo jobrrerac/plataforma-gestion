@@ -259,7 +259,31 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     def _es_admin(self, request):
         return es_admin(request.user)
 
+    def _confirmar(self, request, asig, titulo, advertencia, color, pide_motivo=False):
+        """Pantalla de confirmación para una acción que cambia el estado.
+
+        Es la mitad segura del patrón: en GET solo se pinta, y el cambio va en
+        el POST, que lleva token CSRF.
+        """
+        return dj_render(request, "admin/assignments/confirmar_accion.html", {
+            **self.admin_site.each_context(request),
+            "asignacion": asig,
+            "titulo": titulo,
+            "advertencia": advertencia,
+            "color": color,
+            "pide_motivo": pide_motivo,
+            "opts": self.model._meta,
+        })
+
     def view_aprobar(self, request, pk):
+        """Aprobar. En GET se confirma; el cambio real solo ocurre en POST.
+
+        Antes esto aprobaba directamente desde el enlace del listado, o sea por
+        GET. Bastaba con que un Admin abriera una página con
+        `<img src=".../aprobar/5/">` —o que el navegador hiciera prefetch, o que
+        pasara un escáner interno— para aprobar una asignación sin que nadie lo
+        pidiera. Un GET no debe cambiar datos, y ademas no lleva CSRF.
+        """
         if not self._es_admin(request):
             self.message_user(request, "Se requiere rol Admin para aprobar asignaciones.", messages.ERROR)
             return self._redirect_lista()
@@ -267,11 +291,22 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         if asig.estado != "SOLICITADA":
             self.message_user(request, "Solo se pueden aprobar asignaciones en estado SOLICITADA.", messages.ERROR)
             return self._redirect_lista()
+
         conflict_dates, nueva_fecha_fin, nuevas_horas = analizar_conflictos(asig)
         if conflict_dates:
+            # Hay ausencias en medio: esa pantalla ya pide confirmación aparte,
+            # porque ahí no solo se aprueba, se decide qué hacer con los días.
             from django.http import HttpResponseRedirect
             from django.urls import reverse
             return HttpResponseRedirect(reverse("admin:asignacion-aprobar-confirmar", kwargs={"pk": pk}))
+
+        if request.method != "POST":
+            return self._confirmar(
+                request, asig, "Aprobar",
+                "Al aprobarla, sus horas empiezan a ocupar la capacidad del recurso "
+                "y se congela el snapshot de tarifa y costo.",
+                "#16a34a",
+            )
         try:
             aprobar_asignacion(asig, request.user)
             self.message_user(request, f"Asignación #{pk} aprobada.", messages.SUCCESS)
@@ -366,21 +401,43 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         return dj_render(request, "admin/assignments/ceder_form.html", ctx)
 
     def view_rechazar(self, request, pk):
+        """Rechazar. Confirmación en GET, cambio en POST. Ver `view_aprobar`."""
         if not self._es_admin(request):
             self.message_user(request, "Se requiere rol Admin para rechazar asignaciones.", messages.ERROR)
             return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
-        rechazar_asignacion(asig, request.user)
-        self.message_user(request, f"Asignación #{pk} rechazada.", messages.WARNING)
+        if request.method != "POST":
+            return self._confirmar(
+                request, asig, "Rechazar",
+                "La asignación queda rechazada y no se puede reactivar: "
+                "habría que crear una nueva.",
+                "#dc2626", pide_motivo=True,
+            )
+        try:
+            rechazar_asignacion(asig, request.user, motivo=request.POST.get("motivo", ""))
+            self.message_user(request, f"Asignación #{pk} rechazada.", messages.WARNING)
+        except ValueError as e:
+            self.message_user(request, str(e), messages.ERROR)
         return self._redirect_lista()
 
     def view_revocar(self, request, pk):
+        """Revocar. Confirmación en GET, cambio en POST. Ver `view_aprobar`."""
         if not self._es_admin(request):
             self.message_user(request, "Se requiere rol Admin para revocar asignaciones.", messages.ERROR)
             return self._redirect_lista()
         asig = Asignacion.objects.get(pk=pk)
-        revocar_asignacion(asig, request.user)
-        self.message_user(request, f"Asignación #{pk} revocada.", messages.WARNING)
+        if request.method != "POST":
+            return self._confirmar(
+                request, asig, "Revocar",
+                "Libera la capacidad del recurso y anula las cesiones recibidas. "
+                "No se puede deshacer.",
+                "#f97316", pide_motivo=True,
+            )
+        try:
+            revocar_asignacion(asig, request.user, motivo=request.POST.get("motivo", ""))
+            self.message_user(request, f"Asignación #{pk} revocada.", messages.WARNING)
+        except ValueError as e:
+            self.message_user(request, str(e), messages.ERROR)
         return self._redirect_lista()
 
     # ── Acciones masivas ─────────────────────────────────────────────────
