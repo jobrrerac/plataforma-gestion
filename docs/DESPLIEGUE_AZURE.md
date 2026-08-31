@@ -370,6 +370,32 @@ resetea la contraseña.
 Las contraseñas temporales se anexan a `credenciales_entra.csv`, que está en
 `.gitignore` junto con cualquier otro `credenciales*.csv`.
 
+### Cambiar el rol de alguien
+
+```bash
+python scripts/crear_usuario_entra.py erika.castiblanco-monroy@inetum.com --rol PM --solo-rol
+```
+
+**No se cambia en Django.** El admin de Django deja editar el grupo y dice que
+lo guarda, pero `_sincronizar_grupos` deja los grupos exactamente como dicen los
+app roles de Entra en **cada** login, así que el cambio se revierte en el
+siguiente acceso. Es a propósito: si Django pudiera ganar habría dos fuentes de
+verdad, y dar de baja a alguien en Entra dejaría de significar nada.
+
+Se cambia en Entra, y tiene dos trampas que el script resuelve:
+
+- **Una asignación de app role no se edita.** Se quita y se crea otra. En el
+  portal solo se ve el botón «Quitar», que despista.
+- **Quien haya sido invitado por B2B tiene dos identidades** —su cuenta local
+  `@onmicrosoft` y el objeto de invitado `#EXT#`—, cada una con su propia
+  asignación. Cambiar el rol en una sola deja el rol efectivo a merced de por
+  cuál entre, sin ningún aviso en pantalla.
+
+El script reconcilia: deja exactamente el rol pedido en **todas** las identidades
+de esa persona, y retira los que sobren. Solo toca asignaciones de esta
+aplicación — alguien puede tener acceso a Databricks o a lo que sea, y eso no es
+asunto nuestro.
+
 ### Cuentas cuyo UPN no deriva de un email
 
 `admin@inetumoffshore.onmicrosoft.com` es la cuenta administrativa del tenant:

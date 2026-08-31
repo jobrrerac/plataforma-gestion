@@ -330,7 +330,7 @@ variable "roles_entra" {
     "qa.pm"    = "PM"
     "qa.admin" = "Admin"
 
-    "erika.castiblanco-monroy"  = "Ingeniero"
+    "erika.castiblanco-monroy"  = "PM"
     "sandra.chavarria-romero"   = "Ingeniero"
     "gustavo.villazon-gonzalez" = "Ingeniero"
     "ingrid.cespedes-diaz"      = "Ingeniero"
@@ -467,4 +467,36 @@ variable "github_environment" {
   EOT
   type        = string
   default     = "produccion"
+}
+
+variable "invitados_b2b" {
+  description = <<-EOT
+    Personas que entran por B2B con su cuenta corporativa, indexadas por la
+    parte local del UPN, igual que `roles_entra`.
+
+    Un invitado tiene DOS identidades en este tenant: su cuenta local
+    `nombre@inetumoffshore.onmicrosoft.com` y un objeto Guest cuyo UPN es una
+    deformacion de su correo real:
+
+      erika.castiblanco-monroy_inetum.com#EXT#@inetumoffshore.onmicrosoft.com
+
+    El app role vive en cada objeto por separado. `roles_entra` solo alcanza la
+    cuenta local, asi que sin esta lista el rol de un invitado se queda como
+    estuviera: se cambia el rol en `roles_entra`, se aplica, Terraform dice que
+    todo esta al dia, y la persona sigue entrando con el rol viejo. Sin ningun
+    aviso, porque el objeto que Terraform mira si esta correcto.
+
+    Quien aparezca aqui debe estar tambien en `roles_entra`: de ahi sale su rol,
+    para que no haya dos sitios donde decir lo mismo.
+  EOT
+  type        = set(string)
+  default = [
+    # Invitada el 31/08/2026 para validar el acceso B2B sin segunda contrasena.
+    "erika.castiblanco-monroy",
+  ]
+
+  validation {
+    condition     = length(var.invitados_b2b) == length(setintersection(var.invitados_b2b, keys(var.roles_entra)))
+    error_message = "Todo invitado B2B tiene que tener rol en roles_entra."
+  }
 }
