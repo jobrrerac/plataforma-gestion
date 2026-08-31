@@ -26,6 +26,67 @@ class SoftDeleteModel(models.Model):
         abstract = True
 
 
+class AppendOnlyError(Exception):
+    """Se intento modificar o borrar un registro que no admite cambios."""
+
+
+class AppendOnlyQuerySet(models.QuerySet):
+    """Cierra tambien las puertas de conjunto.
+
+    `Model.save()` y `Model.delete()` no se enteran de un
+    `Modelo.objects.filter(...).update(...)`: eso baja directo a SQL. Sin
+    bloquearlo aqui, la proteccion del modelo seria una valla con la verja
+    abierta al lado.
+    """
+
+    def update(self, **kwargs):
+        raise AppendOnlyError(
+            f"{self.model.__name__} es append-only: no se puede actualizar en bloque. "
+            "Para corregir un dato, registra una entrada nueva."
+        )
+
+    def delete(self):
+        raise AppendOnlyError(
+            f"{self.model.__name__} es append-only: no se puede borrar en bloque."
+        )
+
+
+class AppendOnlyModel(models.Model):
+    """Registro que solo se crea: ni se edita ni se borra.
+
+    La regla estaba escrita en los docstrings y aplicada unicamente en el admin.
+    Eso deja fuera el shell de produccion, un script de migracion, una
+    integracion futura o simplemente el proximo que escriba
+    `.objects.update(...)` sin saber que no debia.
+
+    Un rastro de auditoria que se puede reescribir no es un rastro de auditoria,
+    y una tarifa historica que se puede editar cambia costos ya reportados. Por
+    eso ademas de esto hay un disparador en PostgreSQL: es lo unico que sigue en
+    pie cuando el codigo se salta el ORM.
+    """
+
+    objects = AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        # `_state.adding` es False en cuanto la fila existe, tanto si se cargo
+        # de la base como si se acaba de crear. Comprobar `pk is not None` no
+        # basta: una instancia nueva con pk explicito tambien lo tendria.
+        if not self._state.adding:
+            raise AppendOnlyError(
+                f"{type(self).__name__} es append-only: no se puede modificar una entrada "
+                "ya registrada. Para corregir un dato, registra una entrada nueva."
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise AppendOnlyError(
+            f"{type(self).__name__} es append-only: no se puede borrar una entrada registrada."
+        )
+
+
 class Skill(models.Model):
     """Skills técnicos. En producción se sincronizarán desde el sistema de Skills vía adaptador."""
     nombre = models.CharField(max_length=100, unique=True)
@@ -143,8 +204,17 @@ class RecursoSkill(models.Model):
         return "★" * self.suficiencia + "☆" * (5 - self.suficiencia)
 
 
-class TarifaVigente(models.Model):
-    """Historial de tarifas por hora de un recurso. Append-only: nunca se edita ni borra."""
+class TarifaVigente(AppendOnlyModel):
+    """Historial de tarifas por hora de un recurso.
+
+    Append-only de verdad, no solo de palabra: la inmutabilidad la imponen el
+    modelo y un disparador de PostgreSQL, no el admin. Editar una tarifa ya
+    registrada cambiaria costos historicos ya reportados, y ademas no dispara
+    el recomputo (`signals.py` solo reacciona al alta), asi que las asignaciones
+    se quedarian con el costo viejo sin que nada avisara.
+
+    Una correccion se registra como una vigencia nueva.
+    """
     recurso = models.ForeignKey(
         Recurso, on_delete=models.PROTECT, related_name="tarifas",
     )
