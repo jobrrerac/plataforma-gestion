@@ -156,7 +156,14 @@
         <strong><i class="bi bi-lock-fill me-1"></i>Día aceptado</strong>
         <div style="font-size:.87rem">
           {{ dia.total_horas }} h el {{ dia.registrado_en|date:"d/m/Y H:i" }}.
-          {% if dia.estado == "APROBADO" %}Aprobado por {{ dia.aprobado_por.get_full_name|default:dia.aprobado_por.username }}.
+          {% if dia.estado == "APROBADO" %}
+            {# Un dia puede quedar aprobado sin firmante si sus renglones se
+               aprobaron antes de que el dia empezara a heredar la firma. El
+               argumento de `default` se evalua aunque no se use, asi que
+               `dia.aprobado_por.username` con el campo a nulo reventaba la
+               pagina entera. #}
+            {% if dia.aprobado_por %}Aprobado por {{ dia.aprobado_por.get_full_name|default:dia.aprobado_por.username }}.
+            {% else %}Aprobado.{% endif %}
           {% else %}Pendiente de aprobación del PM.{% endif %}
         </div>
       </div>
