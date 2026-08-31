@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.accounts import roles
@@ -227,3 +227,75 @@ class BloqueoPorIntentosTests(TestCase):
         self._fallar("qa.aut@inetum.com", 5)
         claves_ip = [k for k in ("login_fail_ip_127.0.0.1", "login_fail_ip_") if cache.get(k)]
         self.assertEqual(claves_ip, [])
+
+
+@override_settings(
+    SESSION_COOKIE_AGE=3600,
+    SESSION_SAVE_EVERY_REQUEST=True,
+    SESSION_EXPIRE_AT_BROWSER_CLOSE=True,
+)
+class SesionPorInactividadTests(TestCase):
+    """La sesión caduca por inactividad, no por reloj.
+
+    Antes eran 8 horas contadas desde el login: lo peor de los dos mundos.
+    Demasiado para una pantalla que alguien deja abierta y se va, y a la vez
+    echaba a quien llevaba ocho horas trabajando de verdad, en mitad de lo que
+    estuviera haciendo.
+
+    Se prueba el comportamiento, no que la constante valga 3600: lo que importa
+    es que la actividad renueve el plazo y que el silencio lo consuma.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ana.sesion", password="Clave2026!")
+        self.client.force_login(self.user)
+
+    def _caduca_en(self):
+        """Segundos que le quedan a la sesión según la cookie."""
+        return self.client.session.get_expiry_age()
+
+    def test_la_actividad_renueva_el_plazo(self):
+        """Quien está trabajando no se entera de que hay caducidad."""
+        self.client.session.set_expiry(60)  # como si quedara un minuto
+        self.client.session.save()
+
+        self.client.get(reverse("dashboard"))
+
+        # Tras la petición el plazo vuelve a estar completo.
+        self.assertGreater(self._caduca_en(), 3000)
+
+    def test_una_sesion_sin_actividad_caduca(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        sesion = self.client.session
+        # Se envejece la sesión: última actividad hace hora y media.
+        sesion.set_expiry(timezone.now() - timedelta(minutes=30))
+        sesion.save()
+
+        resp = self.client.get(reverse("dashboard"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login/", resp.url)
+
+    def test_el_plazo_es_de_una_hora_como_mucho(self):
+        # Guarda contra volver a subirlo sin querer: el escenario que preocupa
+        # —el puesto compartido con la aplicación abierta— sigue vivo todo el
+        # rato que dure este número.
+        self.client.get(reverse("dashboard"))
+        self.assertLessEqual(self._caduca_en(), 3600)
+
+    def test_el_perfil_de_produccion_lo_configura_asi(self):
+        """Los tests de arriba usan `override_settings`, así que prueban el
+        mecanismo pero no lo que realmente se despliega. Esto sí lee
+        `production.py`: sin ello, alguien podría subir el plazo a 8 horas y la
+        suite seguiría en verde.
+        """
+        import importlib
+
+        prod = importlib.import_module("config.settings.production")
+        self.assertLessEqual(prod.SESSION_COOKIE_AGE, 3600)
+        self.assertTrue(
+            prod.SESSION_SAVE_EVERY_REQUEST,
+            "Sin esto el plazo cuenta desde el login y echa a quien está trabajando.",
+        )
+        self.assertTrue(prod.SESSION_EXPIRE_AT_BROWSER_CLOSE)

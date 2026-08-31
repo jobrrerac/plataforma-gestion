@@ -37,7 +37,29 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # Cookies seguras (requiere HTTPS en el servidor)
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_AGE = 28800  # 8 horas
+
+# La sesion caduca por INACTIVIDAD, no por reloj.
+#
+# Antes eran 8 horas contadas desde el login, que es lo peor de los dos mundos:
+# demasiado para una pantalla que alguien deja abierta y se va, y a la vez echa
+# a quien lleva ocho horas trabajando de verdad, en mitad de lo que este
+# haciendo.
+#
+# Con SESSION_SAVE_EVERY_REQUEST la marca de tiempo se renueva en cada peticion,
+# asi que el contador mide tiempo sin tocar nada. Quien esta trabajando no se
+# entera; una pantalla olvidada se cierra sola en una hora.
+#
+# Una hora y no menos porque el almuerzo ronda esa duracion: bajarlo a 30
+# minutos obligaria a volver a entrar varias veces al dia y la gente acabaria
+# dejando la sesion abierta a proposito, que es justo lo contrario de lo que se
+# busca. Y no mas porque el escenario que preocupa —el puesto compartido con la
+# aplicacion abierta— sigue vivo todo ese rato.
+SESSION_COOKIE_AGE = 3600  # 1 hora SIN ACTIVIDAD
+SESSION_SAVE_EVERY_REQUEST = True
+
+# Cerrar el navegador cierra la sesion. No sustituye a lo de arriba (mucha gente
+# no cierra nunca el navegador), pero cubre el caso del portatil prestado.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = True
 
