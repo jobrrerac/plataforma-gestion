@@ -17,6 +17,20 @@ from .services import (
     ceder_horas, aprobar_liberacion, rechazar_liberacion, anular_liberacion,
 )
 
+# Paleta del admin. Antes cada boton traia su hexadecimal a mano —y eran los
+# de Tailwind por defecto—, asi que dos acciones equivalentes salian de color
+# distinto segun quien escribiera la linea.
+COLOR = {
+    "principal": "#d6197f",   # magenta de marca: la accion principal
+    "neutro": "#4a5162",      # editar, ver, navegar
+    "ok": "#1f6b45",          # aprobar, confirmar
+    "alerta": "#a52a25",      # rechazar
+    "aviso": "#97591a",       # revocar, deshacer
+    "info": "#2b5674",        # ceder, mover
+    "apagado": "#8a8f9c",     # sin accion disponible
+}
+
+
 
 class AsignacionAdminForm(forms.ModelForm):
     fecha_fin_rango = forms.DateField(
@@ -90,7 +104,7 @@ class SerieFilter(admin.SimpleListFilter):
             uuid.UUID(valor)
         except ValueError:
             return []
-        return [(valor, f"↻ {valor[:8]}")]
+        return [(valor, f"{valor[:8]}")]
 
     def queryset(self, request, queryset):
         if self.value():
@@ -108,7 +122,7 @@ class LogAuditoriaInline(admin.TabularInline):
 
 class CesionRealizadaInline(admin.TabularInline):
     """Cesiones de horas hechas desde esta asignación (solo lectura;
-    se crean con el botón ⇄ Ceder del listado)."""
+    se crean con el botón Ceder del listado)."""
     model = CesionHoras
     fk_name = "asignacion_origen"
     extra = 0
@@ -188,7 +202,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         return format_html(
             '<a href="?serie={}" title="Ver toda la serie" '
             'style="font-family:monospace;font-size:.8em;background:#ede8f5;color:#4a1f7a;'
-            'padding:2px 6px;border-radius:4px;text-decoration:none">↻ {}</a>',
+            'padding:2px 6px;border-radius:4px;text-decoration:none">{}</a>',
             obj.serie, str(obj.serie)[:8],
         )
 
@@ -196,13 +210,13 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     @admin.display(description="Estado", ordering="estado")
     def estado_badge(self, obj):
         colores = {
-            "SOLICITADA": "#6366f1",
-            "APROBADA":   "#16a34a",
-            "RECHAZADA":  "#dc2626",
-            "REVOCADA":   "#9ca3af",
-            "INVALIDADA": "#f97316",
+            "SOLICITADA": COLOR["neutro"],
+            "APROBADA":   COLOR["ok"],
+            "RECHAZADA":  COLOR["alerta"],
+            "REVOCADA":   COLOR["apagado"],
+            "INVALIDADA": COLOR["aviso"],
         }
-        color = colores.get(obj.estado, "#6b7280")
+        color = colores.get(obj.estado, COLOR["apagado"])
         return format_html(
             '<span style="background:{};color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em">{}</span>',
             color, obj.get_estado_display()
@@ -220,18 +234,18 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
     @admin.display(description="Acciones")
     def acciones_rapidas(self, obj):
-        editar = self._btn(f"{obj.pk}/change/", "✎ Editar", "#4f46e5")
+        editar = self._btn(f"{obj.pk}/change/", "Editar", COLOR["neutro"])
 
         if obj.estado == "SOLICITADA":
-            aprobar  = self._btn(f"aprobar/{obj.pk}/",  "✓ Aprobar",  "#16a34a")
-            rechazar = self._btn(f"rechazar/{obj.pk}/", "✗ Rechazar", "#dc2626")
+            aprobar  = self._btn(f"aprobar/{obj.pk}/",  "Aprobar",  COLOR["ok"])
+            rechazar = self._btn(f"rechazar/{obj.pk}/", "Rechazar", COLOR["alerta"])
             return format_html(
                 '<div style="display:flex;gap:4px;align-items:center">{}{}{}</div>',
                 editar, aprobar, rechazar,
             )
         if obj.estado == "APROBADA":
-            ceder = self._btn(f"ceder/{obj.pk}/", "⇄ Ceder", "#0d9488")
-            revocar = self._btn(f"revocar/{obj.pk}/", "↩ Revocar", "#f97316")
+            ceder = self._btn(f"ceder/{obj.pk}/", "Ceder", COLOR["info"])
+            revocar = self._btn(f"revocar/{obj.pk}/", "Revocar", COLOR["aviso"])
             return format_html(
                 '<div style="display:flex;gap:4px;align-items:center">{}{}{}</div>',
                 editar, ceder, revocar,
@@ -305,7 +319,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
                 request, asig, "Aprobar",
                 "Al aprobarla, sus horas empiezan a ocupar la capacidad del recurso "
                 "y se congela el snapshot de tarifa y costo.",
-                "#16a34a",
+                COLOR["ok"],
             )
         try:
             aprobar_asignacion(asig, request.user)
@@ -411,7 +425,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
                 request, asig, "Rechazar",
                 "La asignación queda rechazada y no se puede reactivar: "
                 "habría que crear una nueva.",
-                "#dc2626", pide_motivo=True,
+                COLOR["alerta"], pide_motivo=True,
             )
         try:
             rechazar_asignacion(asig, request.user, motivo=request.POST.get("motivo", ""))
@@ -431,7 +445,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
                 request, asig, "Revocar",
                 "Libera la capacidad del recurso y anula las cesiones recibidas. "
                 "No se puede deshacer.",
-                "#f97316", pide_motivo=True,
+                COLOR["aviso"], pide_motivo=True,
             )
         try:
             revocar_asignacion(asig, request.user, motivo=request.POST.get("motivo", ""))
@@ -441,7 +455,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         return self._redirect_lista()
 
     # ── Acciones masivas ─────────────────────────────────────────────────
-    @admin.action(description="✓ Aprobar asignaciones seleccionadas")
+    @admin.action(description="Aprobar asignaciones seleccionadas")
     def action_aprobar(self, request, queryset):
         ok = err = 0
         for asig in queryset.filter(estado="SOLICITADA"):
@@ -454,7 +468,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         if ok:
             self.message_user(request, f"{ok} asignación(es) aprobada(s).", messages.SUCCESS)
 
-    @admin.action(description="✗ Rechazar asignaciones seleccionadas")
+    @admin.action(description="Rechazar asignaciones seleccionadas")
     def action_rechazar(self, request, queryset):
         n = 0
         for asig in queryset.filter(estado="SOLICITADA"):
@@ -462,7 +476,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             n += 1
         self.message_user(request, f"{n} asignación(es) rechazada(s).", messages.WARNING)
 
-    @admin.action(description="↩ Revocar asignaciones seleccionadas")
+    @admin.action(description="Revocar asignaciones seleccionadas")
     def action_revocar(self, request, queryset):
         n = 0
         for asig in queryset.filter(estado="APROBADA"):
@@ -528,7 +542,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(CesionHoras)
 class CesionHorasAdmin(admin.ModelAdmin):
-    """Trazabilidad de cesiones: solo lectura (se crean con el botón ⇄ Ceder)."""
+    """Trazabilidad de cesiones: solo lectura (se crean con el botón Ceder)."""
     list_display = [
         "id", "recurso_nombre", "fecha", "horas", "proyecto_origen", "proyecto_destino",
         "politica", "tarifa_hora", "estado_cesion", "creado_por", "creado_en",
@@ -551,11 +565,11 @@ class CesionHorasAdmin(admin.ModelAdmin):
     @admin.display(description="Estado")
     def estado_cesion(self, obj):
         if obj.anulada_en:
-            color, texto = "#9ca3af", "ANULADA"
+            color, texto = COLOR["apagado"], "ANULADA"
         elif obj.asignacion_destino.estado == "APROBADA":
-            color, texto = "#16a34a", "EFECTIVA"
+            color, texto = COLOR["ok"], "EFECTIVA"
         else:
-            color, texto = "#6366f1", "RESERVADA"
+            color, texto = COLOR["neutro"], "RESERVADA"
         return format_html(
             '<span style="background:{};color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em">{}</span>',
             color, texto,
@@ -604,12 +618,12 @@ class LiberacionRecursoAdmin(admin.ModelAdmin):
     @admin.display(description="Estado", ordering="estado")
     def estado_badge(self, obj):
         colores = {
-            "SOLICITADA": "#6366f1",
-            "APROBADA": "#0ea5e9",
-            "RECHAZADA": "#dc2626",
-            "ANULADA": "#9ca3af",
+            "SOLICITADA": COLOR["neutro"],
+            "APROBADA": COLOR["info"],
+            "RECHAZADA": COLOR["alerta"],
+            "ANULADA": COLOR["apagado"],
         }
-        color = colores.get(obj.estado, "#6b7280")
+        color = colores.get(obj.estado, COLOR["apagado"])
         return format_html(
             '<span style="background:{};color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em">{}</span>',
             color, obj.get_estado_display(),
@@ -627,11 +641,11 @@ class LiberacionRecursoAdmin(admin.ModelAdmin):
     def acciones(self, obj):
         from django.urls import reverse
         if obj.estado == "SOLICITADA":
-            aprobar = self._btn(reverse("admin:liberacion-aprobar", kwargs={"pk": obj.pk}), "✓ Aprobar", "#16a34a")
-            rechazar = self._btn(reverse("admin:liberacion-rechazar", kwargs={"pk": obj.pk}), "✗ Rechazar", "#dc2626")
+            aprobar = self._btn(reverse("admin:liberacion-aprobar", kwargs={"pk": obj.pk}), "Aprobar", COLOR["ok"])
+            rechazar = self._btn(reverse("admin:liberacion-rechazar", kwargs={"pk": obj.pk}), "Rechazar", COLOR["alerta"])
             return format_html('<div style="display:flex;gap:4px">{}{}</div>', aprobar, rechazar)
         if obj.estado == "APROBADA":
-            return self._btn(reverse("admin:liberacion-anular", kwargs={"pk": obj.pk}), "↩ Anular", "#f97316")
+            return self._btn(reverse("admin:liberacion-anular", kwargs={"pk": obj.pk}), "Anular", COLOR["aviso"])
         return format_html('<span style="color:#aaa">—</span>')
 
     def get_urls(self):

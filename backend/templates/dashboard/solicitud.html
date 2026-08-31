@@ -10,21 +10,21 @@
     /* Calendario: feriados/no laborables en rojo, findes atenuados */
     .flatpickr-day.dia-no-habil { background:#fee2e2; border-color:#fecaca; color:#b91c1c; font-weight:700; }
     .flatpickr-day.dia-no-habil:hover { background:#fecaca; }
-    .flatpickr-day.dia-finde { color:#dc2626; opacity:.6; }
-    .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#e0178a; border-color:#e0178a; color:#fff; opacity:1; }
+    .flatpickr-day.dia-finde { color:#a52a25; opacity:.6; }
+    .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#d6197f; border-color:#d6197f; color:#fff; opacity:1; }
     body { background: #f4f4f8; }
 
     /* Availability bar — colores alineados con el heatmap del dashboard:
        mismo criterio: verde=poco ocupado, amarillo=moderado, naranja=alto, rojo=lleno */
     .avail-bar-wrap { min-width: 140px; }
     /* >75% libre  = <25% ocupado  → verde  (como cell-low  #d1fae5) */
-    .libre-100 { background: #16a34a; }
+    .libre-100 { background: #1f6b45; }
     /* 50-75% libre = 25-50% ocupado → ámbar  (como cell-mid  #fef08a) */
     .libre-75  { background: #d97706; }
     /* 25-50% libre = 50-75% ocupado → naranja (como cell-high #fdba74) */
     .libre-50  { background: #ea580c; }
     /* <25% libre  = >75% ocupado   → rojo   (como cell-full #f87171) */
-    .libre-25  { background: #dc2626; }
+    .libre-25  { background: #a52a25; }
     /* 0% libre    = 100% ocupado   → rojo intenso */
     .libre-0   { background: #9f1239; }
     .badge-libre-100 { background: #d1fae5; color: #14532d; }
@@ -49,11 +49,11 @@
       font-family: 'Montserrat', sans-serif;
       font-size: 1.25rem;
       font-weight: 800;
-      color: #110d26;
+      color: #191b2e;
       margin: 0 0 4px;
       letter-spacing: -.02em;
     }
-    .page-strip h1 span { color: #e0178a; }
+    .page-strip h1 span { color: #d6197f; }
 
     /* Filter card */
     .filter-card {
@@ -63,7 +63,7 @@
       box-shadow: 0 1px 6px rgba(0,0,0,.07);
     }
     .filter-card .card-header {
-      background: #110d26;
+      background: #191b2e;
       color: #fff;
       border-radius: 12px 12px 0 0 !important;
       font-family: 'Montserrat', sans-serif;
@@ -82,10 +82,10 @@
     /* TomSelect: misma altura que los input-group */
     .ts-wrapper { margin-bottom:0 !important; height:30px !important; }
     .ts-wrapper .ts-control { min-height:30px !important; max-height:30px !important; height:30px !important; overflow-y:auto !important; flex-wrap:nowrap !important; border-radius:6px !important; padding:0 8px !important; align-items:center !important; display:flex !important; }
-    .ts-wrapper.focus .ts-control { border-color:#e0178a !important; box-shadow:0 0 0 3px rgba(224,23,138,.12) !important; }
+    .ts-wrapper.focus .ts-control { border-color:#d6197f !important; box-shadow:0 0 0 3px rgba(224,23,138,.12) !important; }
 
     /* Etiqueta de fila de filtros */
-    .filter-row-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#9ca3af; margin-bottom:6px; }
+    .filter-row-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#8a8f9c; margin-bottom:6px; }
     /* Botones de acción del formulario — tamaño idéntico */
     .filter-action-btn { height:30px; padding:0 18px; font-size:.82rem; border-radius:8px; font-family:'Montserrat',sans-serif; display:flex; align-items:center; white-space:nowrap; line-height:1; }
 
@@ -147,7 +147,7 @@
                    value="{{ fecha_fin }}" style="width:130px;border-color:#e0d6f5">
           </div>
           <div class="d-flex align-items-center gap-1 ms-2">
-            <span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;white-space:nowrap;margin-right:2px">Rápido</span>
+            <span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#8a8f9c;white-space:nowrap;margin-right:2px">Rápido</span>
             <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(1)">1 día</button>
             <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(5)">1 sem</button>
             <button type="button" class="btn btn-outline-secondary btn-sm rango-btn" onclick="setRango(10)">2 sem</button>
@@ -224,7 +224,7 @@
             </label>
           </div>
           <button type="submit" class="btn fw-semibold flex-shrink-0 filter-action-btn"
-                  style="background:#110d26;color:#fff;border:none">
+                  style="background:#191b2e;color:#fff;border:none">
             <i class="bi bi-search me-1"></i>Buscar
           </button>
           <a href="/solicitud/" class="btn fw-semibold flex-shrink-0 filter-action-btn"
@@ -259,7 +259,7 @@
     <div class="row g-3 mb-4">
       <div class="col-auto">
         <div class="card px-3 py-2 text-center" style="min-width:100px">
-          <div class="fw-bold fs-4" style="color:#110d26">{{ resultados|length }}</div>
+          <div class="fw-bold fs-4" style="color:#191b2e">{{ resultados|length }}</div>
           <div class="small text-muted">Recursos</div>
         </div>
       </div>
@@ -280,12 +280,12 @@
     <!-- Tabla de resultados -->
     <div class="card">
       <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center"
-           style="background:#110d26;color:#fff;border-radius:12px 12px 0 0 !important">
+           style="background:#191b2e;color:#fff;border-radius:12px 12px 0 0 !important">
         <span style="font-family:'Montserrat',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em">
           Disponibilidad
-          <span style="color:#d5e500">{{ fecha_inicio }}</span>
+          <span style="color:#d6197f">{{ fecha_inicio }}</span>
           →
-          <span style="color:#d5e500">{{ fecha_fin }}</span>
+          <span style="color:#d6197f">{{ fecha_fin }}</span>
         </span>
         <span style="font-size:.72rem;color:rgba(255,255,255,.5)">Ordenado de más a menos disponible</span>
       </div>
@@ -308,7 +308,7 @@
             {% for r in resultados %}
             {% with pct=r.porcentaje_libre %}
             <tr class="{% if not r.elegible %}sin-cupo{% endif %}" data-cupo="{% if r.elegible %}{{ pct }}{% else %}0{% endif %}">
-              <td class="ps-3 fw-semibold" style="color:#110d26">{{ r.recurso.nombre }}</td>
+              <td class="ps-3 fw-semibold" style="color:#191b2e">{{ r.recurso.nombre }}</td>
 
               <td>
                 {% with b=r.recurso.banda %}
@@ -410,13 +410,13 @@
                   <ul class="dropdown-menu dropdown-menu-end" style="font-size:.82rem">
                     <li>
                       <a class="dropdown-item" href="/solicitud/crear/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}{% if dias_flexibles %}&dias_flexibles=on{% endif %}{% if modo_busqueda == 'horas' %}&modo_crear=horas&horas_crear={{ horas_totales }}&intensidad_crear={{ intensidad_busqueda }}{% endif %}">
-                        <i class="bi bi-calendar-plus me-2" style="color:#e0178a"></i>Puntual
+                        <i class="bi bi-calendar-plus me-2" style="color:#d6197f"></i>Puntual
                         <span class="text-muted d-block" style="font-size:.72rem">Un rango de fechas u horas totales</span>
                       </a>
                     </li>
                     <li>
                       <a class="dropdown-item" href="/solicitud/recurrente/?recurso={{ r.recurso.pk }}&fecha_inicio={{ fecha_inicio }}{% if dias_flexibles %}&dias_flexibles=on{% endif %}">
-                        <i class="bi bi-arrow-repeat me-2" style="color:#e0178a"></i>Recurrente
+                        <i class="bi bi-arrow-repeat me-2" style="color:#d6197f"></i>Recurrente
                         <span class="text-muted d-block" style="font-size:.72rem">Patrón semanal — ej: lunes 2 h, miércoles 4 h</span>
                       </a>
                     </li>
@@ -440,7 +440,7 @@
     {% endif %}
   {% else %}
     <div class="text-center text-muted py-5">
-      <i class="bi bi-calendar-search" style="font-size:3rem;opacity:.25;color:#110d26"></i>
+      <i class="bi bi-calendar-search" style="font-size:3rem;opacity:.25;color:#191b2e"></i>
       <p class="mt-3" style="font-family:'Montserrat',sans-serif;font-size:.9rem">
         Ingresa un rango de fechas o define las horas totales requeridas para ver la disponibilidad.
       </p>
@@ -458,7 +458,7 @@
     {% for sk in r.skills %}
     <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;padding:4px 0;{% if not forloop.last %}border-bottom:1px solid #f0eaf8{% endif %}">
       <span style="font-size:.82rem">{{ sk.nombre }}</span>
-      <span style="color:#e0178a;letter-spacing:1px;font-size:.9rem">{{ sk.estrellas }}</span>
+      <span style="color:#d6197f;letter-spacing:1px;font-size:.9rem">{{ sk.estrellas }}</span>
     </div>
     {% endfor %}
   </div>
@@ -532,7 +532,7 @@
       bloqueHoras.style.display = '';
       bloqueRango.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
       bloqueHoras.querySelectorAll('input').forEach(function(i){ i.disabled = false; });
-      btnH.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#110d26;color:#fff;border:none';
+      btnH.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#191b2e;color:#fff;border:none';
       btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
     } else {
       // Sincronizar fecha_inicio de horas → rango al cambiar de modo
@@ -541,7 +541,7 @@
       bloqueRango.style.display = '';
       bloqueHoras.querySelectorAll('input').forEach(function(i){ i.disabled = true; });
       bloqueRango.querySelectorAll('input').forEach(function(i){ i.disabled = false; });
-      btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#110d26;color:#fff;border:none';
+      btnR.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#191b2e;color:#fff;border:none';
       btnH.style.cssText = 'font-size:.72rem;border-radius:6px;padding:3px 12px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
     }
     actualizarDiasCalc();

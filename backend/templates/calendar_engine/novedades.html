@@ -7,11 +7,11 @@
 <style>
   body { background: #f4f4f8; }
   .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-control:focus, .form-select:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
   .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
-  .page-strip h1 span { color:#e0178a; }
-  .btn-pink { background:#e0178a; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#191b2e; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#d6197f; }
+  .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
   .btn-pink:hover { background:#c4117a; color:#fff; }
   .nov-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
   .nov-row .meta { color:#6b7280; font-size:.84rem; }
@@ -20,17 +20,17 @@
   .e-APROBADA  { background:#d1fae5; color:#065f46; }
   .e-RECHAZADA { background:#fee2e2; color:#991b1b; }
   .tipo-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
-  .vacio { text-align:center; color:#9ca3af; padding:36px 12px; }
+  .vacio { text-align:center; color:#8a8f9c; padding:36px 12px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-strip">
-  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+  <a href="/dashboard/" style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
   <div style="width:1px;height:20px;background:#e8e6f0"></div>
-  <h1><i class="bi bi-calendar-heart" style="color:#e0178a"></i> Mis <span>novedades</span></h1>
+  <h1><i class="bi bi-calendar-heart" style="color:#d6197f"></i> Mis <span>novedades</span></h1>
   {% if es_admin and pendientes_por_revisar %}
   <a href="/novedades/revisar/" class="ms-auto badge-estado e-PENDIENTE" style="text-decoration:none">
     {{ pendientes_por_revisar }} por revisar
@@ -131,7 +131,7 @@
   </script>
 
   <!-- Historial -->
-  <h6 class="fw-bold mb-3" style="font-family:'Montserrat',sans-serif;font-size:.92rem;color:#110d26">
+  <h6 class="fw-bold mb-3" style="font-family:'Montserrat',sans-serif;font-size:.92rem;color:#191b2e">
     Historial <span class="text-muted fw-normal">({{ novedades|length }})</span>
   </h6>
 

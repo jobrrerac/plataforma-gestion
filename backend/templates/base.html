@@ -14,14 +14,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
 
   <style>
-    /* ═══ INETUM BRAND TOKENS ═══════════════════════════════════════ */
+    /* Paleta corporativa.
+       El magenta es la marca y se usa con cuentagotas: cabecera, accion
+       principal y poco mas. Todo lo demas se apoya en grises, que es lo que
+       hace que una herramienta interna se lea como una herramienta y no como
+       una demo. Los estados tienen tonos apagados a proposito: un rojo
+       saturado en una tabla de 30 filas cansa a los cinco minutos. */
     :root {
-      --inet-pink:        #e0178a;
-      --inet-yellow:      #d5e500;
-      --inet-dark:        #110d26;
-      --inet-grad-left:   #5c1040;
-      --inet-grad-mid:    #2a0e4a;
-      --inet-grad-right:  #110d26;
+      --inet-pink:        #d6197f;
+      --inet-pink-oscuro: #a81263;
+      --inet-dark:        #191b2e;
+      --inet-dark-suave:  #262a42;
+
+      --inet-tinta:       #23262f;
+      --inet-tenue:       #676d7a;
+      --inet-linea:       #e2e4ea;
+      --inet-fondo:       #f4f5f7;
+
+      --inet-ok:          #1f6b45;
+      --inet-ok-fondo:    #e8f2ec;
+      --inet-aviso:       #97591a;
+      --inet-aviso-fondo: #fbf1e3;
+      --inet-alerta:      #a52a25;
+      --inet-alerta-fondo:#f8ebea;
+      --inet-info:        #2b5674;
+      --inet-info-fondo:  #eaeff4;
 
       /* Densidad de la cabecera. Se aprietan por tramos mas abajo segun el
          ancho de ventana; centralizadas aqui para ajustarlas en un solo sitio. */
@@ -32,11 +49,9 @@
 
     /* ─── HEADER ────────────────────────────────────────────────── */
     .inet-header {
-      background: linear-gradient(90deg,
-        var(--inet-grad-left)  0%,
-        var(--inet-grad-mid)  22%,
-        var(--inet-grad-right) 60%);
-      border-bottom: 3px solid var(--inet-pink);
+      /* Plano. El degradado de tres paradas era lo que mas cantaba. */
+      background: var(--inet-dark);
+      border-bottom: 2px solid var(--inet-pink);
       position: sticky;
       top: 0;
       z-index: 1030;
@@ -116,8 +131,8 @@
       border-bottom-color: rgba(255, 255, 255, .3);
     }
     .inet-nav-link.active {
-      color: var(--inet-yellow);
-      border-bottom-color: var(--inet-yellow);
+      color: #fff;
+      border-bottom-color: var(--inet-pink);
     }
 
     /* Área derecha del header */
@@ -162,7 +177,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .1em;
-      color: var(--inet-yellow);
+      color: rgba(255,255,255,.55);
     }
     .inet-salir-form { display: flex; margin: 0; }
     .inet-salir {
@@ -181,7 +196,7 @@
     }
     .inet-salir:hover { color: var(--inet-pink); }
     .inet-salir:focus-visible {
-      outline: 2px solid var(--inet-yellow);
+      outline: 2px solid var(--inet-pink);
       outline-offset: 3px;
     }
 
@@ -245,7 +260,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .15em;
-      color: var(--inet-yellow);
+      color: rgba(255,255,255,.55);
       margin-bottom: 14px;
     }
 

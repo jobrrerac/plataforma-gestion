@@ -1,15 +1,9 @@
 # ---------------------------------------------------------------------------
 # Vigilancia de costos
 # ---------------------------------------------------------------------------
-# Coste de esto: 0 USD. Los presupuestos y las alertas de Azure son gratuitos.
-#
-# El presupuesto NO corta nada. Azure no apaga recursos por superarlo: solo
-# manda un correo. Sirve para enterarse de una desviacion cuando empieza, no al
-# recibir la factura a fin de mes.
-#
-# Va acotado al grupo de recursos del proyecto, no a la suscripcion entera, para
-# que el ruido de los otros grupos (rg-sdlcagents, rg-prodbench) no contamine la
-# lectura. Esa es justo la ventaja de tenerlo todo en su propio grupo.
+# Gratis, y NO corta nada: Azure solo avisa. Acotado al grupo de recursos del
+# proyecto para que el ruido de los otros no contamine la lectura.
+# → docs/DECISIONES_INFRA.md#presupuesto
 
 resource "azurerm_consumption_budget_resource_group" "mensual" {
   name              = "presupuesto-${local.base}"

@@ -15,7 +15,7 @@
     .heatmap thead th { background: #1a1033; color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
     .heatmap .col-recurso { min-width: 180px; max-width: 220px; padding: 6px 10px; background: #fff; font-weight: 500; }
     .heatmap .col-recurso small { display: block; color: #6c757d; font-weight: 400; }
-    .heatmap .col-recurso a:hover { color: #e0178a !important; text-decoration: underline !important; }
+    .heatmap .col-recurso a:hover { color: #d6197f !important; text-decoration: underline !important; }
     .cell-nohabil { background: #d4d4d4; }
     /* Ausencia (vacaciones o permiso aprobado): la persona no está disponible.
        Se distingue de un fin de semana a propósito — el gris se lee como
@@ -41,13 +41,13 @@
 
     /* Stat cards */
     .stat-card { border-left: 4px solid transparent; }
-    .stat-card.total   { border-color: #e0178a; }
-    .stat-card.ocupado { border-color: #f97316; }
+    .stat-card.total   { border-color: #d6197f; }
+    .stat-card.ocupado { border-color: #97591a; }
     .stat-card.bench   { border-color: #6b7280; }
     .stat-num { font-size: 2rem; font-weight: 700; line-height: 1; }
 
     .badge-bench   { background: #6b7280; font-size: 0.6rem; }
-    .badge-ocupado { background: #f97316; font-size: 0.6rem; }
+    .badge-ocupado { background: #97591a; font-size: 0.6rem; }
     .badge-hoy     { font-size: 0.65rem; }
 
     .legend-box { width: 14px; height: 14px; display: inline-block; border: 1px solid #ccc; vertical-align: middle; margin-right: 4px; }
@@ -71,11 +71,11 @@
       font-family: 'Montserrat', sans-serif;
       font-size: 1.25rem;
       font-weight: 800;
-      color: #110d26;
+      color: #191b2e;
       margin: 0;
       letter-spacing: -.02em;
     }
-    .page-strip h1 span { color: #e0178a; }
+    .page-strip h1 span { color: #d6197f; }
   </style>
 {% endblock %}
 
@@ -177,13 +177,13 @@
     document.getElementById("summary-cards").innerHTML = `
       <div class="col-auto">
         <div class="card stat-card total shadow-sm py-2 px-3" style="border-radius:10px">
-          <div class="stat-num" style="color:#e0178a">${recursos.length}</div>
+          <div class="stat-num" style="color:#d6197f">${recursos.length}</div>
           <div class="text-muted" style="font-size:.8rem">Total recursos</div>
         </div>
       </div>
       <div class="col-auto">
         <div class="card stat-card ocupado shadow-sm py-2 px-3" style="border-radius:10px">
-          <div class="stat-num" style="color:#f97316">${ocupado}</div>
+          <div class="stat-num" style="color:#97591a">${ocupado}</div>
           <div class="text-muted" style="font-size:.8rem">Ocupados hoy</div>
         </div>
       </div>
