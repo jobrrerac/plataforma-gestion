@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from apps.core.models import SoftDeleteModel, Recurso, Proyecto, Cluster
+from apps.core.models import AppendOnlyModel, SoftDeleteModel, Recurso, Proyecto, Cluster
 
 
 class Asignacion(SoftDeleteModel):
@@ -186,8 +186,15 @@ class LiberacionRecurso(models.Model):
         return self.estado == "APROBADA"
 
 
-class LogAuditoria(models.Model):
-    """Registro append-only de cambios de estado en asignaciones. No editar ni borrar."""
+class LogAuditoria(AppendOnlyModel):
+    """Registro append-only de cambios de estado en asignaciones.
+
+    Append-only de verdad, no solo de palabra: la inmutabilidad la imponen el
+    modelo y un disparador de PostgreSQL. Antes estaba solo en el admin, lo que
+    dejaba fuera el shell de produccion, los scripts y cualquier consumidor
+    futuro. Un rastro de auditoria que se puede reescribir no es un rastro de
+    auditoria.
+    """
     ACCION_CHOICES = [
         ("CREAR", "Crear"),
         ("APROBAR", "Aprobar"),
