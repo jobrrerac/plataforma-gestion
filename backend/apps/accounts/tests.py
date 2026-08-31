@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AnonymousUser, Group, User
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
@@ -132,3 +133,97 @@ class LogoutTests(TestCase):
         resp = self.client.get(reverse("dashboard"))
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login/", resp.url)
+
+
+class BloqueoPorIntentosTests(TestCase):
+    """El bloqueo por intentos fallidos tiene que ser de la cuenta, no de todos.
+
+    BUG-AUT-002, reportado en QA: mientras `qa.aut` estaba bloqueada por
+    intentos fallidos, `testaut@inetum.com` tampoco podía entrar.
+
+    La causa era peor que una molestia. Se contaba en paralelo por cuenta y por
+    IP, y se bloqueaba si cualquiera de los dos contadores llegaba al límite. Y
+    la "IP" no era la de nadie: detrás del ingress de Azure, el último valor de
+    X-Forwarded-For es a menudo la dirección interna del propio proxy. En el
+    cache de producción había una clave `login_fail_ip_100.100.0.31` —una
+    dirección privada de Azure— compartida por todas las peticiones.
+
+    Es decir: cinco intentos fallidos de cualquiera dejaban la aplicación
+    inaccesible para toda la empresa durante quince minutos, y cualquiera podía
+    provocarlo a propósito sin ninguna credencial.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.victima = User.objects.create_user(
+            username="qa.aut@inetum.com", password="Correcta2026!"
+        )
+        self.tercero = User.objects.create_user(
+            username="testaut@inetum.com", password="Correcta2026!"
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _fallar(self, usuario, veces):
+        for _ in range(veces):
+            self.client.post(reverse("login"), {"username": usuario, "password": "mala"})
+
+    def test_tras_cinco_fallos_se_bloquea_esa_cuenta(self):
+        self._fallar("qa.aut@inetum.com", 5)
+        resp = self.client.post(reverse("login"), {
+            "username": "qa.aut@inetum.com", "password": "Correcta2026!",
+        })
+        self.assertEqual(resp.status_code, 429)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_el_bloqueo_de_una_cuenta_no_afecta_a_otra(self):
+        """El caso reportado, tal cual."""
+        self._fallar("qa.aut@inetum.com", 5)
+        resp = self.client.post(reverse("login"), {
+            "username": "testaut@inetum.com", "password": "Correcta2026!",
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_fallar_con_una_cuenta_no_gasta_intentos_de_otra(self):
+        # Cuatro fallos ajenos no pueden dejar a nadie a un intento del bloqueo.
+        self._fallar("qa.aut@inetum.com", 4)
+        self._fallar("testaut@inetum.com", 4)
+        resp = self.client.post(reverse("login"), {
+            "username": "testaut@inetum.com", "password": "Correcta2026!",
+        })
+        self.assertEqual(resp.status_code, 302)
+
+    def test_entrar_bien_reinicia_el_contador(self):
+        self._fallar("testaut@inetum.com", 4)
+        self.client.post(reverse("login"), {
+            "username": "testaut@inetum.com", "password": "Correcta2026!",
+        })
+        self.client.post(reverse("logout"))
+        self._fallar("testaut@inetum.com", 4)
+        resp = self.client.post(reverse("login"), {
+            "username": "testaut@inetum.com", "password": "Correcta2026!",
+        })
+        self.assertEqual(resp.status_code, 302)
+
+    def test_el_aviso_sale_dentro_del_formulario_y_no_como_pagina_de_error(self):
+        # Antes era un 403 en texto plano sobre la pagina en blanco: parecia una
+        # caida de la aplicacion, no un limite con su motivo y su plazo.
+        self._fallar("qa.aut@inetum.com", 5)
+        resp = self.client.post(reverse("login"), {
+            "username": "qa.aut@inetum.com", "password": "Correcta2026!",
+        })
+        html = resp.content.decode()
+        self.assertIn("Plataforma de", html)
+        self.assertIn("15 minutos", html)
+
+    def test_ya_no_existe_un_contador_por_ip(self):
+        """Guarda explícita: reintroducirlo devuelve el bloqueo global.
+
+        Detrás del ingress de Azure la IP observada es la del proxy, así que un
+        contador por IP no limita a un atacante: es un interruptor compartido.
+        """
+        self._fallar("qa.aut@inetum.com", 5)
+        claves_ip = [k for k in ("login_fail_ip_127.0.0.1", "login_fail_ip_") if cache.get(k)]
+        self.assertEqual(claves_ip, [])
