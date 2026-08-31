@@ -9,16 +9,25 @@
   .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
   .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
   .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#191b2e; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:var(--inet-dark); margin:0; letter-spacing:-.02em; }
+  /* Cabecera de seccion en el azul oscuro de la barra superior. */
+  .card-titulo { background:var(--inet-dark); color:#fff; margin:-1.5rem -1.5rem 1.25rem; padding:12px 1.5rem;
+                 border-radius:8px 8px 0 0; font-family:'Montserrat',sans-serif; font-size:.82rem;
+                 font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
   .page-strip h1 span { color:#d6197f; }
-  .asig-row { display:flex; justify-content:space-between; align-items:center; border:1px solid #eee; border-radius:10px; padding:12px 16px; margin-bottom:8px; }
+  /* El boton no encoge ni parte la etiqueta: con nombres largos se quedaba en
+     dos lineas y cada fila salia de una altura distinta. */
+  .asig-row { display:flex; justify-content:space-between; align-items:center; gap:16px;
+              border:1px solid var(--inet-linea); border-radius:8px; padding:12px 16px; margin-bottom:8px; }
+  .asig-row > div:first-child { min-width:0; }
+  .asig-row .btn { flex:0 0 auto; white-space:nowrap; }
   .asig-row .meta { color:#6b7280; font-size:.85rem; }
   .pol-opt { display:block; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:10px 14px; margin:6px 0; cursor:pointer; }
   .pol-opt small { color:#6c757d; display:block; margin-top:2px; }
   .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
   .btn-pink:hover { background:#c4117a; color:#fff; }
   .badge-estado { padding:2px 8px; border-radius:4px; font-size:.72rem; color:#fff; font-weight:600; }
-  .snow { color:#0ea5e9; }
+  .snow { color:var(--inet-info); }
 </style>
 {% endblock %}
 
@@ -28,14 +37,14 @@
     <i class="bi bi-arrow-left"></i> Volver
   </a>
   <div style="width:1px;height:20px;background:#e8e6f0"></div>
-  <h1><span class="snow">❄</span> Solicitar <span>liberación</span></h1>
+  <h1><i class="bi bi-snow snow"></i> Solicitar <span>liberación</span></h1>
 </div>
 
-<div class="container py-4" style="max-width:760px">
+<div class="container py-4" style="max-width:1120px">
 
   {% if exito %}
   <div class="card p-4 text-center mb-4">
-    <div class="mb-2" style="font-size:2.6rem">🕗</div>
+    <i class="bi bi-hourglass-split mb-2" style="font-size:2.2rem;color:var(--inet-info)"></i>
     <h4 class="fw-bold mb-1" style="color:#4a5162;font-family:'Montserrat',sans-serif">Solicitud enviada</h4>
     <p class="text-muted mb-3">
       Liberación de <strong>{{ exito.asignacion.recurso.nombre }}</strong>
@@ -56,7 +65,7 @@
   {% if not asignacion_sel and not exito %}
   <!-- Paso 1: elegir asignación aprobada -->
   <div class="card p-4">
-    <h6 class="fw-bold mb-3">Eligela asignación a liberar</h6>
+    <div class="card-titulo">Elige la asignación a liberar</div>
     {% if asignaciones %}
       {% for a in asignaciones %}
       <div class="asig-row">
@@ -68,11 +77,11 @@
             {% if a.jornada_completa %}· jornada completa{% else %}· {{ a.intensidad_diaria }} h/día{% endif %}
           </div>
         </div>
-        <a href="/liberacion/?asignacion={{ a.pk }}" class="btn btn-sm btn-pink">❄ Liberar</a>
+        <a href="/liberacion/?asignacion={{ a.pk }}" class="btn btn-sm btn-pink"><i class="bi bi-snow"></i> Liberar</a>
       </div>
       {% endfor %}
     {% else %}
-      <p class="text-muted mb-0">No tenés asignaciones aprobadas para liberar.</p>
+      <p class="text-muted mb-0">No tienes asignaciones aprobadas para liberar.</p>
     {% endif %}
   </div>
   {% endif %}
