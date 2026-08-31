@@ -37,6 +37,58 @@ class AsignacionViewSet(viewsets.ModelViewSet):
             return AsignacionCreateSerializer
         return AsignacionSerializer
 
+    def update(self, request, *args, **kwargs):
+        """Editar una asignación solo mientras siga SOLICITADA.
+
+        Una asignación aprobada tiene tres cosas congeladas que este endpoint no
+        sabe rehacer: la capacidad del recurso ya comprometida, el snapshot de
+        tarifa y el costo estimado. `fecha_fin` es ademas de solo lectura en el
+        serializer, asi que cambiar las horas la dejaba mintiendo.
+
+        El resultado era que un Admin podia convertir una asignación aprobada en
+        una sobreasignación, o dejar los datos financieros incoherentes, sin que
+        nada fallara. Se cierra la puerta en vez de dejarla entreabierta: para
+        cambiar una aprobada hay que revocarla y crear otra, que ademas deja
+        rastro en la auditoría.
+        """
+        asignacion = self.get_object()
+        if asignacion.estado != "SOLICITADA":
+            return Response(
+                {
+                    "error": (
+                        f"No se puede editar una asignación en estado "
+                        f"'{asignacion.estado}'. Revócala y crea una nueva."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        """Recalcula `fecha_fin`: es derivada, no un dato que se pueda quedar viejo.
+
+        `fecha_fin` es de solo lectura en el serializer, asi que sin esto una
+        edición de horas, intensidad o fecha de inicio dejaba la fecha final
+        anterior, y con ella el calendario y el dashboard.
+        """
+        instancia = serializer.instance
+        datos = serializer.validated_data
+        recurso = datos.get("recurso", instancia.recurso)
+        fecha_inicio = datos.get("fecha_inicio", instancia.fecha_inicio)
+        horas = datos.get("horas_totales", instancia.horas_totales)
+        intensidad = datos.get("intensidad_diaria", instancia.intensidad_diaria)
+
+        asignacion = serializer.save(
+            fecha_fin=calcular_fecha_fin(recurso, fecha_inicio, horas, intensidad),
+        )
+        LogAuditoria.objects.create(
+            asignacion=asignacion, accion="CREAR", actor=self.request.user,
+            detalle={
+                "edicion": True,
+                "fecha_fin_recalculada": str(asignacion.fecha_fin),
+            },
+        )
+
     def perform_create(self, serializer):
         data = serializer.validated_data
         fecha_fin = calcular_fecha_fin(

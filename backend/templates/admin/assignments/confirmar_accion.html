@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% comment %}
+  Pantalla de confirmación para las acciones que cambian el estado de una
+  asignación.
+
+  Existe por seguridad, no por cortesía. Antes estas acciones se ejecutaban
+  directamente desde el enlace del listado, es decir por GET: bastaba con que
+  un Admin abriera una página con <img src=".../revocar/5/"> —o que el
+  navegador hiciera prefetch del enlace, o que pasara un escáner interno— para
+  revocar una asignación sin que nadie lo pidiera. El cambio real va ahora en
+  un POST con token CSRF, que es lo único que un tercero no puede falsificar.
+{% endcomment %}
+
+{% block title %}{{ titulo }} — Asignación #{{ asignacion.pk }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a> ›
+  <a href="{% url 'admin:assignments_asignacion_changelist' %}">Asignaciones</a> ›
+  {{ titulo }} #{{ asignacion.pk }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .caja { border-radius:8px; padding:16px 20px; margin-bottom:20px; max-width:760px; }
+  .caja.aviso { background:#fff3cd; border:1px solid #ffc107; }
+  .caja.datos { background:#f6f7f9; border:1px solid #dfe1e5; }
+  .caja h3 { margin:0 0 10px; font-size:1rem; }
+  .datos dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 18px; }
+  .datos dt { font-weight:600; color:#555; }
+  .datos dd { margin:0; }
+  .acciones { display:flex; gap:10px; align-items:center; margin-top:18px; }
+  .btn-confirmar { background:{{ color }}; color:#fff; border:none; border-radius:5px;
+                   padding:9px 18px; font-weight:600; cursor:pointer; font-size:.92rem; }
+  .btn-cancelar { color:#555; text-decoration:none; padding:9px 14px; }
+  .campo-motivo { margin-top:14px; max-width:760px; }
+  .campo-motivo label { display:block; font-weight:600; margin-bottom:5px; }
+  .campo-motivo input { width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:5px; }
+  .campo-motivo .ayuda { color:#666; font-size:.85rem; margin-top:5px; }
+</style>
+
+<div class="caja aviso">
+  <h3>{{ titulo }} la asignación #{{ asignacion.pk }}</h3>
+  <div>{{ advertencia }}</div>
+</div>
+
+<div class="caja datos">
+  <dl>
+    <dt>Recurso</dt><dd>{{ asignacion.recurso.nombre }}</dd>
+    <dt>Proyecto</dt><dd>{{ asignacion.proyecto.codigo }} — {{ asignacion.proyecto.nombre }}</dd>
+    <dt>Ventana</dt><dd>{{ asignacion.fecha_inicio }} → {{ asignacion.fecha_fin }}</dd>
+    <dt>Horas</dt><dd>{{ asignacion.horas_totales }} h ({{ asignacion.intensidad_diaria }} h/día)</dd>
+    <dt>Estado actual</dt><dd><strong>{{ asignacion.get_estado_display }}</strong></dd>
+  </dl>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  {% if pide_motivo %}
+  <div class="campo-motivo">
+    <label for="motivo">Motivo</label>
+    <input type="text" id="motivo" name="motivo" maxlength="300"
+           placeholder="Por qué se {{ titulo|lower }} esta asignación">
+    <div class="ayuda">Queda en el registro de auditoría junto a tu usuario y la fecha.</div>
+  </div>
+  {% endif %}
+
+  <div class="acciones">
+    <button type="submit" class="btn-confirmar">{{ titulo }}</button>
+    <a class="btn-cancelar" href="{% url 'admin:assignments_asignacion_changelist' %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

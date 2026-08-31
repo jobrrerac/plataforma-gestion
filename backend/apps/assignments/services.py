@@ -201,15 +201,57 @@ def puede_asignar(asignacion) -> tuple[bool, object]:
     return True, None
 
 
+# Transiciones legales de una asignación. Cualquier otra combinación es un
+# error de programa, no una situación que el usuario pueda provocar.
+#
+#   SOLICITADA -> APROBADA | RECHAZADA
+#   APROBADA   -> REVOCADA
+#   RECHAZADA / REVOCADA / INVALIDADA son terminales.
+TRANSICIONES = {
+    "aprobar": ({"SOLICITADA"}, "aprobar"),
+    "rechazar": ({"SOLICITADA"}, "rechazar"),
+    "revocar": ({"APROBADA"}, "revocar"),
+}
+
+
+def _bloquear_y_validar(asignacion, operacion):
+    """Relee la asignación bajo bloqueo y exige que la transición sea legal.
+
+    Se relee a propósito en vez de fiarse del objeto recibido: entre que la
+    pantalla lo cargó y llega aquí, otra persona puede haberla aprobado o
+    revocado. Sin esto, dos pestañas abiertas aprueban dos veces la misma
+    asignación y dejan dos entradas de auditoría contando lo mismo.
+
+    La comprobación vive en el servicio, no en quien lo llama. Antes estaba solo
+    en la API; el admin no la hacía, y cualquier consumidor nuevo dependía de
+    acordarse. Una invariante que hay que recordar no es una invariante.
+    """
+    estados, verbo = TRANSICIONES[operacion]
+    fresca = Asignacion.objects.select_for_update().get(pk=asignacion.pk)
+    if fresca.estado not in estados:
+        legibles = " o ".join(sorted(estados))
+        raise ValueError(
+            f"No se puede {verbo} una asignación en estado {fresca.estado}; "
+            f"solo se puede {verbo} una {legibles}."
+        )
+    # El objeto que trae quien llama puede estar desfasado: se sincroniza para
+    # que no siga usando un estado viejo despues de esta llamada.
+    asignacion.estado = fresca.estado
+    return fresca
+
+
 def aprobar_asignacion(asignacion, actor):
     """
     Aprobación transaccional con select_for_update por recurso.
-    Lanza ValueError si hay sobreasignación.
+    Lanza ValueError si hay sobreasignación o si el estado no lo permite.
     """
     with transaction.atomic():
         recurso = asignacion.recurso.__class__.all_objects.select_for_update().get(
             pk=asignacion.recurso_id
         )
+        # Orden de bloqueo: recurso y despues asignacion. Se mantiene igual en
+        # todas las rutas para no crear un abrazo mortal.
+        _bloquear_y_validar(asignacion, "aprobar")
         ok, fecha_conflicto = puede_asignar(asignacion)
         if not ok:
             cap = capacidad_maxima_dia(fecha_conflicto)
@@ -1120,6 +1162,7 @@ def crear_solicitudes_recurrentes(recurso, proyecto, fecha_inicio, semanas, hora
 
 def rechazar_asignacion(asignacion, actor, motivo=""):
     with transaction.atomic():
+        _bloquear_y_validar(asignacion, "rechazar")
         asignacion.estado = "RECHAZADA"
         asignacion.save(update_fields=["estado", "updated_at"])
         LogAuditoria.objects.create(
@@ -1130,6 +1173,7 @@ def rechazar_asignacion(asignacion, actor, motivo=""):
 
 def revocar_asignacion(asignacion, actor, motivo=""):
     with transaction.atomic():
+        _bloquear_y_validar(asignacion, "revocar")
         asignacion.estado = "REVOCADA"
         asignacion.save(update_fields=["estado", "updated_at"])
         LogAuditoria.objects.create(
