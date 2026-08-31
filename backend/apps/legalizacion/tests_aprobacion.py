@@ -1,8 +1,9 @@
 """Tests de la aprobación de horas.
 
-Lo que hay que blindar: quién puede aprobar qué, que el Admin sirva de válvula
-de escape cuando el PM no está, y que devolver un día lo reabra dejando dicho
-qué corregir.
+La unidad de aprobación es la **actividad**, no el día. Lo que hay que blindar:
+que cada PM firme lo suyo y solo lo suyo, que el Admin sirva de válvula cuando
+no hay PM que reclame un renglón, y que devolver una actividad no arrastre a las
+que ya firmó otro.
 """
 
 from datetime import date, timedelta
@@ -18,7 +19,7 @@ from apps.accounts import roles
 from apps.assignments.models import Asignacion
 from apps.core.models import Proyecto, Recurso
 from apps.legalizacion import services as svc
-from apps.legalizacion.models import DiaLegalizado, TipoActividad
+from apps.legalizacion.models import DiaLegalizado, RegistroHoras, TipoActividad
 
 
 def ultimo_miercoles():
@@ -51,23 +52,29 @@ class BaseAprobacion(TestCase):
         self.admin = User.objects.create_user(username="admin1", password="Clave2026!")
         self.admin.groups.add(Group.objects.get(name=roles.ADMIN))
 
-        self.proyecto = Proyecto.objects.create(
-            codigo="V-22222222/B", nombre="Proyecto Cliente", cliente="ACME",
-            fecha_inicio=date(2026, 1, 1), pm=self.pm, facturable=True,
-        )
+        self.fecha = ultimo_miercoles()
+
+        self.proyecto = self._proyecto("V-22222222/B", "Proyecto Cliente", self.pm)
+        self.proyecto_ajeno = self._proyecto("V-33333333/B", "Otro Cliente", self.otro_pm)
+
         self.t_proyecto = TipoActividad.objects.get(nombre="Proyecto")
         self.t_estudio = TipoActividad.objects.get(nombre="Estudio")
 
-        self.fecha = ultimo_miercoles()
+    def _proyecto(self, codigo, nombre, pm):
+        proyecto = Proyecto.objects.create(
+            codigo=codigo, nombre=nombre, cliente="ACME",
+            fecha_inicio=date(2026, 1, 1), pm=pm, facturable=True,
+        )
         Asignacion.objects.create(
-            recurso=self.recurso, proyecto=self.proyecto,
+            recurso=self.recurso, proyecto=proyecto,
             fecha_inicio=self.fecha, fecha_fin=self.fecha,
             horas_totales=34, intensidad_diaria=8.5,
-            estado="APROBADA", solicitada_por=self.pm,
+            estado="APROBADA", solicitada_por=pm,
         )
+        return proyecto
 
     def _dia_registrado(self, con_proyecto=True):
-        """Un día cerrado y listo para revisar."""
+        """Un día cerrado con una sola actividad de 8.5 h."""
         dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
         if con_proyecto:
             svc.agregar_renglon(dia, self.t_proyecto, 8.5, "Desarrollo", proyecto=self.proyecto)
@@ -75,153 +82,269 @@ class BaseAprobacion(TestCase):
             svc.agregar_renglon(dia, self.t_estudio, 8.5, "Curso de Django")
         return svc.registrar_dia(dia, self.ing)
 
+    def _dia_repartido(self):
+        """El caso que motivó todo: 4 h de proyecto y 4.5 h internas.
+
+        Cada mitad la firma alguien distinto, y antes no había forma de hacerlo:
+        el día se aprobaba entero o no se aprobaba.
+        """
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        svc.agregar_renglon(dia, self.t_proyecto, 4, "Desarrollo", proyecto=self.proyecto)
+        svc.agregar_renglon(dia, self.t_estudio, 4.5, "Formación interna")
+        return svc.registrar_dia(dia, self.ing)
+
+    def _dia_dos_proyectos(self):
+        """Dos proyectos de PM distintos en la misma jornada."""
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        svc.agregar_renglon(dia, self.t_proyecto, 4, "Cliente A", proyecto=self.proyecto)
+        svc.agregar_renglon(dia, self.t_proyecto, 4.5, "Cliente B", proyecto=self.proyecto_ajeno)
+        return svc.registrar_dia(dia, self.ing)
+
+    def _renglon(self, dia, proyecto=None, tipo=None):
+        qs = dia.registros.all()
+        if proyecto is not None:
+            return qs.get(proyecto=proyecto)
+        return qs.get(tipo_actividad=tipo)
+
 
 class AlcanceDeLaColaTests(BaseAprobacion):
-    def test_el_pm_ve_los_dias_de_sus_proyectos(self):
-        dia = self._dia_registrado()
-        self.assertIn(dia, svc.dias_por_aprobar(self.pm))
+    def test_el_pm_solo_ve_los_renglones_de_sus_proyectos(self):
+        self._dia_repartido()
+        pendientes = list(svc.registros_por_aprobar(self.pm))
+        self.assertEqual(len(pendientes), 1)
+        self.assertEqual(pendientes[0].proyecto, self.proyecto)
 
-    def test_un_pm_ajeno_no_ve_esos_dias(self):
-        self._dia_registrado()
-        self.assertEqual(svc.dias_por_aprobar(self.otro_pm).count(), 0)
+    def test_el_pm_no_ve_la_actividad_interna(self):
+        # Es el nudo del asunto: un PM no tiene forma de valorar las horas de
+        # formación de nadie, así que no debe poder firmarlas.
+        self._dia_repartido()
+        tipos = {r.tipo_actividad.nombre for r in svc.registros_por_aprobar(self.pm)}
+        self.assertNotIn("Estudio", tipos)
+
+    def test_cada_pm_ve_solo_su_proyecto(self):
+        self._dia_dos_proyectos()
+        self.assertEqual(
+            [r.proyecto for r in svc.registros_por_aprobar(self.pm)], [self.proyecto]
+        )
+        self.assertEqual(
+            [r.proyecto for r in svc.registros_por_aprobar(self.otro_pm)], [self.proyecto_ajeno]
+        )
 
     def test_el_admin_lo_ve_todo(self):
-        # Es la valvula de escape: si el PM no esta, las horas no pueden
-        # quedarse bloqueadas para siempre.
-        dia = self._dia_registrado()
-        self.assertIn(dia, svc.dias_por_aprobar(self.admin))
+        self._dia_repartido()
+        self.assertEqual(len(list(svc.registros_por_aprobar(self.admin))), 2)
 
-    def test_el_admin_ve_hasta_los_dias_de_proyectos_ajenos(self):
-        self.proyecto.pm = self.otro_pm
-        self.proyecto.save(update_fields=["pm"])
-        dia = self._dia_registrado()
-        self.assertIn(dia, svc.dias_por_aprobar(self.admin))
-
-    def test_un_dia_sin_proyecto_solo_lo_ve_el_admin(self):
-        # Un dia de puro estudio no tiene PM que lo reclame. Sin el alcance
-        # total del Admin, no se aprobaria nunca.
-        dia = self._dia_registrado(con_proyecto=False)
-        self.assertEqual(svc.dias_por_aprobar(self.pm).count(), 0)
-        self.assertIn(dia, svc.dias_por_aprobar(self.admin))
+    def test_una_actividad_sin_proyecto_solo_la_ve_el_admin(self):
+        self._dia_registrado(con_proyecto=False)
+        self.assertEqual(len(list(svc.registros_por_aprobar(self.admin))), 1)
+        self.assertEqual(len(list(svc.registros_por_aprobar(self.pm))), 0)
 
     def test_un_ingeniero_no_aprueba_nada(self):
         self._dia_registrado()
-        self.assertEqual(svc.dias_por_aprobar(self.ing).count(), 0)
+        self.assertEqual(len(list(svc.registros_por_aprobar(self.ing))), 0)
 
     def test_un_dia_abierto_no_esta_en_la_cola(self):
-        # Todavia no lo ha aceptado quien lo registra.
         dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
-        svc.agregar_renglon(dia, self.t_proyecto, 4, "A medias", proyecto=self.proyecto)
-        self.assertNotIn(dia, svc.dias_por_aprobar(self.admin))
+        svc.agregar_renglon(dia, self.t_proyecto, 8.5, "Desarrollo", proyecto=self.proyecto)
+        self.assertEqual(len(list(svc.registros_por_aprobar(self.admin))), 0)
+
+    def test_la_cola_agrupa_por_dia_separando_lo_propio(self):
+        self._dia_repartido()
+        dias = svc.dias_por_aprobar(self.pm)
+        self.assertEqual(len(dias), 1)
+        # Ve la jornada entera para tener contexto, pero solo firma la suya.
+        self.assertEqual(len(dias[0].pendientes_mios), 1)
+        self.assertEqual(len(dias[0].otros), 1)
 
 
 class AprobarTests(BaseAprobacion):
-    def test_el_pm_aprueba_y_queda_su_firma(self):
-        dia = self._dia_registrado()
-        svc.aprobar_dia(dia, self.pm)
+    def test_el_pm_firma_su_renglon_y_queda_constancia(self):
+        dia = self._dia_repartido()
+        renglon = svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        self.assertEqual(renglon.estado, RegistroHoras.APROBADO)
+        self.assertEqual(renglon.aprobado_por, self.pm)
+        self.assertIsNotNone(renglon.aprobado_en)
+
+    def test_aprobar_una_actividad_no_aprueba_el_dia(self):
+        # La regresión que se venía a arreglar: firmar 4 h de proyecto daba por
+        # buenas también las 4.5 h internas, que ese PM no había mirado.
+        dia = self._dia_repartido()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)
+        interna = self._renglon(dia, tipo=self.t_estudio)
+        self.assertEqual(interna.estado, RegistroHoras.PENDIENTE)
+
+    def test_el_dia_se_aprueba_cuando_lo_estan_todas(self):
+        dia = self._dia_repartido()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.aprobar_registro(self._renglon(dia, tipo=self.t_estudio), self.admin)
 
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
-        self.assertEqual(dia.aprobado_por, self.pm)
-        self.assertIsNotNone(dia.aprobado_en)
 
-    def test_el_admin_puede_aprobar_en_lugar_del_pm(self):
-        dia = self._dia_registrado()
-        svc.aprobar_dia(dia, self.admin)
+    def test_dos_pm_firman_cada_uno_lo_suyo(self):
+        dia = self._dia_dos_proyectos()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto_ajeno), self.otro_pm)
 
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
-        self.assertEqual(dia.aprobado_por, self.admin)
 
-    def test_un_pm_ajeno_no_puede_aprobar(self):
-        dia = self._dia_registrado()
+    def test_un_pm_no_puede_firmar_el_proyecto_de_otro(self):
+        dia = self._dia_dos_proyectos()
         with self.assertRaises(PermissionDenied):
-            svc.aprobar_dia(dia, self.otro_pm)
+            svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto_ajeno), self.pm)
+
+    def test_un_pm_no_puede_firmar_una_actividad_sin_proyecto(self):
+        dia = self._dia_repartido()
+        with self.assertRaises(PermissionDenied) as ctx:
+            svc.aprobar_registro(self._renglon(dia, tipo=self.t_estudio), self.pm)
+        self.assertIn("administrador", str(ctx.exception))
+
+    def test_el_admin_puede_firmar_en_lugar_del_pm(self):
+        dia = self._dia_repartido()
+        renglon = svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.admin)
+        self.assertEqual(renglon.aprobado_por, self.admin)
 
     def test_el_ingeniero_no_se_aprueba_a_si_mismo(self):
         dia = self._dia_registrado()
         with self.assertRaises(PermissionDenied):
-            svc.aprobar_dia(dia, self.ing)
+            svc.aprobar_registro(dia.registros.first(), self.ing)
 
     def test_no_se_aprueba_dos_veces(self):
         dia = self._dia_registrado()
-        svc.aprobar_dia(dia, self.pm)
+        renglon = dia.registros.first()
+        svc.aprobar_registro(renglon, self.pm)
         with self.assertRaises(ValidationError):
-            svc.aprobar_dia(dia, self.admin)
-
-    def test_no_se_aprueba_un_dia_todavia_abierto(self):
-        # El error tiene que hablar del estado, no de permisos: el Admin sí
-        # puede revisarlo, lo que pasa es que aún no está cerrado.
-        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
-        svc.agregar_renglon(dia, self.t_proyecto, 4, "A medias", proyecto=self.proyecto)
-        with self.assertRaises(ValidationError) as ctx:
-            svc.aprobar_dia(dia, self.admin)
-        self.assertIn("todavía no lo ha aceptado", "; ".join(ctx.exception.messages))
+            svc.aprobar_registro(renglon, self.pm)
 
     def test_el_error_de_aprobar_dos_veces_dice_la_verdad(self):
-        # Regresión: el chequeo de permiso miraba solo días REGISTRADOS, así
-        # que un día ya aprobado parecía fuera de alcance y el PM legítimo leía
-        # "no eres PM de ninguno de sus proyectos" — falso y desorientador.
+        # Mezclar alcance y estado producía un mensaje mentiroso: al PM
+        # legítimo se le decía que el proyecto no era suyo.
         dia = self._dia_registrado()
-        svc.aprobar_dia(dia, self.pm)
-
+        renglon = dia.registros.first()
+        svc.aprobar_registro(renglon, self.pm)
         with self.assertRaises(ValidationError) as ctx:
-            svc.aprobar_dia(dia, self.pm)
-        self.assertIn("ya está aprobado", "; ".join(ctx.exception.messages))
+            svc.aprobar_registro(renglon, self.pm)
+        self.assertIn("ya está aprobada", str(ctx.exception))
+
+    def test_no_se_aprueba_una_actividad_de_un_dia_abierto(self):
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        svc.agregar_renglon(dia, self.t_proyecto, 8.5, "Desarrollo", proyecto=self.proyecto)
+        with self.assertRaises(ValidationError):
+            svc.aprobar_registro(dia.registros.first(), self.pm)
 
 
 class DevolverTests(BaseAprobacion):
-    def test_devolver_reabre_el_dia(self):
-        dia = self._dia_registrado()
-        svc.devolver_dia(dia, self.pm, "Faltan las horas de la reunion")
+    def test_devolver_una_actividad_reabre_el_dia(self):
+        dia = self._dia_repartido()
+        svc.devolver_registro(self._renglon(dia, proyecto=self.proyecto), self.pm, "Falta el ticket")
 
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)
         self.assertTrue(dia.editable)
-        self.assertIsNone(dia.registrado_en)
+
+    def test_devolver_no_toca_lo_que_ya_firmo_otro(self):
+        # El motivo de bajar la aprobación al renglón: que devolver una
+        # actividad no obligue a rehacer trabajo ya validado por otro PM.
+        dia = self._dia_dos_proyectos()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.devolver_registro(
+            self._renglon(dia, proyecto=self.proyecto_ajeno), self.otro_pm, "Detalle insuficiente"
+        )
+
+        firmada = self._renglon(dia, proyecto=self.proyecto)
+        self.assertEqual(firmada.estado, RegistroHoras.APROBADO)
+        self.assertEqual(firmada.aprobado_por, self.pm)
 
     def test_el_motivo_es_obligatorio(self):
-        # Devolver sin decir que esta mal solo produce un segundo intento a
-        # ciegas.
         dia = self._dia_registrado()
         with self.assertRaises(ValidationError):
-            svc.devolver_dia(dia, self.pm, "   ")
+            svc.devolver_registro(dia.registros.first(), self.pm, "   ")
 
-    def test_el_motivo_queda_guardado_para_quien_lo_registro(self):
+    def test_el_motivo_llega_a_quien_lo_registro(self):
         dia = self._dia_registrado()
-        svc.devolver_dia(dia, self.pm, "Faltan las horas de la reunion")
+        svc.devolver_registro(dia.registros.first(), self.pm, "Falta el detalle del ticket")
 
         dia.refresh_from_db()
-        self.assertEqual(dia.motivo_devolucion, "Faltan las horas de la reunion")
-
-    def test_tras_devolverlo_se_puede_volver_a_editar(self):
-        dia = self._dia_registrado()
-        svc.devolver_dia(dia, self.pm, "Corrige el detalle")
-
-        dia.refresh_from_db()
-        svc.guardar_renglones(dia, [
-            {"tipo_actividad": self.t_proyecto, "proyecto": self.proyecto,
-             "horas": "8.5", "detalle": "Desarrollo, ahora bien explicado"},
-        ])
-        self.assertEqual(dia.registros.count(), 1)
-
-    def test_al_aprobar_se_limpia_un_motivo_anterior(self):
-        # Si no, el dia quedaria aprobado y con un reproche pegado.
-        dia = self._dia_registrado()
-        svc.devolver_dia(dia, self.pm, "Corrige el detalle")
-        dia.refresh_from_db()
-
-        svc.registrar_dia(dia, self.ing)
-        dia.refresh_from_db()
-        svc.aprobar_dia(dia, self.pm)
-
-        dia.refresh_from_db()
-        self.assertEqual(dia.motivo_devolucion, "")
+        self.assertIn("ticket", dia.motivo_devolucion)
+        self.assertIn("ticket", dia.registros.first().motivo_devolucion)
 
     def test_un_pm_ajeno_no_puede_devolver(self):
-        dia = self._dia_registrado()
+        dia = self._dia_dos_proyectos()
         with self.assertRaises(PermissionDenied):
-            svc.devolver_dia(dia, self.otro_pm, "No me gusta")
+            svc.devolver_registro(self._renglon(dia, proyecto=self.proyecto_ajeno), self.pm, "no")
+
+    def test_lo_aprobado_no_se_puede_editar_al_corregir(self):
+        """La actividad firmada sobrevive a que se reescriba el día."""
+        dia = self._dia_dos_proyectos()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.devolver_registro(
+            self._renglon(dia, proyecto=self.proyecto_ajeno), self.otro_pm, "Corrige el detalle"
+        )
+
+        dia.refresh_from_db()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_estudio, "proyecto": None,
+            "horas": "4.5", "detalle": "Formación, ya corregido",
+        }])
+
+        estados = sorted(r.estado for r in dia.registros.all())
+        self.assertEqual(estados, [RegistroHoras.APROBADO, RegistroHoras.PENDIENTE])
+        self.assertTrue(dia.registros.filter(proyecto=self.proyecto, estado="APROBADO").exists())
+
+    def test_al_corregir_no_se_puede_pasar_de_jornada_contando_lo_aprobado(self):
+        dia = self._dia_dos_proyectos()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)  # 4 h firmadas
+        svc.devolver_registro(
+            self._renglon(dia, proyecto=self.proyecto_ajeno), self.otro_pm, "Corrige"
+        )
+        dia.refresh_from_db()
+
+        with self.assertRaises(ValidationError) as ctx:
+            svc.guardar_renglones(dia, [{
+                "tipo_actividad": self.t_estudio, "proyecto": None,
+                "horas": "8.5", "detalle": "Demasiadas",
+            }])
+        self.assertIn("aprobadas", str(ctx.exception))
+
+    def test_al_reenviar_lo_corregido_vuelve_a_la_cola_y_lo_firmado_no(self):
+        dia = self._dia_dos_proyectos()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.devolver_registro(
+            self._renglon(dia, proyecto=self.proyecto_ajeno), self.otro_pm, "Corrige"
+        )
+        dia.refresh_from_db()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_estudio, "proyecto": None,
+            "horas": "4.5", "detalle": "Corregido",
+        }])
+        svc.registrar_dia(dia, self.ing)
+
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)
+        self.assertEqual(dia.motivo_devolucion, "")
+        # La firma del primer PM sigue en pie: no tiene que volver a aprobar.
+        self.assertNotIn(
+            self._renglon(dia, proyecto=self.proyecto).pk,
+            [r.pk for r in svc.registros_por_aprobar(self.pm)],
+        )
+
+    def test_si_solo_quedaba_lo_aprobado_el_dia_nace_aprobado(self):
+        dia = self._dia_repartido()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        svc.devolver_registro(self._renglon(dia, tipo=self.t_estudio), self.admin, "Rehazlo")
+        dia.refresh_from_db()
+
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_estudio, "proyecto": None,
+            "horas": "4.5", "detalle": "Rehecho",
+        }])
+        svc.registrar_dia(dia, self.ing)
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)
 
 
 class PantallaAprobacionTests(BaseAprobacion):
@@ -229,71 +352,55 @@ class PantallaAprobacionTests(BaseAprobacion):
         self.client.force_login(self.pm)
         self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 200)
 
-    def test_el_admin_entra(self):
-        self.client.force_login(self.admin)
-        self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 200)
-
     def test_el_ingeniero_recibe_403(self):
         self.client.force_login(self.ing)
         self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 403)
 
-    def test_al_admin_se_le_avisa_de_su_alcance(self):
-        self.client.force_login(self.admin)
-        html = self.client.get(reverse("horas-aprobar")).content.decode()
-        self.assertIn("Como administrador ves", html)
-
-    def test_al_pm_no_se_le_muestra_esa_nota(self):
-        self.client.force_login(self.pm)
-        html = self.client.get(reverse("horas-aprobar")).content.decode()
-        self.assertNotIn("Como administrador ves", html)
-
     def test_aprobar_desde_la_pantalla(self):
-        dia = self._dia_registrado()
+        dia = self._dia_repartido()
+        renglon = self._renglon(dia, proyecto=self.proyecto)
         self.client.force_login(self.pm)
-        resp = self.client.post(reverse("horas-aprobar"), {"accion": "aprobar", "dia": dia.pk})
-
+        resp = self.client.post(reverse("horas-aprobar"), {
+            "accion": "aprobar", "registro": renglon.pk,
+        })
         self.assertRedirects(resp, reverse("horas-aprobar"), fetch_redirect_response=False)
-        dia.refresh_from_db()
-        self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
+        renglon.refresh_from_db()
+        self.assertEqual(renglon.estado, RegistroHoras.APROBADO)
 
     def test_devolver_desde_la_pantalla(self):
-        dia = self._dia_registrado()
+        dia = self._dia_repartido()
+        renglon = self._renglon(dia, proyecto=self.proyecto)
         self.client.force_login(self.pm)
         self.client.post(reverse("horas-aprobar"), {
-            "accion": "devolver", "dia": dia.pk, "motivo": "Falta detalle",
+            "accion": "devolver", "registro": renglon.pk, "motivo": "Falta detalle",
         })
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)
 
-    def test_la_cola_muestra_el_desglose_no_solo_el_total(self):
-        # Quien aprueba necesita ver a que se fueron las horas.
-        self._dia_registrado()
+    def test_el_pm_no_ve_boton_para_la_actividad_interna(self):
+        self._dia_repartido()
         self.client.force_login(self.pm)
         html = self.client.get(reverse("horas-aprobar")).content.decode()
-        self.assertIn("V-22222222/B", html)
+        self.assertIn("no te corresponde firmarlo", html)
+
+    def test_la_cola_muestra_el_desglose_no_solo_el_total(self):
+        self._dia_repartido()
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("horas-aprobar")).content.decode()
+        self.assertIn("Formación interna", html)
         self.assertIn("Desarrollo", html)
-
-    def test_el_ingeniero_ve_el_motivo_de_la_devolucion(self):
-        dia = self._dia_registrado()
-        svc.devolver_dia(dia, self.pm, "Faltan las horas de la reunion")
-
-        self.client.force_login(self.ing)
-        html = self.client.get(f"{reverse('horas')}?fecha={self.fecha.isoformat()}").content.decode()
-        self.assertIn("Te devolvieron este día para corregir", html)
-        self.assertIn("Faltan las horas de la reunion", html)
 
 
 class FacturablesTests(BaseAprobacion):
     def test_el_resumen_separa_facturables_de_lo_que_no(self):
-        interno = Proyecto.objects.create(
-            codigo="INT-X", nombre="Interno", cliente="Inetum",
-            fecha_inicio=date(2026, 1, 1), pm=self.admin, facturable=False,
-        )
-        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
-        svc.agregar_renglon(dia, self.t_proyecto, 6, "Desarrollo", proyecto=self.proyecto)
-        svc.agregar_renglon(dia, self.t_proyecto, 1.5, "Gestion", proyecto=interno)
-        svc.agregar_renglon(dia, self.t_estudio, 1, "Curso")
-
+        dia = self._dia_repartido()
         datos = svc.resumen(dia)
-        self.assertEqual(datos["facturables"], Decimal("6"))
-        self.assertEqual(datos["no_facturables"], Decimal("2.5"))
+        self.assertEqual(datos["facturables"], Decimal("4.0"))
+        self.assertEqual(datos["no_facturables"], Decimal("4.5"))
+
+    def test_el_resumen_distingue_lo_ya_firmado(self):
+        dia = self._dia_repartido()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        datos = svc.resumen(dia)
+        self.assertEqual(datos["aprobadas"], Decimal("4.0"))
+        self.assertEqual(len(datos["pendientes"]), 1)

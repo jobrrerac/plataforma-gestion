@@ -68,15 +68,41 @@ class LegalizarDiaView(LoginRequiredMixin, View):
             if estado["habil"]:
                 dia = DiaLegalizado.objects.filter(recurso=recurso, fecha=fecha).first()
                 ctx["dia"] = dia
-                ctx["resumen"] = svc.resumen(dia) if dia else None
+                datos = svc.resumen(dia) if dia else None
+                ctx["resumen"] = datos
 
                 # Se muestra el formulario cuando aún no hay nada guardado, o
                 # cuando la persona pidió volver atrás para corregir. Si ya hay
                 # renglones guardados, lo que toca ver es el resumen.
                 hay_guardado = bool(dia and dia.registros.exists())
+                devuelto = bool(datos and datos["hay_devueltos"])
                 ctx["modo_edicion"] = (
-                    not hay_guardado or request.GET.get("editar") == "1"
+                    not hay_guardado or devuelto or request.GET.get("editar") == "1"
                 ) and (dia is None or dia.editable)
+
+                # El editor tiene que arrancar con lo que ya estaba guardado.
+                # Guardar hace un reemplazo completo de lo editable, así que un
+                # editor en blanco no era "empezar de cero": era borrar el día.
+                # Es lo que pasaba al volver para completar las horas que
+                # faltaban — el día se quedaba solo con lo último tecleado.
+                ctx["renglones_previos"] = [
+                    {
+                        "tipo": r.tipo_actividad_id,
+                        "proyecto": r.proyecto_id or "",
+                        "horas": float(r.horas),
+                        "detalle": r.detalle,
+                        "etiqueta": r.proyecto.codigo if r.proyecto_id else r.tipo_actividad.nombre,
+                        "devuelto": r.estado == "DEVUELTO",
+                        "motivo": r.motivo_devolucion,
+                    }
+                    for r in (datos["registros"] if datos else [])
+                    if not r.bloqueado
+                ]
+                # Lo ya firmado por un PM no entra al editor: se ve, no se toca.
+                ctx["renglones_bloqueados"] = [
+                    r for r in (datos["registros"] if datos else []) if r.bloqueado
+                ]
+                ctx["horas_bloqueadas"] = datos["aprobadas"] if datos else 0
 
         ctx.update(extra)
         return ctx

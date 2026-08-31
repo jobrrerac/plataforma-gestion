@@ -182,10 +182,42 @@
 
   {% elif modo_edicion %}
   {# ── PASO 1: componer el día ─────────────────────────────────── #}
-  {% if resumen.registros %}
+  {% if resumen.hay_devueltos %}
+  <div class="borrador">
+    <i class="bi bi-arrow-counterclockwise me-1"></i>
+    <strong>Te devolvieron una actividad para corregir.</strong>
+    Abajo tienes el día tal y como lo dejaste: ajusta lo que haga falta y vuelve a registrarlo.
+    Lo que ya estaba aprobado sigue como estaba y no se toca.
+  </div>
+  {% elif renglones_previos %}
   <div class="borrador">
     <i class="bi bi-pencil me-1"></i>
-    Estás corrigiendo un día ya guardado. Al guardar se reemplazan las actividades anteriores.
+    Estás corrigiendo un día ya guardado. Las actividades están cargadas abajo; al guardar
+    sustituyen a las anteriores.
+  </div>
+  {% endif %}
+
+  {% if renglones_bloqueados %}
+  <div class="card p-3 mb-3">
+    <div class="fw-bold mb-2" style="font-family:'Montserrat',sans-serif;font-size:.85rem">
+      <i class="bi bi-lock-fill me-1"></i>Ya aprobadas ({{ horas_bloqueadas }} h)
+    </div>
+    <div class="meta mb-2" style="font-size:.8rem">
+      Firmadas por su PM. No se pueden editar ni borrar, y cuentan para completar la jornada.
+    </div>
+    {% for r in renglones_bloqueados %}
+    <div class="renglon">
+      <div>
+        <div>
+          {% if r.proyecto %}<strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
+          {% else %}<span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>{% endif %}
+        </div>
+        <div class="meta mt-1">{{ r.detalle }}</div>
+      </div>
+      <div class="hrs">{{ r.horas }} h</div>
+      <div><i class="bi bi-check-circle-fill" style="color:#198754" title="Aprobada"></i></div>
+    </div>
+    {% endfor %}
   </div>
   {% endif %}
 
@@ -355,6 +387,7 @@
 </div>
 
 {% if modo_edicion %}
+{{ renglones_previos|json_script:"renglones-previos" }}
 <script>
   // Todo el día se compone aquí y viaja en un solo POST. Nada toca la base
   // hasta pulsar Guardar, así se puede corregir y reordenar sin dejar filas
@@ -364,7 +397,28 @@
     // jornada con coma decimal, y parseFloat corta ahi y devuelve el entero.
     // La jornada valia 8 en vez de 8.5 y el dia nunca llegaba a cuadrar.
     var JORNADA = parseFloat("{{ estado_dia.jornada|unlocalize }}");
-    var renglones = [];
+    // Las horas ya aprobadas no pasan por el editor pero ocupan jornada: lo
+    // que queda por repartir aqui es el resto.
+    var YA_APROBADAS = parseFloat("{{ horas_bloqueadas|default:0|unlocalize }}");
+    var DISPONIBLE = JORNADA - YA_APROBADAS;
+
+    // El editor arranca con lo que ya estaba guardado. Arrancar en blanco no
+    // era "empezar de cero": como guardar reemplaza el dia editable completo,
+    // volver a entrar para completar las horas que faltaban borraba lo
+    // anterior y dejaba el dia solo con lo ultimo tecleado.
+    var renglones = JSON.parse(
+      document.getElementById('renglones-previos').textContent
+    ).map(function (r) {
+      return {
+        tipo: String(r.tipo),
+        proyecto: r.proyecto === '' ? '' : String(r.proyecto),
+        horas: r.horas,
+        detalle: r.detalle,
+        etiqueta: r.etiqueta,
+        devuelto: r.devuelto,
+        motivo: r.motivo,
+      };
+    });
 
     var elActividad = document.getElementById('f-actividad');
     var elProyecto  = document.getElementById('f-proyecto');
@@ -406,16 +460,22 @@
 
     function pintar() {
       lista.innerHTML = renglones.map(function (r, i) {
+        var aviso = r.devuelto
+          ? '<div class="meta mt-1" style="color:#b02a37">' +
+            '<i class="bi bi-arrow-counterclockwise"></i> Devuelta: ' + escapar(r.motivo || '') +
+            '</div>'
+          : '';
         return '<div class="renglon">' +
           '<div><div>' + escapar(r.etiqueta) + '</div>' +
-          '<div class="meta mt-1">' + escapar(r.detalle) + '</div></div>' +
+          '<div class="meta mt-1">' + escapar(r.detalle) + '</div>' + aviso + '</div>' +
           '<div class="hrs">' + r.horas + ' h</div>' +
           '<div><button type="button" class="btn btn-sm btn-outline-secondary" ' +
           'data-quitar="' + i + '" style="font-size:.75rem">Quitar</button></div>' +
           '</div>';
       }).join('');
 
-      var suma = total();
+      // El marcador cuenta el dia entero: lo aprobado tambien llena jornada.
+      var suma = total() + YA_APROBADAS;
       acumulado.textContent = suma;
       var pct = Math.min(100, JORNADA ? (suma / JORNADA) * 100 : 0);
       barra.firstElementChild.style.width = pct + '%';
@@ -441,8 +501,8 @@
       if (horas * 2 % 1 !== 0) { alert('Las horas van en bloques de media hora.'); return; }
       if (!detalle) { alert('Falta decir qué hiciste.'); return; }
       if (necesitaProyecto() && !elProyecto.value) { alert('Elige el proyecto.'); return; }
-      if (total() + horas > JORNADA) {
-        alert('Te pasas de la jornada. Quedan ' + (JORNADA - total()) + ' h por asignar.');
+      if (total() + horas > DISPONIBLE) {
+        alert('Te pasas de la jornada. Quedan ' + (DISPONIBLE - total()) + ' h por asignar.');
         return;
       }
 

@@ -69,6 +69,14 @@ class DiaLegalizado(SoftDeleteModel):
     resumen, se acepta, y a partir de ahí no se toca. Cambiar algo exige que
     alguien autorice la reapertura.
 
+    Pero la unidad de **aprobación** es el renglón, no el día. Quien aprueba
+    responde por un proyecto concreto, no por la jornada entera de otra
+    persona: un PM no tiene forma de valorar las horas de formación de nadie,
+    ni las de un proyecto que no es suyo. Cuando alguien reparte el día entre
+    dos proyectos, cada PM firma lo suyo. Por eso el estado de este modelo es
+    un **reflejo** del de sus renglones (`recalcular_estado`), no un dato que
+    se fije por su cuenta.
+
     Esa inmutabilidad es el punto de todo el módulo. Si las horas se pueden
     editar indefinidamente, el informe de facturables deja de significar nada:
     los números cambiarían después de haberlos reportado.
@@ -143,6 +151,41 @@ class DiaLegalizado(SoftDeleteModel):
     def cuadra(self):
         return self.total_horas == self.jornada_esperada
 
+    @property
+    def devuelto(self):
+        """Alguien pidió corregir al menos un renglón."""
+        return self.registros.filter(estado=RegistroHoras.DEVUELTO).exists()
+
+    def recalcular_estado(self):
+        """Deriva el estado del día del de sus renglones y lo guarda si cambió.
+
+        El día no tiene estado propio: lo hereda. Guardarlo igualmente evita
+        recorrer los renglones en cada listado, pero la fuente de verdad son
+        ellos, y por eso esto se llama después de cada aprobación o devolución.
+        """
+        registros = list(self.registros.all())
+        if not registros:
+            nuevo = self.ABIERTO
+        elif any(r.estado == RegistroHoras.DEVUELTO for r in registros):
+            # Un solo renglón devuelto reabre el día: quien lo registró tiene
+            # que poder corregirlo. Los ya aprobados siguen intactos y bloqueados.
+            nuevo = self.ABIERTO
+        elif all(r.estado == RegistroHoras.APROBADO for r in registros):
+            nuevo = self.APROBADO
+        elif self.estado == self.ABIERTO:
+            nuevo = self.ABIERTO
+        else:
+            nuevo = self.REGISTRADO
+
+        if nuevo != self.estado:
+            self.estado = nuevo
+            campos = ["estado", "updated_at"]
+            if nuevo == self.ABIERTO:
+                self.registrado_en = None
+                campos.append("registrado_en")
+            self.save(update_fields=campos)
+        return self.estado
+
 
 class RegistroHoras(SoftDeleteModel):
     """Un renglón dentro de un día: qué se hizo y cuántas horas costó.
@@ -151,7 +194,23 @@ class RegistroHoras(SoftDeleteModel):
     tiene que dar la jornada exacta. Rellenar hasta cuadrar —aunque sea con
     estudio o con un proyecto interno— es lo que convierte esto en un registro
     fiable en vez de una aproximación.
+
+    **Es también la unidad de aprobación.** Cada renglón lo firma quien
+    responde por él: el PM del proyecto al que se imputa, o un Admin cuando no
+    cuelga de ningún proyecto (formación, estudio) o el proyecto no tiene PM.
+    Aprobar el día entero obligaba a un PM a avalar horas ajenas a su proyecto
+    —y dejaba sin aprobador posible los días repartidos entre varios PM, porque
+    el primero en firmar decidía por todos.
     """
+
+    PENDIENTE = "PENDIENTE"
+    APROBADO = "APROBADO"
+    DEVUELTO = "DEVUELTO"
+    ESTADO_CHOICES = [
+        (PENDIENTE, "Pendiente de aprobación"),
+        (APROBADO, "Aprobado"),
+        (DEVUELTO, "Devuelto para corregir"),
+    ]
 
     dia = models.ForeignKey(DiaLegalizado, on_delete=models.CASCADE, related_name="registros")
     tipo_actividad = models.ForeignKey(TipoActividad, on_delete=models.PROTECT, related_name="registros")
@@ -163,6 +222,20 @@ class RegistroHoras(SoftDeleteModel):
     detalle = models.CharField(
         max_length=300,
         help_text="Qué se hizo. Es lo que permite legalizar estas horas después.",
+    )
+
+    estado = models.CharField(max_length=10, choices=ESTADO_CHOICES, default=PENDIENTE)
+    aprobado_por = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="renglones_aprobados",
+    )
+    aprobado_en = models.DateTimeField(null=True, blank=True)
+    motivo_devolucion = models.CharField(
+        max_length=300, blank=True,
+        help_text=(
+            "Por qué se devolvió este renglón. Lo ve quien lo registró: devolver "
+            "sin decir qué está mal solo genera un segundo intento a ciegas."
+        ),
     )
 
     class Meta:
@@ -178,3 +251,22 @@ class RegistroHoras(SoftDeleteModel):
     def facturable(self):
         """Solo cuentan como facturables las horas de un proyecto de cliente."""
         return bool(self.proyecto_id and self.proyecto.facturable)
+
+    @property
+    def bloqueado(self):
+        """Un renglón aprobado ya no se toca, ni aunque el día se reabra.
+
+        Es lo que permite devolver una actividad sin tirar abajo las que otro
+        PM ya firmó: se corrige lo devuelto y lo aprobado se queda como estaba.
+        """
+        return self.estado == self.APROBADO
+
+    @property
+    def pm_responsable(self):
+        """Quién debería firmar este renglón, o None si no hay nadie natural.
+
+        Sin proyecto —formación, estudio— no hay PM que lo reclame, y tampoco
+        si el proyecto no tiene PM asignado. Esos renglones son del Admin: sin
+        él no se aprobarían nunca.
+        """
+        return self.proyecto.pm if self.proyecto_id else None
