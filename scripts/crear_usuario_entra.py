@@ -11,6 +11,16 @@ Uso:
     python scripts/crear_usuario_entra.py ana.perez@inetum.com --rol PM
     python scripts/crear_usuario_entra.py a@inetum.com b@inetum.com --simular
 
+Tambien cambia el rol de quien ya existe:
+
+    python scripts/crear_usuario_entra.py erika...@inetum.com --rol PM --solo-rol
+
+En Entra una asignacion de app role no se edita: se quita y se crea otra. Y
+quien haya sido invitado por B2B tiene DOS identidades —su cuenta local y el
+objeto de invitado—, cada una con su propia asignacion. Cambiar el rol en una
+sola deja el rol efectivo a merced de por cual entre, sin ningun aviso. El
+script las trata juntas.
+
 Por qué existe: hasta ahora cada alta se hacía a mano por el portal, que son
 cinco pantallas y dos pasos fáciles de olvidar (el app role y el aviso de
 cambio de contraseña). Sin el app role la persona ve "se necesita aprobación
@@ -173,25 +183,69 @@ def crear_usuario(upn, nombre_visible, alias, password):
     )
 
 
-def asignar_rol(sp_id, usuario_id, rol_id):
-    """El app role no es opcional: el registro exige asignación explícita, así
-    que sin esto la persona ve "se necesita aprobación del administrador"."""
+def identidades_de(upn_entra, email_corporativo):
+    """Todas las identidades de esa persona en el tenant.
+
+    Puede tener dos: la cuenta local que se le creó (`@onmicrosoft`) y, si se la
+    invitó por B2B, un objeto de invitado cuyo `mail` es su correo corporativo.
+
+    Hay que tratarlas juntas. El rol vive en cada objeto por separado, así que
+    cambiarlo en una sola deja el rol efectivo a merced de por cuál entre —y no
+    hay nada en pantalla que avise de la discrepancia.
+    """
+    vistos, encontradas = set(), []
+    for filtro in (
+        f"userPrincipalName eq '{upn_entra}'",
+        f"mail eq '{email_corporativo}'",
+    ):
+        for u in az("ad", "user", "list", "--filter", filtro, "-o", "json") or []:
+            if u["id"] not in vistos:
+                vistos.add(u["id"])
+                encontradas.append(u)
+    return encontradas
+
+
+def reconciliar_rol(sp_id, usuario_id, rol_id):
+    """Deja a esa identidad exactamente con el rol pedido, y con ninguno más.
+
+    En Entra una asignación de app role **no se edita**: se quita y se crea otra.
+    Por eso esto retira las que sobran en vez de limitarse a añadir la que falta;
+    si no, alguien acabaría con Ingeniero y PM a la vez y el token traería los
+    dos, que es justo lo que la sincronización de grupos no sabe resolver.
+
+    El app role tampoco es opcional: el registro exige asignación explícita, así
+    que sin ninguna la persona ve "se necesita aprobación del administrador".
+    """
     asignaciones = az(
         "rest", "--method", "GET",
         "--url", f"https://graph.microsoft.com/v1.0/users/{usuario_id}/appRoleAssignments",
         "-o", "json",
     )
+    ya_estaba, retiradas = False, []
     for a in (asignaciones or {}).get("value", []):
-        if a.get("resourceId") == sp_id and a.get("appRoleId") == rol_id:
-            return False  # ya estaba
-    az(
-        "rest", "--method", "POST",
-        "--url", f"https://graph.microsoft.com/v1.0/users/{usuario_id}/appRoleAssignments",
-        "--headers", "Content-Type=application/json",
-        "-o", "json",
-        entrada_json={"principalId": usuario_id, "resourceId": sp_id, "appRoleId": rol_id},
-    )
-    return True
+        if a.get("resourceId") != sp_id:
+            continue  # otra aplicación, no es asunto nuestro
+        if a.get("appRoleId") == rol_id:
+            ya_estaba = True
+            continue
+        az(
+            "rest", "--method", "DELETE",
+            "--url",
+            f"https://graph.microsoft.com/v1.0/users/{usuario_id}"
+            f"/appRoleAssignments/{a['id']}",
+            "-o", "json",
+        )
+        retiradas.append(a.get("appRoleId"))
+
+    if not ya_estaba:
+        az(
+            "rest", "--method", "POST",
+            "--url", f"https://graph.microsoft.com/v1.0/users/{usuario_id}/appRoleAssignments",
+            "--headers", "Content-Type=application/json",
+            "-o", "json",
+            entrada_json={"principalId": usuario_id, "resourceId": sp_id, "appRoleId": rol_id},
+        )
+    return ya_estaba, retiradas
 
 
 def registrar_credencial(upn, email_corporativo, rol, password):
@@ -204,7 +258,7 @@ def registrar_credencial(upn, email_corporativo, rol, password):
 
 
 # ---------------------------------------------------------------------------
-def procesar(entrada, rol_forzado, roles, sp_id, simular):
+def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False):
     alias, email_corporativo, upn = normalizar_email(entrada)
     ficha = ficha_en_plantilla(email_corporativo) or {}
 
@@ -218,31 +272,44 @@ def procesar(entrada, rol_forzado, roles, sp_id, simular):
         raise Fallo(f"{email_corporativo}: rol '{rol}' no existe. Disponibles: {', '.join(sorted(roles))}")
 
     nombre_visible = ficha.get("nombre") or alias
-    existente = buscar_usuario(upn)
+    identidades = identidades_de(upn, email_corporativo)
 
-    print(f"\n  {email_corporativo}")
-    print(f"    UPN de Entra   {upn}")
+    print("")
+    print(f"  {email_corporativo}")
     print(f"    nombre         {nombre_visible}")
     print(f"    rol            {rol}")
+    for u in identidades:
+        print(f"    identidad      {u['userPrincipalName']}")
 
     if simular:
-        print(f"    accion         {'ya existe, solo se revisaría el rol' if existente else 'se crearía'} (simulacro)")
+        if identidades:
+            print(f"    accion         se ajustaría el rol en {len(identidades)} identidad(es) (simulacro)")
+        else:
+            print("    accion         se crearía la cuenta (simulacro)")
         return None
 
     password = None
-    if existente:
-        usuario_id = existente["id"]
-        print("    cuenta         ya existía, no se toca (ni la contraseña)")
-    else:
+    if not identidades:
+        if solo_rol:
+            raise Fallo(f"{email_corporativo}: no existe en el tenant y se pidió --solo-rol.")
         password = generar_password()
-        creado = crear_usuario(upn, nombre_visible, alias, password)
-        usuario_id = creado["id"]
+        identidades = [crear_usuario(upn, nombre_visible, alias, password)]
         print("    cuenta         creada, con cambio de contraseña obligatorio en el primer acceso")
-
-    if asignar_rol(sp_id, usuario_id, roles[rol]):
-        print(f"    app role       asignado ({rol})")
     else:
-        print(f"    app role       ya lo tenía ({rol})")
+        print("    cuenta         ya existía, no se toca (ni la contraseña)")
+
+    nombres_rol = {v: k for k, v in roles.items()}
+    for u in identidades:
+        ya, retiradas = reconciliar_rol(sp_id, u["id"], roles[rol])
+        etiqueta = u["userPrincipalName"]
+        print(f"    identidad      {etiqueta}")
+        if retiradas:
+            quitados = ", ".join(nombres_rol.get(r, r) for r in retiradas)
+            print(f"      app role     {rol}  (retirado: {quitados})")
+        elif ya:
+            print(f"      app role     ya tenía {rol}")
+        else:
+            print(f"      app role     {rol} asignado")
 
     if password:
         registrar_credencial(upn, email_corporativo, rol, password)
@@ -258,6 +325,10 @@ def main():
     p.add_argument("emails", nargs="+", help="correo corporativo, p. ej. daniel.guzman@inetum.com")
     p.add_argument("--rol", help="Admin | PM | Ingeniero. Por defecto, el de docs/plantillas/recursos.csv")
     p.add_argument("--simular", action="store_true", help="muestra lo que haría sin tocar nada")
+    p.add_argument(
+        "--solo-rol", action="store_true", dest="solo_rol",
+        help="solo ajusta el rol de quien ya existe; no da de alta a nadie",
+    )
     args = p.parse_args()
 
     try:
@@ -270,7 +341,7 @@ def main():
         credenciales, errores = [], []
         for entrada in args.emails:
             try:
-                r = procesar(entrada, args.rol, roles, sp_id, args.simular)
+                r = procesar(entrada, args.rol, roles, sp_id, args.simular, args.solo_rol)
                 if r:
                     credenciales.append(r)
             except Fallo as e:
