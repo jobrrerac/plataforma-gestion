@@ -7,10 +7,10 @@
 <style>
   body { background: #f4f4f8; }
   .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-control:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .form-control:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
   .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
-  .page-strip h1 span { color:#e0178a; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#191b2e; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#d6197f; }
   .nov-card { border:1px solid #eee; border-radius:12px; padding:18px; margin-bottom:14px; background:#fff; }
   .nov-card .meta { color:#6b7280; font-size:.84rem; }
   .tipo-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
@@ -23,21 +23,21 @@
   .afectada { border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa; }
   .pol-opt { display:block; background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:9px 12px; margin:6px 0 0; cursor:pointer; font-size:.85rem; }
   .pol-opt small { color:#6c757d; display:block; margin-top:2px; }
-  .pol-opt:has(input:checked) { border-color:#e0178a; box-shadow:0 0 0 2px rgba(224,23,138,.10); }
-  .vacio { text-align:center; color:#9ca3af; padding:44px 12px; }
+  .pol-opt:has(input:checked) { border-color:#d6197f; box-shadow:0 0 0 2px rgba(224,23,138,.10); }
+  .vacio { text-align:center; color:#8a8f9c; padding:44px 12px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-strip">
-  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+  <a href="/dashboard/" style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
   <div style="width:1px;height:20px;background:#e8e6f0"></div>
-  <h1><i class="bi bi-check2-square" style="color:#e0178a"></i> Revisar <span>novedades</span></h1>
+  <h1><i class="bi bi-check2-square" style="color:#d6197f"></i> Revisar <span>novedades</span></h1>
 </div>
 
-<div class="container py-4" style="max-width:860px">
+<div class="container py-4" style="max-width:1120px">
 
   {% if messages %}
     {% for m in messages %}
@@ -152,7 +152,7 @@
   </div>
   {% empty %}
   <div class="card vacio">
-    <div style="font-size:2.2rem">✅</div>
+    <i class="bi bi-check2-circle" style="font-size:2rem;color:var(--inet-ok)"></i>
     <div class="mt-2">No hay novedades pendientes de revisión.</div>
   </div>
   {% endfor %}

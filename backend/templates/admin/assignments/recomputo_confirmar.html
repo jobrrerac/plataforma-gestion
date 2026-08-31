@@ -42,7 +42,7 @@
 
 <!-- Alerta de conflictos -->
 <div class="conflict-card">
-  <h3>⚠️ El recurso está bloqueado en {{ conflict_dates|length }} día{{ conflict_dates|length|pluralize:"s" }}</h3>
+  <h3>El recurso está bloqueado en {{ conflict_dates|length }} día{{ conflict_dates|length|pluralize:"s" }}</h3>
   <div style="margin-bottom:10px">
     {% for d in conflict_dates %}
     <span class="day-chip">{{ d|date:"D d/m/Y" }}</span>
@@ -74,7 +74,7 @@
     </div>
   </div>
   <p style="margin:8px 0 0;font-size:.85rem;color:#0a5c36">
-    ✓ Las horas comprometidas se preservan — solo se extiende la ventana para saltear los días bloqueados.
+    Las horas comprometidas se preservan — solo se extiende la ventana para saltear los días bloqueados.
   </p>
 </div>
 {% endif %}
@@ -84,10 +84,10 @@
   {% csrf_token %}
   <div style="display:flex;gap:12px;align-items:center">
     <button type="submit" class="btn-confirm">
-      ✓ Aprobar recomputando fecha fin
+      Aprobar recomputando fecha fin
     </button>
     <a href="{% url 'admin:assignments_asignacion_changelist' %}">
-      <button type="button" class="btn-cancel">✗ Cancelar</button>
+      <button type="button" class="btn-cancel">Cancelar</button>
     </a>
   </div>
 </form>

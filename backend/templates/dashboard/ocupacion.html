@@ -15,8 +15,30 @@
     .heatmap thead th { background: #1a1033; color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
     .heatmap .col-recurso { min-width: 180px; max-width: 220px; padding: 6px 10px; background: #fff; font-weight: 500; }
     .heatmap .col-recurso small { display: block; color: #6c757d; font-weight: 400; }
-    .heatmap .col-recurso a:hover { color: #e0178a !important; text-decoration: underline !important; }
+    .heatmap .col-recurso a:hover { color: #d6197f !important; text-decoration: underline !important; }
     .cell-nohabil { background: #d4d4d4; }
+
+    /* Marca de horas legalizadas: un triangulo en la esquina, no un rayado.
+       El rayado ya significa "no habil", y dos patrones parecidos en la misma
+       tabla se confunden. El triangulo se lee sobre cualquier color de carga.
+         solido  = aprobado por su PM
+         hueco   = registrado, esperando aprobacion */
+    .legend-tri { display:inline-block; width:0; height:0; margin-right:6px;
+                  vertical-align:middle; border-style:solid; border-width:0 10px 10px 0; }
+    .legend-tri-ok   { border-color: transparent #1f6b45 transparent transparent; }
+    .legend-tri-pend { border-color: transparent #8fb3a1 transparent transparent; }
+
+    .day-cell { position: relative; }
+    .day-cell.horas-ok::after,
+    .day-cell.horas-pend::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0;
+      border-style: solid;
+      border-width: 0 9px 9px 0;
+    }
+    .day-cell.horas-ok::after   { border-color: transparent #1f6b45 transparent transparent; }
+    .day-cell.horas-pend::after { border-color: transparent #8fb3a1 transparent transparent; }
     /* Ausencia (vacaciones o permiso aprobado): la persona no está disponible.
        Se distingue de un fin de semana a propósito — el gris se lee como
        "nadie trabaja", y esto es "esta persona concreta no está". */
@@ -41,13 +63,13 @@
 
     /* Stat cards */
     .stat-card { border-left: 4px solid transparent; }
-    .stat-card.total   { border-color: #e0178a; }
-    .stat-card.ocupado { border-color: #f97316; }
+    .stat-card.total   { border-color: #d6197f; }
+    .stat-card.ocupado { border-color: #97591a; }
     .stat-card.bench   { border-color: #6b7280; }
     .stat-num { font-size: 2rem; font-weight: 700; line-height: 1; }
 
     .badge-bench   { background: #6b7280; font-size: 0.6rem; }
-    .badge-ocupado { background: #f97316; font-size: 0.6rem; }
+    .badge-ocupado { background: #97591a; font-size: 0.6rem; }
     .badge-hoy     { font-size: 0.65rem; }
 
     .legend-box { width: 14px; height: 14px; display: inline-block; border: 1px solid #ccc; vertical-align: middle; margin-right: 4px; }
@@ -71,11 +93,11 @@
       font-family: 'Montserrat', sans-serif;
       font-size: 1.25rem;
       font-weight: 800;
-      color: #110d26;
+      color: #191b2e;
       margin: 0;
       letter-spacing: -.02em;
     }
-    .page-strip h1 span { color: #e0178a; }
+    .page-strip h1 span { color: #d6197f; }
   </style>
 {% endblock %}
 
@@ -117,6 +139,9 @@
       <span><span class="legend-box" style="background:#fdba74;"></span>50–75%</span>
       <span><span class="legend-box" style="background:#f87171;"></span>75–100%</span>
       <span><span class="legend-box" style="background:#f0f0f0;"></span>No hábil</span>
+      <span style="margin-left:18px;padding-left:18px;border-left:1px solid var(--inet-linea)">
+        <span class="legend-tri legend-tri-ok"></span>Horas aprobadas</span>
+      <span><span class="legend-tri legend-tri-pend"></span>Horas sin aprobar</span>
     </span>
   </div>
 
@@ -177,13 +202,13 @@
     document.getElementById("summary-cards").innerHTML = `
       <div class="col-auto">
         <div class="card stat-card total shadow-sm py-2 px-3" style="border-radius:10px">
-          <div class="stat-num" style="color:#e0178a">${recursos.length}</div>
+          <div class="stat-num" style="color:#d6197f">${recursos.length}</div>
           <div class="text-muted" style="font-size:.8rem">Total recursos</div>
         </div>
       </div>
       <div class="col-auto">
         <div class="card stat-card ocupado shadow-sm py-2 px-3" style="border-radius:10px">
-          <div class="stat-num" style="color:#f97316">${ocupado}</div>
+          <div class="stat-num" style="color:#97591a">${ocupado}</div>
           <div class="text-muted" style="font-size:.8rem">Ocupados hoy</div>
         </div>
       </div>
@@ -238,7 +263,17 @@
             ? `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}`
             : "Bench";
         }
-        cells += `<td class="day-cell ${cls}" title="${tooltip}">${label}</td>`;
+        // Marca de horas legalizadas, independiente del color de carga: una
+        // cosa es cuanto tiene asignado y otra si ya declaro lo que hizo.
+        let marca = "";
+        if (d.horas === "APROBADO") {
+          marca = " horas-ok";
+          tooltip += " · horas aprobadas";
+        } else if (d.horas === "REGISTRADO") {
+          marca = " horas-pend";
+          tooltip += " · horas registradas, sin aprobar";
+        }
+        cells += `<td class="day-cell ${cls}${marca}" title="${tooltip}">${label}</td>`;
       });
       rows += `<tr>${cells}</tr>`;
     });

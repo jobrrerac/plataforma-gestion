@@ -16,19 +16,19 @@
   .info-row { display:flex; gap:40px; margin-bottom:8px; flex-wrap:wrap; }
   .info-item label { display:block; font-size:.78rem; color:#6c757d; margin-bottom:2px; }
   .info-item span { font-weight:600; }
-  .ceder-card { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:16px 20px; margin-bottom:20px; max-width:820px; }
+  .ceder-card { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:16px 20px; margin-bottom:20px; max-width:1120px; }
   .ceder-form label.campo { display:block; font-weight:600; margin:14px 0 4px; }
   .ceder-form input, .ceder-form select { padding:6px 10px; border:1px solid #ced4da; border-radius:6px; }
   .politica-opt { display:block; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:10px 14px; margin:6px 0; cursor:pointer; max-width:640px; }
   .politica-opt small { color:#6c757d; display:block; margin-top:2px; }
-  .error-box { background:#f8d7da; border:1px solid #dc3545; color:#842029; border-radius:8px; padding:12px 16px; margin-bottom:16px; max-width:820px; }
+  .error-box { background:#f8d7da; border:1px solid #dc3545; color:#842029; border-radius:8px; padding:12px 16px; margin-bottom:16px; max-width:1120px; }
   .nota-tarifa { background:#e7f1ff; border:1px solid #9ec5fe; color:#084298; border-radius:8px; padding:10px 14px; font-size:.85rem; margin:14px 0; max-width:640px; }
-  .btn-ceder { background:#0d9488; color:#fff; border:none; padding:8px 24px; border-radius:6px; font-size:.95rem; cursor:pointer; font-weight:600; }
+  .btn-ceder { background:#2b5674; color:#fff; border:none; padding:8px 24px; border-radius:6px; font-size:.95rem; cursor:pointer; font-weight:600; }
   .btn-ceder:hover { background:#0b7c72; }
   .btn-cancel { background:#6c757d; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:.95rem; cursor:pointer; }
 </style>
 
-<h1>⇄ Ceder horas a otro proyecto</h1>
+<h1>Ceder horas a otro proyecto</h1>
 
 <div class="ceder-card">
   <div class="info-row">
@@ -42,7 +42,7 @@
   </div>
 </div>
 
-{% if error %}<div class="error-box">⚠️ {{ error }}</div>{% endif %}
+{% if error %}<div class="error-box">{{ error }}</div>{% endif %}
 
 <form method="post" class="ceder-form">
   {% csrf_token %}
@@ -88,8 +88,8 @@
   </div>
 
   <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
-    <button type="submit" class="btn-ceder">⇄ Ceder horas</button>
-    <a href="{% url 'admin:assignments_asignacion_changelist' %}"><button type="button" class="btn-cancel">✗ Cancelar</button></a>
+    <button type="submit" class="btn-ceder">Ceder horas</button>
+    <a href="{% url 'admin:assignments_asignacion_changelist' %}"><button type="button" class="btn-cancel">Cancelar</button></a>
   </div>
 </form>
 {% endblock %}

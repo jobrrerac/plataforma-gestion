@@ -9,14 +9,14 @@
   /* Calendario: feriados/no laborables en rojo, findes atenuados */
   .flatpickr-day.dia-no-habil { background:#fee2e2; border-color:#fecaca; color:#b91c1c; font-weight:700; }
   .flatpickr-day.dia-no-habil:hover { background:#fecaca; }
-  .flatpickr-day.dia-finde { color:#dc2626; opacity:.6; }
-  .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#e0178a; border-color:#e0178a; color:#fff; opacity:1; }
+  .flatpickr-day.dia-finde { color:#a52a25; opacity:.6; }
+  .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#d6197f; border-color:#d6197f; color:#fff; opacity:1; }
   body { background: #f4f4f8; }
   .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:20px 2rem; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.25rem; font-weight:800; color:#110d26; margin:0 0 4px; letter-spacing:-.02em; }
-  .page-strip h1 span { color:#e0178a; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.25rem; font-weight:800; color:#191b2e; margin:0 0 4px; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#d6197f; }
   .card { border:none; border-radius:12px; box-shadow:0 1px 6px rgba(0,0,0,.07); }
-  .card-header-inet { background:#110d26; color:#fff; border-radius:12px 12px 0 0 !important; font-family:'Montserrat',sans-serif; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; padding:10px 16px; }
+  .card-header-inet { background:#191b2e; color:#fff; border-radius:12px 12px 0 0 !important; font-family:'Montserrat',sans-serif; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; padding:10px 16px; }
   .dia-input { width:80px; text-align:center; }
   .dia-label { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#4a1f7a; }
   .badge-ok { background:#d1fae5; color:#14532d; }
@@ -82,7 +82,7 @@
       </div>
       {% endif %}
       <div class="mt-3">
-        <a href="/solicitud/" class="btn btn-sm fw-semibold" style="background:#110d26;color:#fff">
+        <a href="/solicitud/" class="btn btn-sm fw-semibold" style="background:#191b2e;color:#fff">
           <i class="bi bi-arrow-left me-1"></i>Volver al buscador
         </a>
         <a href="/recurso/{{ recurso.pk }}/" class="btn btn-sm btn-outline-secondary fw-semibold">
@@ -112,7 +112,7 @@
           </select>
           {% if not recurso %}
           <div class="text-muted mt-1" style="font-size:.76rem">
-            Tip: desde el <a href="/solicitud/">buscador</a> podés verificar la disponibilidad y llegar acá con el recurso ya elegido (botón <i class="bi bi-arrow-repeat"></i>).
+            Tip: desde el <a href="/solicitud/">buscador</a> puedes verificar la disponibilidad y llegar aquí con el recurso ya elegido (botón <i class="bi bi-arrow-repeat"></i>).
           </div>
           {% endif %}
         </div>
@@ -174,7 +174,7 @@
         </button>
         {% else %}
         <button type="submit" name="accion" value="previsualizar" class="btn btn-sm fw-semibold"
-                style="background:#110d26;color:#fff">
+                style="background:#191b2e;color:#fff">
           <i class="bi bi-eye me-1"></i>Previsualizar plan
         </button>
         {% endif %}

@@ -32,19 +32,10 @@ resource "azurerm_federated_identity_credential" "github" {
   subject = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
 }
 
-# Segunda credencial para el mismo repositorio, con otro subject.
-#
-# No es redundante: cuando un job declara `environment:`, GitHub CAMBIA el
-# subject del token OIDC. Deja de presentar la rama y presenta el entorno:
-#
-#   sin environment:  repo:owner/repo:ref:refs/heads/main
-#   con environment:  repo:owner/repo:environment:produccion
-#
-# El workflow declara `environment: produccion` para poder exigir aprobacion
-# manual antes de desplegar, asi que es esta la que se usa en la practica. La
-# de la rama se conserva para `workflow_dispatch` y por si algun dia se quita
-# el entorno. Faltando esta, el despliegue falla con AADSTS700213 en el primer
-# paso, antes de tocar nada.
+# Segunda credencial, no redundante: un job con `environment:` presenta el
+# entorno en el subject del token en vez de la rama. Faltando esta, el
+# despliegue falla con AADSTS700213.
+# → docs/DECISIONES_INFRA.md#github-environment
 resource "azurerm_federated_identity_credential" "github_entorno" {
   count                     = local.cicd_activo ? 1 : 0
   name                      = "github-entorno-${var.github_environment}"

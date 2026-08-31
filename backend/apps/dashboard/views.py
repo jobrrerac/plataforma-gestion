@@ -89,6 +89,20 @@ class OcupacionAPIView(APIView):
 
         ve_datos_personales = puede_ver_datos_personales(request.user)
 
+        # Dias con horas ya legalizadas, para poder ver de un vistazo quien esta
+        # al dia. Se trae de una sola consulta y se indexa por (recurso, fecha):
+        # preguntarlo dentro del bucle serian miles de consultas.
+        from apps.legalizacion.models import DiaLegalizado
+        legalizados = {
+            (r_id, f): estado
+            for r_id, f, estado in DiaLegalizado.objects.filter(
+                recurso__in=recursos,
+                fecha__gte=fecha_inicio,
+                fecha__lte=fecha_fin,
+                estado__in=[DiaLegalizado.REGISTRADO, DiaLegalizado.APROBADO],
+            ).values_list("recurso_id", "fecha", "estado")
+        }
+
         result = []
         for recurso in recursos:
             asig_recurso = [a for a in asignaciones if a.recurso_id == recurso.pk]
@@ -113,6 +127,10 @@ class OcupacionAPIView(APIView):
                         "horas_asignadas": round(horas, 2),
                         "porcentaje": min(100, round((horas / capacidad_maxima_dia(cur)) * 100, 1)),
                         "proyectos": list({a.proyecto.codigo for a in asig_hoy}),
+                        # None | "REGISTRADO" | "APROBADO". Se distinguen porque
+                        # no significan lo mismo: registrado es "ya lo declaro",
+                        # aprobado es "y alguien lo dio por bueno".
+                        "horas": legalizados.get((recurso.pk, cur)),
                     })
                 else:
                     motivo = cal.motivo_no_habil(cur, recurso)
@@ -130,6 +148,8 @@ class OcupacionAPIView(APIView):
                         "horas_asignadas": 0,
                         "porcentaje": 100 if es_ausencia else 0,
                         "proyectos": [],
+                        # Un dia no habil no se legaliza: no hay nada que declarar.
+                        "horas": None,
                     })
                 cur += timedelta(days=1)
 

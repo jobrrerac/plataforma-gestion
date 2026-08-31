@@ -7,15 +7,15 @@
 <style>
   body { background: #f4f4f8; }
   .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-control:focus { border-color:#e0178a; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .form-control:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
   .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:18px 2rem 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#110d26; margin:0; letter-spacing:-.02em; }
-  .page-strip h1 span { color:#e0178a; }
+  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.1rem; font-weight:800; color:#191b2e; margin:0; letter-spacing:-.02em; }
+  .page-strip h1 span { color:#d6197f; }
 
   .dia-card { border:1px solid #eee; border-radius:12px; padding:18px; margin-bottom:14px; background:#fff; }
   .dia-card .meta { color:#6b7280; font-size:.84rem; }
-  .persona { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; color:#110d26; }
-  .total { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:#110d26; white-space:nowrap; }
+  .persona { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; color:#191b2e; }
+  .total { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:#191b2e; white-space:nowrap; }
   .total small { font-weight:600; color:#6b7280; font-size:.76rem; }
 
   .lineas { margin-top:12px; border-top:1px solid #f0eef5; padding-top:10px; }
@@ -35,20 +35,20 @@
   .btn-devolver:hover { background:#fffbeb; color:#92400e; }
 
   .nota-admin { background:#fce7f3; border:1px solid #f9a8d4; border-radius:10px; padding:11px 15px; font-size:.84rem; color:#9d174d; margin-bottom:16px; }
-  .vacio { text-align:center; color:#9ca3af; padding:44px 12px; }
+  .vacio { text-align:center; color:#8a8f9c; padding:44px 12px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-strip">
-  <a href="/dashboard/" style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+  <a href="/dashboard/" style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
   <div style="width:1px;height:20px;background:#e8e6f0"></div>
-  <h1><i class="bi bi-clipboard-check" style="color:#e0178a"></i> Aprobar <span>horas</span></h1>
+  <h1><i class="bi bi-clipboard-check" style="color:#d6197f"></i> Aprobar <span>horas</span></h1>
 </div>
 
-<div class="container py-4" style="max-width:880px">
+<div class="container py-4" style="max-width:1120px">
 
   {% if messages %}
     {% for m in messages %}
@@ -178,7 +178,7 @@
   </div>
   {% empty %}
   <div class="card vacio">
-    <div style="font-size:2.2rem">✅</div>
+    <i class="bi bi-check2-circle" style="font-size:2rem;color:var(--inet-ok)"></i>
     <div class="mt-2">No hay horas pendientes de aprobar.</div>
   </div>
   {% endfor %}

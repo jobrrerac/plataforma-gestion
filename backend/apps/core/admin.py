@@ -3,6 +3,20 @@ from .admin_mixins import SoftDeleteAdminMixin
 from django.utils.html import format_html, mark_safe, escape
 from .models import Recurso, Proyecto, Skill, RecursoSkill, Cluster, TarifaVigente
 
+# Paleta del admin. Antes cada boton traia su hexadecimal a mano —y eran los
+# de Tailwind por defecto—, asi que dos acciones equivalentes salian de color
+# distinto segun quien escribiera la linea.
+COLOR = {
+    "principal": "#d6197f",   # magenta de marca: la accion principal
+    "neutro": "#4a5162",      # editar, ver, navegar
+    "ok": "#1f6b45",          # aprobar, confirmar
+    "alerta": "#a52a25",      # rechazar
+    "aviso": "#97591a",       # revocar, deshacer
+    "info": "#2b5674",        # ceder, mover
+    "apagado": "#8a8f9c",     # sin accion disponible
+}
+
+
 
 @admin.register(Skill)
 class SkillAdmin(admin.ModelAdmin):
@@ -55,10 +69,10 @@ class RecursoSkillInline(admin.TabularInline):
     def estrellas_display(self, obj):
         if not obj.pk:
             return ""
-        colors = ["#dc3545", "#fd7e14", "#ffc107", "#20c997", "#198754"]
+        colors = [COLOR["alerta"], COLOR["aviso"], COLOR["aviso"], COLOR["ok"], COLOR["ok"]]
         color = colors[obj.suficiencia - 1]
-        filled = "★" * obj.suficiencia
-        empty = "☆" * (5 - obj.suficiencia)
+        filled = "*" * obj.suficiencia
+        empty = "-" * (5 - obj.suficiencia)
         return format_html(
             '<span style="color:{};font-size:1.15rem;letter-spacing:1px">{}</span>'
             '<span style="color:#ccc;font-size:1.15rem;letter-spacing:1px">{}</span>',
@@ -111,7 +125,7 @@ class RecursoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             '</div>'.format(
                 "" if i < len(entries) - 1 else " inet-skill-row-last",
                 escape(rs.skill.nombre),
-                "★" * rs.suficiencia,
+                "*" * rs.suficiencia,
             )
             for i, rs in enumerate(entries)
         ))

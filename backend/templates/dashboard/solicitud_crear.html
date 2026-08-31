@@ -8,8 +8,8 @@
     body { background: #f4f4f8; }
     .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
     .skill-tag { display:inline-block; background:#ede8f5; color:#4a1f7a; border-radius:5px; padding:1px 7px; font-size:.78rem; margin:1px; }
-    .skill-stars { font-size:.65rem; color:#e0178a; margin-left:3px; letter-spacing:0; }
-    .form-control:focus, .form-select:focus { border-color: #e0178a; box-shadow: 0 0 0 .2rem rgba(224,23,138,.12); }
+    .skill-stars { font-size:.65rem; color:#d6197f; margin-left:3px; letter-spacing:0; }
+    .form-control:focus, .form-select:focus { border-color: #d6197f; box-shadow: 0 0 0 .2rem rgba(224,23,138,.12); }
     .btn-crear { font-size: 1rem; padding: .55rem 2.5rem; }
     .resumen-item { display:flex; justify-content:space-between; border-bottom:1px solid #f0f0f0; padding:6px 0; }
     .resumen-item:last-child { border-bottom: none; }
@@ -28,17 +28,17 @@
       font-family: 'Montserrat', sans-serif;
       font-size: 1.1rem;
       font-weight: 800;
-      color: #110d26;
+      color: #191b2e;
       margin: 0;
       letter-spacing: -.02em;
     }
-    .page-strip h1 span { color: #e0178a; }
+    .page-strip h1 span { color: #d6197f; }
 
     /* Día celda de detalle */
     .dia-cell:hover { opacity: 1 !important; transform: scale(1.12); transition: transform .1s; }
 
     /* Jornada completa switch — accent color */
-    .form-check-input:checked { background-color: #e0178a; border-color: #e0178a; }
+    .form-check-input:checked { background-color: #d6197f; border-color: #d6197f; }
   </style>
 {% endblock %}
 
@@ -47,14 +47,14 @@
 <!-- Page strip -->
 <div class="page-strip">
   <a href="/solicitud/?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
-     style="color:#e0178a;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+     style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
   <div style="width:1px;height:20px;background:#e8e6f0"></div>
   <h1>Nueva <span>Solicitud</span></h1>
 </div>
 
-<div class="container py-4" style="max-width:720px">
+<div class="container py-4" style="max-width:1120px">
 
   {% if error_parametros %}
   <div class="alert alert-danger">
@@ -65,7 +65,7 @@
   {% elif asignacion_creada %}
   <!-- ── ÉXITO ──────────────────────────────────────────── -->
   <div class="card p-4 text-center mb-3">
-    <div class="mb-3" style="font-size:3rem">✅</div>
+    <div class="mb-3" style="font-size:3rem"></div>
     <h4 class="fw-bold mb-1" style="color:#198754;font-family:'Montserrat',sans-serif">Solicitud creada</h4>
     <p class="text-muted mb-3">
       La solicitud #{{ asignacion_creada.pk }} está pendiente de aprobación.
@@ -110,7 +110,7 @@
       </div>
       {% endif %}
       <div class="resumen-item"><span class="text-muted">Estado</span>
-        <span class="badge" style="background:#6366f1">Solicitada — pendiente aprobación</span>
+        <span class="badge" style="background:#4a5162">Solicitada — pendiente aprobación</span>
       </div>
     </div>
     <div class="d-flex gap-2 justify-content-center">
@@ -144,7 +144,7 @@
         {{ recurso.nombre|first|upper }}
       </div>
       <div class="flex-grow-1">
-        <div class="fw-bold fs-5" style="font-family:'Montserrat',sans-serif;color:#110d26">{{ recurso.nombre }}</div>
+        <div class="fw-bold fs-5" style="font-family:'Montserrat',sans-serif;color:#191b2e">{{ recurso.nombre }}</div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <span class="badge
             {% if recurso.banda == 'LEAD' %}bg-dark
@@ -161,7 +161,7 @@
       <div class="text-end" style="min-width:110px">
         {% if info %}
         <div class="fw-bold"
-          style="color:{% if info.porcentaje_libre >= 75 %}#16a34a{% elif info.porcentaje_libre >= 50 %}#d97706{% elif info.porcentaje_libre >= 25 %}#ea580c{% else %}#dc2626{% endif %}">
+          style="color:{% if info.porcentaje_libre >= 75 %}#1f6b45{% elif info.porcentaje_libre >= 50 %}#d97706{% elif info.porcentaje_libre >= 25 %}#ea580c{% else %}#a52a25{% endif %}">
           {{ info.porcentaje_libre }}% libre
         </div>
         <div class="text-muted small">{{ info.horas_libres }}h disponibles</div>
@@ -222,8 +222,8 @@
   {% if detalle_dias %}
   <div class="card mb-4 p-3">
     <div class="d-flex align-items-center justify-content-between mb-3">
-      <h6 class="fw-bold mb-0" style="font-family:'Montserrat',sans-serif;color:#110d26">
-        <i class="bi bi-calendar3 me-2" style="color:#e0178a"></i>Ocupación por día hábil
+      <h6 class="fw-bold mb-0" style="font-family:'Montserrat',sans-serif;color:#191b2e">
+        <i class="bi bi-calendar3 me-2" style="color:#d6197f"></i>Ocupación por día hábil
       </h6>
       <span class="text-muted small">{{ detalle_dias|length }} días hábiles</span>
     </div>
@@ -252,8 +252,8 @@
 
   <!-- Formulario -->
   <div class="card p-4">
-    <h5 class="fw-bold mb-4" style="font-family:'Montserrat',sans-serif;color:#110d26">
-      <i class="bi bi-clipboard-check me-2" style="color:#e0178a"></i>Completar solicitud
+    <h5 class="fw-bold mb-4" style="font-family:'Montserrat',sans-serif;color:#191b2e">
+      <i class="bi bi-clipboard-check me-2" style="color:#d6197f"></i>Completar solicitud
     </h5>
 
     <form method="post" action="/solicitud/crear/" id="form-crear">
@@ -338,7 +338,7 @@
            style="background:#f9f5ff;border-color:#e0d6f5!important;font-size:.85rem">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
-            <i class="bi bi-calculator me-1" style="color:#e0178a"></i>
+            <i class="bi bi-calculator me-1" style="color:#d6197f"></i>
             <span id="res-info-rango">
               <strong id="res-dias">{{ dias_habiles }}</strong> días hábiles ·
               <strong id="res-horas">—</strong> h totales
@@ -367,8 +367,8 @@
       </div>
       {% else %}
       <div class="alert border py-2 px-3 mb-4 small" id="resumen-live"
-           style="{% if modo_crear != 'horas' %}display:none;{% endif %}background:#f9f5ff;border-color:#e0178a!important">
-        <i class="bi bi-calculator me-1" style="color:#e0178a"></i>
+           style="{% if modo_crear != 'horas' %}display:none;{% endif %}background:#f9f5ff;border-color:#d6197f!important">
+        <i class="bi bi-calculator me-1" style="color:#d6197f"></i>
         Estimado: <strong id="res-dias">—</strong> días hábiles ·
         <strong id="res-horas">—</strong> horas totales
       </div>
@@ -479,7 +479,7 @@ function setModoCrea(modo) {
   var btnTxt    = document.getElementById('btn-crear-txt');
   var lbl       = document.getElementById('label-dedicacion-hint');
 
-  var styleOn  = 'font-size:.72rem;border-radius:6px;padding:3px 14px;background:#110d26;color:#fff;border:none';
+  var styleOn  = 'font-size:.72rem;border-radius:6px;padding:3px 14px;background:#191b2e;color:#fff;border:none';
   var styleOff = 'font-size:.72rem;border-radius:6px;padding:3px 14px;background:#f0ecfc;color:#4a1f7a;border:1px solid #e0d6f5';
 
   if (modo === 'horas') {

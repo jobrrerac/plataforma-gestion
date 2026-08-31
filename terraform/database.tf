@@ -59,19 +59,10 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
 # Firewall
 # ---------------------------------------------------------------------------
 
-# El rango 0.0.0.0-0.0.0.0 es el valor magico de Azure para "permitir servicios
-# de Azure". Hace falta porque la IP de salida de un entorno de Container Apps
-# en plan Consumption NO es estatica: Microsoft documenta que puede cambiar, asi
-# que no se puede fijar una regla por IP. Las alternativas con IP fija (NAT
-# Gateway sobre workload profiles, plan Dedicated) cuestan mas de 30 USD/mes,
-# mas que todo el resto de la infraestructura junta.
-#
-# Lo que protege la base mientras tanto:
-#   - require_secure_transport = ON (TLS obligatorio, abajo)
-#   - contrasena aleatoria de 32 caracteres, nunca escrita a mano
-#   - la base no expone datos sin autenticar
-#
-# Endurecimiento real cuando el presupuesto lo permita: inyeccion en VNet.
+# 0.0.0.0-0.0.0.0 es el valor magico de Azure para "permitir servicios de Azure".
+# La IP de salida de Container Apps en Consumption no es estatica, asi que no se
+# puede fijar una regla por IP.
+# → docs/DECISIONES_INFRA.md#firewall-de-la-base
 resource "azurerm_postgresql_flexible_server_firewall_rule" "servicios_azure" {
   name             = "permitir-servicios-azure"
   server_id        = azurerm_postgresql_flexible_server.principal.id
