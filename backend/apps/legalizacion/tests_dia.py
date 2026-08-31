@@ -590,3 +590,65 @@ class EditorPrecargadoTests(BaseLegalizacion):
         self.assertEqual(resp.context["renglones_previos"][0]["detalle"], "Estudio")
         self.assertEqual(len(resp.context["renglones_bloqueados"]), 1)
         self.assertEqual(resp.context["horas_bloqueadas"], Decimal("4.0"))
+
+
+class DiaAprobadoConservaLaFirmaTests(BaseLegalizacion):
+    """Un día aprobado tiene que decir quién lo aprobó.
+
+    Regresión en producción: al bajar la aprobación del día al renglón,
+    `recalcular_estado` dejó de rellenar `aprobado_por`. Los días aprobados a
+    partir de entonces quedaban en APROBADO con el campo a nulo, y la pantalla
+    de legalización devolvía un **500** al abrirlos.
+
+    El detalle de por qué reventaba: el argumento de `|default:` se evalúa
+    siempre, se use o no, así que `dia.aprobado_por.username` con el campo a
+    nulo lanza `VariableDoesNotExist` y se lleva la página entera.
+
+    Ningún test lo vio porque todos comprobaban el estado del día leyendo la
+    base, sin pasar por la pantalla.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.assignments.models import Asignacion
+        Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.cliente,
+            fecha_inicio=self.fecha, fecha_fin=self.fecha,
+            horas_totales=34, intensidad_diaria=8.5,
+            estado="APROBADA", solicitada_por=self.pm,
+        )
+
+    def _dia_aprobado(self):
+        from apps.legalizacion import services as servicios
+        dia = self._dia()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_proyecto, "proyecto": self.cliente,
+            "horas": "8.5", "detalle": "Desarrollo",
+        }])
+        svc.registrar_dia(dia, self.ing)
+        servicios.aprobar_registro(dia.registros.first(), self.pm)
+        dia.refresh_from_db()
+        return dia
+
+    def test_el_dia_hereda_la_firma_de_su_ultimo_renglon(self):
+        dia = self._dia_aprobado()
+        self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
+        self.assertEqual(dia.aprobado_por, self.pm)
+        self.assertIsNotNone(dia.aprobado_en)
+
+    def test_la_pantalla_de_un_dia_aprobado_se_abre(self):
+        """El síntoma exacto: 500 al abrir el día."""
+        self._dia_aprobado()
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Aprobado por")
+
+    def test_se_abre_aunque_no_haya_firmante(self):
+        """Los días que quedaron sin firma tienen que seguir siendo legibles."""
+        dia = self._dia_aprobado()
+        DiaLegalizado.objects.filter(pk=dia.pk).update(aprobado_por=None, aprobado_en=None)
+
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
+        self.assertEqual(resp.status_code, 200)

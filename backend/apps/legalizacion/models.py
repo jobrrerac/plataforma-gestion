@@ -183,6 +183,20 @@ class DiaLegalizado(SoftDeleteModel):
             if nuevo == self.ABIERTO:
                 self.registrado_en = None
                 campos.append("registrado_en")
+            if nuevo == self.APROBADO:
+                # La firma del dia es la del ultimo que cerro su parte. Al
+                # bajar la aprobacion al renglon se dejo de rellenar, y el dia
+                # quedaba APROBADO con `aprobado_por` a nulo: la pantalla que
+                # dice "Aprobado por ..." reventaba con un 500 al abrirlo.
+                ultimo = max(
+                    (r for r in registros if r.aprobado_en),
+                    key=lambda r: r.aprobado_en,
+                    default=None,
+                )
+                if ultimo is not None:
+                    self.aprobado_por_id = ultimo.aprobado_por_id
+                    self.aprobado_en = ultimo.aprobado_en
+                    campos += ["aprobado_por", "aprobado_en"]
             self.save(update_fields=campos)
         return self.estado
 
