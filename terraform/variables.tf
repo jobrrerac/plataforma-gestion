@@ -330,7 +330,7 @@ variable "roles_entra" {
     "qa.pm"    = "PM"
     "qa.admin" = "Admin"
 
-    "erika.castiblanco-monroy"  = "PM"
+    "erika.castiblanco-monroy"  = "Ingeniero"
     "sandra.chavarria-romero"   = "Ingeniero"
     "gustavo.villazon-gonzalez" = "Ingeniero"
     "ingrid.cespedes-diaz"      = "Ingeniero"

@@ -15,7 +15,11 @@ from apps.accounts.roles import es_admin_o_pm
 from apps.core.permissions import SoloLecturaOAdmin, EsAdmin
 from . import novedades as novedades_svc
 from .models import DiaNoLaborable, Indisponibilidad
-from .serializers import DiaNoLaborableSerializer, IndisponibilidadSerializer
+from .serializers import (
+    DiaNoLaborableSerializer,
+    IndisponibilidadSerializer,
+    IndisponibilidadUpdateSerializer,
+)
 from .services import feriados_en_rango
 
 
@@ -83,6 +87,13 @@ class IndisponibilidadViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = IndisponibilidadSerializer
+
+    def get_serializer_class(self):
+        # Al editar, tres campos dejan de ser escribibles: quien es el dueno de
+        # la novedad y de donde vino el dato se deciden al crearla.
+        if self.action in ("update", "partial_update"):
+            return IndisponibilidadUpdateSerializer
+        return IndisponibilidadSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):

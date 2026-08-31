@@ -5,7 +5,7 @@ from .models import DiaNoLaborable, Indisponibilidad
 
 
 @admin.register(DiaNoLaborable)
-class DiaNoLaborableAdmin(admin.ModelAdmin):
+class DiaNoLaborableAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ["fecha", "descripcion", "creado_por", "creado_en"]
     ordering = ["fecha"]
 
