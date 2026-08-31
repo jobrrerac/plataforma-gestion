@@ -204,3 +204,28 @@ resource "azuread_service_principal_delegated_permission_grant" "consentimiento"
   resource_service_principal_object_id = data.azuread_service_principal.msgraph.object_id
   claim_values                         = ["openid", "profile", "email"]
 }
+
+# ---------------------------------------------------------------------------
+# Identidades B2B (invitados)
+# ---------------------------------------------------------------------------
+# Quien entra con su cuenta corporativa se autentica como el objeto Guest, no
+# como la cuenta local. Son dos objetos distintos y cada uno lleva su propia
+# asignacion de app role.
+#
+# Se localiza por `mail` y no por UPN a proposito: el UPN de un invitado es una
+# deformacion (`nombre_dominio#EXT#@tenant`) fragil de reconstruir, mientras que
+# `mail` es su direccion corporativa tal cual.
+data "azuread_user" "invitados" {
+  for_each = var.invitados_b2b
+  mail     = "${each.value}@${var.dominio_corporativo}"
+}
+
+# El rol sale de `roles_entra`, el mismo sitio que para la cuenta local: cambiar
+# el rol de alguien sigue siendo editar una sola linea.
+resource "azuread_app_role_assignment" "invitados" {
+  for_each = var.invitados_b2b
+
+  app_role_id         = local.ids_roles[var.roles_entra[each.value]]
+  principal_object_id = data.azuread_user.invitados[each.value].object_id
+  resource_object_id  = azuread_service_principal.sso.object_id
+}

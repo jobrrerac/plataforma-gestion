@@ -20,9 +20,9 @@ resource "azurerm_user_assigned_identity" "cicd" {
 }
 
 resource "azurerm_federated_identity_credential" "github" {
-  count     = local.cicd_activo ? 1 : 0
-  name      = "github-${var.github_branch}"
-  parent_id = azurerm_user_assigned_identity.cicd[0].id
+  count                     = local.cicd_activo ? 1 : 0
+  name                      = "github-${var.github_branch}"
+  user_assigned_identity_id = azurerm_user_assigned_identity.cicd[0].id
 
   audience = ["api://AzureADTokenExchange"]
   issuer   = "https://token.actions.githubusercontent.com"
@@ -46,9 +46,9 @@ resource "azurerm_federated_identity_credential" "github" {
 # el entorno. Faltando esta, el despliegue falla con AADSTS700213 en el primer
 # paso, antes de tocar nada.
 resource "azurerm_federated_identity_credential" "github_entorno" {
-  count     = local.cicd_activo ? 1 : 0
-  name      = "github-entorno-${var.github_environment}"
-  parent_id = azurerm_user_assigned_identity.cicd[0].id
+  count                     = local.cicd_activo ? 1 : 0
+  name                      = "github-entorno-${var.github_environment}"
+  user_assigned_identity_id = azurerm_user_assigned_identity.cicd[0].id
 
   audience = ["api://AzureADTokenExchange"]
   issuer   = "https://token.actions.githubusercontent.com"
