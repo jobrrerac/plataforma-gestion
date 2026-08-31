@@ -13,13 +13,13 @@
   un POST con token CSRF, que es lo único que un tercero no puede falsificar.
 {% endcomment %}
 
-{% block title %}{{ titulo }} — Asignación #{{ asignacion.pk }}{% endblock %}
+{% block title %}{{ titulo }} — {{ objeto }}{% endblock %}
 
 {% block breadcrumbs %}
 <div class="breadcrumbs">
   <a href="{% url 'admin:index' %}">Inicio</a> ›
   <a href="{% url 'admin:assignments_asignacion_changelist' %}">Asignaciones</a> ›
-  {{ titulo }} #{{ asignacion.pk }}
+  {{ titulo }} · {{ objeto }}
 </div>
 {% endblock %}
 
@@ -43,17 +43,15 @@
 </style>
 
 <div class="caja aviso">
-  <h3>{{ titulo }} la asignación #{{ asignacion.pk }}</h3>
+  <h3>{{ titulo }} · {{ objeto }}</h3>
   <div>{{ advertencia }}</div>
 </div>
 
 <div class="caja datos">
   <dl>
-    <dt>Recurso</dt><dd>{{ asignacion.recurso.nombre }}</dd>
-    <dt>Proyecto</dt><dd>{{ asignacion.proyecto.codigo }} — {{ asignacion.proyecto.nombre }}</dd>
-    <dt>Ventana</dt><dd>{{ asignacion.fecha_inicio }} → {{ asignacion.fecha_fin }}</dd>
-    <dt>Horas</dt><dd>{{ asignacion.horas_totales }} h ({{ asignacion.intensidad_diaria }} h/día)</dd>
-    <dt>Estado actual</dt><dd><strong>{{ asignacion.get_estado_display }}</strong></dd>
+    {% for etiqueta, valor in datos %}
+    <dt>{{ etiqueta }}</dt><dd>{{ valor }}</dd>
+    {% endfor %}
   </dl>
 </div>
 
@@ -70,7 +68,7 @@
 
   <div class="acciones">
     <button type="submit" class="btn-confirmar">{{ titulo }}</button>
-    <a class="btn-cancelar" href="{% url 'admin:assignments_asignacion_changelist' %}">Cancelar</a>
+    <a class="btn-cancelar" href="{{ volver }}">Cancelar</a>
   </div>
 </form>
 {% endblock %}

@@ -279,13 +279,22 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         Es la mitad segura del patrón: en GET solo se pinta, y el cambio va en
         el POST, que lleva token CSRF.
         """
+        from django.urls import reverse
         return dj_render(request, "admin/assignments/confirmar_accion.html", {
             **self.admin_site.each_context(request),
-            "asignacion": asig,
+            "objeto": f"Asignación #{asig.pk}",
+            "datos": [
+                ("Recurso", asig.recurso.nombre),
+                ("Proyecto", f"{asig.proyecto.codigo} — {asig.proyecto.nombre}"),
+                ("Ventana", f"{asig.fecha_inicio} → {asig.fecha_fin}"),
+                ("Horas", f"{asig.horas_totales} h ({asig.intensidad_diaria} h/día)"),
+                ("Estado actual", asig.get_estado_display()),
+            ],
             "titulo": titulo,
             "advertencia": advertencia,
             "color": color,
             "pide_motivo": pide_motivo,
+            "volver": reverse("admin:assignments_asignacion_changelist"),
             "opts": self.model._meta,
         })
 
@@ -336,7 +345,17 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         conflict_dates, nueva_fecha_fin, nuevas_horas = analizar_conflictos(asig)
 
         if not conflict_dates:
-            # Ya no hay conflictos (otro usuario los resolvió), aprobar directo
+            # Los conflictos desaparecieron entre que se cargo la pantalla y
+            # esta llamada (otro los resolvio). Aprobar aqui directamente
+            # reabria el agujero por el que se entro: seria una mutacion por
+            # GET, sin CSRF, alcanzable con un enlace o un prefetch.
+            if request.method != "POST":
+                return self._confirmar(
+                    request, asig, "Aprobar",
+                    "Los conflictos de calendario que habia ya no estan: alguien los "
+                    "resolvio mientras tanto. Se aprueba sin recomputar fechas.",
+                    COLOR["ok"],
+                )
             try:
                 aprobar_asignacion(asig, request.user)
                 self.message_user(request, f"Asignación #{pk} aprobada.", messages.SUCCESS)
@@ -669,10 +688,46 @@ class LiberacionRecursoAdmin(admin.ModelAdmin):
             return False
         return True
 
+    def _confirmar(self, request, lib, titulo, advertencia, color):
+        """Confirmacion en GET; la mutacion solo en POST, con CSRF.
+
+        Mismo motivo que en las asignaciones: estas acciones se ejecutaban
+        directamente desde el enlace del listado, asi que bastaba un
+        `<img src=".../aprobar/5/">` en cualquier pagina que abriera un Admin
+        —o un prefetch del navegador, o un escaner interno— para aplicar una
+        liberacion que nadie pidio.
+        """
+        from django.urls import reverse
+        asig = lib.asignacion
+        return dj_render(request, "admin/assignments/confirmar_accion.html", {
+            **self.admin_site.each_context(request),
+            "objeto": f"Liberación #{lib.pk}",
+            "datos": [
+                ("Recurso", asig.recurso.nombre),
+                ("Proyecto", f"{asig.proyecto.codigo} — {asig.proyecto.nombre}"),
+                ("Ventana a liberar", f"{lib.fecha_inicio} → {lib.fecha_fin}"),
+                ("Horas", f"{lib.horas_liberadas} h en {lib.dias_liberados} día(s)"),
+                ("Estado actual", lib.get_estado_display()),
+            ],
+            "titulo": titulo,
+            "advertencia": advertencia,
+            "color": color,
+            "pide_motivo": False,
+            "volver": reverse("admin:assignments_liberacionrecurso_changelist"),
+            "opts": self.model._meta,
+        })
+
     def view_aprobar(self, request, pk):
         if not self._guard(request):
             return self._redirect_lista()
         lib = LiberacionRecurso.objects.get(pk=pk)
+        if request.method != "POST":
+            return self._confirmar(
+                request, lib, "Aprobar",
+                "Se aplica sobre la asignación: libera la capacidad del recurso "
+                "en esa ventana.",
+                COLOR["ok"],
+            )
         try:
             aprobar_liberacion(lib, request.user)
             self.message_user(request, f"Liberación #{pk} aprobada y aplicada.", messages.SUCCESS)
@@ -684,6 +739,12 @@ class LiberacionRecursoAdmin(admin.ModelAdmin):
         if not self._guard(request):
             return self._redirect_lista()
         lib = LiberacionRecurso.objects.get(pk=pk)
+        if request.method != "POST":
+            return self._confirmar(
+                request, lib, "Rechazar",
+                "La solicitud queda rechazada y la asignación sigue como está.",
+                COLOR["alerta"],
+            )
         try:
             rechazar_liberacion(lib, request.user)
             self.message_user(request, f"Liberación #{pk} rechazada.", messages.WARNING)
@@ -695,6 +756,13 @@ class LiberacionRecursoAdmin(admin.ModelAdmin):
         if not self._guard(request):
             return self._redirect_lista()
         lib = LiberacionRecurso.objects.get(pk=pk)
+        if request.method != "POST":
+            return self._confirmar(
+                request, lib, "Anular",
+                "Deshace una liberación ya aplicada: la asignación vuelve a su "
+                "ventana y horas anteriores.",
+                COLOR["aviso"],
+            )
         try:
             anular_liberacion(lib, request.user)
             self.message_user(request, f"Liberación #{pk} anulada; la asignación fue restaurada.", messages.SUCCESS)

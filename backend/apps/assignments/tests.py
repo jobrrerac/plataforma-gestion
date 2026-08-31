@@ -1020,3 +1020,78 @@ class EdicionPorApiTests(TestCase):
         self.assertEqual(float(asig.horas_totales), 80.0)
         # 80 h a 8 h/día son 10 días hábiles: la ventana ya no puede acabar el 17.
         self.assertGreater(asig.fecha_fin, date(2025, 1, 17))
+
+
+class LiberacionAccionesExigenPostTests(TestCase):
+    """Las acciones de liberación tampoco pueden mutar con un GET.
+
+    Segunda ronda de la revisión de seguridad: al cerrar el agujero en las
+    asignaciones se quedaron fuera `LiberacionRecurso` —aprobar, rechazar y
+    anular— con el mismo patrón, y la rama de `view_aprobar_confirmar` que
+    aprueba directo cuando los conflictos desaparecieron entre la carga y la
+    confirmación.
+
+    Aprobar una liberación no es cosmético: aplica sobre la asignación y libera
+    la capacidad del recurso.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root_lib", "rl@test.com", "pass")
+        self.client.force_login(self.admin)
+        self.recurso = Recurso.objects.create(nombre="DevLib", email="devlib@test.com", banda="SR")
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-LIB", nombre="L", cliente="X", fecha_inicio=date(2025, 1, 1), pm=self.admin,
+        )
+        self.asig = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 17),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado="APROBADA", solicitada_por=self.admin,
+        )
+        from .models import LiberacionRecurso
+        self.lib = LiberacionRecurso.objects.create(
+            asignacion=self.asig, fecha_inicio=date(2025, 1, 15), fecha_fin=date(2025, 1, 16),
+            dias_liberados=2, horas_liberadas=16, politica="RECOMPUTAR",
+            estado="SOLICITADA", solicitada_por=self.admin,
+        )
+
+    def _url(self, accion):
+        return f"/admin/assignments/liberacionrecurso/{self.lib.pk}/{accion}/"
+
+    def test_get_a_aprobar_no_aprueba(self):
+        resp = self.client.get(self._url("aprobar"))
+        self.assertEqual(resp.status_code, 200)
+        self.lib.refresh_from_db()
+        self.assertEqual(self.lib.estado, "SOLICITADA")
+
+    def test_get_a_rechazar_no_rechaza(self):
+        self.client.get(self._url("rechazar"))
+        self.lib.refresh_from_db()
+        self.assertEqual(self.lib.estado, "SOLICITADA")
+
+    def test_el_get_muestra_confirmacion_con_csrf(self):
+        resp = self.client.get(self._url("aprobar"))
+        self.assertContains(resp, "csrfmiddlewaretoken")
+        self.assertContains(resp, "Liberación")
+
+    def test_el_post_si_aprueba(self):
+        self.client.post(self._url("aprobar"))
+        self.lib.refresh_from_db()
+        self.assertEqual(self.lib.estado, "APROBADA")
+
+    def test_confirmar_sin_conflictos_no_aprueba_por_get(self):
+        """La rama que aprobaba directo cuando el conflicto ya no estaba."""
+        otra = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 2, 10), fecha_fin=date(2025, 2, 14),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado="SOLICITADA", solicitada_por=self.admin,
+        )
+        resp = self.client.get(f"/admin/assignments/asignacion/aprobar/{otra.pk}/confirmar/")
+        self.assertEqual(resp.status_code, 200)
+        otra.refresh_from_db()
+        self.assertEqual(otra.estado, "SOLICITADA")
+
+        self.client.post(f"/admin/assignments/asignacion/aprobar/{otra.pk}/confirmar/")
+        otra.refresh_from_db()
+        self.assertEqual(otra.estado, "APROBADA")
