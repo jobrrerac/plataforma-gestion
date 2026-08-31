@@ -15,6 +15,13 @@ Tambien cambia el rol de quien ya existe:
 
     python scripts/crear_usuario_entra.py erika...@inetum.com --rol PM --solo-rol
 
+IMPORTANTE: a quien se cree con este script hay que anadirlo tambien a
+`roles_entra` en terraform/variables.tf, en el mismo cambio. Si no, Terraform no
+sabe que existe y el fichero que se documenta como el unico punto de control de
+acceso deja de serlo. Ya paso con daniel.guzman: 23 asignaciones en el estado y
+24 en Entra, y hubo que arreglarlo con `terraform import`.
+Ver docs/DISENO_ACCESO.md.
+
 En Entra una asignacion de app role no se edita: se quita y se crea otra. Y
 quien haya sido invitado por B2B tiene DOS identidades —su cuenta local y el
 objeto de invitado—, cada una con su propia asignacion. Cambiar el rol en una
