@@ -63,6 +63,34 @@ class EntraOIDCBackend(OIDCAuthenticationBackend):
                 return valor
         return ""
 
+    def _correo_de_invitado(self, valor):
+        """Recupera el correo real de un invitado B2B a partir de su UPN.
+
+        A un invitado Entra le fabrica un UPN deformando su direccion:
+
+            erika.castiblanco-monroy@inetum.com
+            -> erika.castiblanco-monroy_inetum.com#EXT#@inetumoffshore.onmicrosoft.com
+
+        Como termina en el dominio del tenant, `OIDC_DOMINIO_ALIAS` lo tomaria
+        por una cuenta local y lo traduciria a
+        `erika.castiblanco-monroy_inetum.com#EXT#@inetum.com`, que no es de
+        nadie: crearia un usuario nuevo y vacio sin dar ningun error, dejando
+        huerfano el historial. Es el mismo modo de fallo que motivo el alias de
+        dominio, entrando por la puerta de al lado.
+
+        Normalmente el token trae el claim `email` con la direccion buena y esto
+        no llega a usarse. Pero `email` esta declarado como opcional y no
+        esencial, asi que no esta garantizado.
+        """
+        local, _, _dominio = valor.partition("@")
+        if not local.endswith("#ext#"):
+            return ""
+        # El separador es el ULTIMO '_': el nombre puede llevar guiones bajos.
+        usuario, sep, dominio = local[: -len("#ext#")].rpartition("_")
+        if not sep or "." not in dominio:
+            return ""
+        return f"{usuario}@{dominio}"
+
     def _email(self, claims):
         """Email canónico: el de negocio, que es como se conoce a la persona aquí.
 
@@ -76,6 +104,12 @@ class EntraOIDCBackend(OIDCAuthenticationBackend):
         email = self._email_token(claims)
         if not email:
             return ""
+
+        # Un invitado B2B se resuelve antes del alias: su direccion real ya es
+        # la corporativa, traducir el dominio del tenant la destrozaria.
+        invitado = self._correo_de_invitado(email)
+        if invitado:
+            return invitado
 
         alias = self.get_settings("OIDC_DOMINIO_ALIAS", {}) or {}
         usuario, _, dominio = email.partition("@")
