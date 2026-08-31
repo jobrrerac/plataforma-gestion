@@ -159,6 +159,9 @@ def resumen(dia) -> dict:
     total = sum((r.horas for r in registros), Decimal("0"))
     facturables = sum((r.horas for r in registros if r.facturable), Decimal("0"))
 
+    bloqueadas = sum((r.horas for r in registros if r.bloqueado), Decimal("0"))
+    devueltos = [r for r in registros if r.estado == RegistroHoras.DEVUELTO]
+
     return {
         "registros": registros,
         "total": total,
@@ -167,6 +170,12 @@ def resumen(dia) -> dict:
         "cuadra": total == dia.jornada_esperada,
         "facturables": facturables,
         "no_facturables": total - facturables,
+        # Desglose por estado de aprobación: sin esto la pantalla no puede
+        # distinguir lo que ya firmó un PM de lo que sigue esperando.
+        "aprobadas": bloqueadas,
+        "pendientes": [r for r in registros if r.estado == RegistroHoras.PENDIENTE],
+        "devueltos": devueltos,
+        "hay_devueltos": bool(devueltos),
     }
 
 
@@ -200,10 +209,21 @@ def registrar_dia(dia, usuario):
             f"Te pasas en {-faltan} h de la jornada de {dia.jornada_esperada} h."
         )
 
+    # Lo ya aprobado no se reenvía: sigue firmado. Lo devuelto vuelve a la cola
+    # como pendiente, con el motivo ya limpio porque acaba de corregirse.
+    dia.registros.exclude(estado=RegistroHoras.APROBADO).update(
+        estado=RegistroHoras.PENDIENTE, motivo_devolucion=""
+    )
+
     dia.estado = DiaLegalizado.REGISTRADO
     dia.total_horas = datos["total"]
     dia.registrado_en = timezone.now()
-    dia.save(update_fields=["estado", "total_horas", "registrado_en", "updated_at"])
+    dia.motivo_devolucion = ""
+    dia.save(update_fields=[
+        "estado", "total_horas", "registrado_en", "motivo_devolucion", "updated_at",
+    ])
+    # Si todo lo que quedaba ya estaba aprobado, el día nace aprobado.
+    dia.recalcular_estado()
     return dia
 
 
@@ -240,47 +260,24 @@ def actividades_disponibles():
 # ---------------------------------------------------------------------------
 # Aprobación
 # ---------------------------------------------------------------------------
+# Se aprueba **renglón a renglón**, no el día entero. Quien firma responde por
+# un proyecto concreto: un PM no puede valorar las horas de formación de otro,
+# ni las de un proyecto que no es suyo. Y cuando alguien reparte el día entre
+# dos proyectos, aprobar el día completo dejaba que el primer PM en llegar
+# decidiera también por el segundo.
 
 
-def dias_por_aprobar(usuario):
-    """Días registrados que este usuario puede aprobar.
+def puede_aprobar_registro(usuario, registro) -> bool:
+    """Si esta persona puede firmar este renglón concreto.
 
-    - **Admin**: todos. Es la válvula de escape — si un PM está de vacaciones,
-      se va de la empresa o simplemente tarda, las horas de su gente no pueden
-      quedarse bloqueadas para siempre.
-    - **PM**: los días que tocan alguno de sus proyectos.
-    - **Cualquier otro**: ninguno.
+    - **PM del proyecto**: lo suyo, y solo lo suyo.
+    - **Admin**: cualquiera. No es un lujo: los renglones sin proyecto
+      —formación, estudio— no tienen PM que los reclame, y sin el Admin no se
+      aprobarían nunca. Sirve además de válvula si un PM tarda o se va.
 
-    Un día puede mezclar proyectos de varios PM. Basta con que uno de ellos sea
-    suyo para poder aprobarlo entero: exigir la firma de todos convertiría un
-    trámite diario en una cadena de esperas, y el dato que se valida —cuántas
-    horas dedicó esa persona— es el mismo para todos.
-
-    Un día sin ningún proyecto (solo estudio o entrenamiento) no tiene PM que lo
-    reclame. Ahí el Admin es el único que puede aprobarlo, y por eso su alcance
-    total no es un lujo: sin él, esos días no se aprobarían nunca.
-    """
-    from apps.accounts.roles import es_admin, es_admin_o_pm
-
-    pendientes = DiaLegalizado.objects.filter(
-        estado=DiaLegalizado.REGISTRADO
-    ).select_related("recurso").order_by("fecha", "recurso__nombre")
-
-    if es_admin(usuario):
-        return pendientes
-    if not es_admin_o_pm(usuario):
-        return pendientes.none()
-
-    return pendientes.filter(registros__proyecto__pm=usuario).distinct()
-
-
-def puede_aprobar(usuario, dia) -> bool:
-    """Si este día cae dentro de lo que esta persona puede revisar.
-
-    Mira el alcance, no el estado. Son dos preguntas distintas y mezclarlas
-    produce mensajes falsos: al intentar aprobar un día ya aprobado, un PM
-    legítimo leía «no eres PM de ninguno de sus proyectos», que es mentira y
-    manda a buscar el problema donde no está.
+    Mira el alcance, no el estado: son dos preguntas distintas y mezclarlas
+    produce mensajes falsos, como decirle a un PM legítimo que el renglón no es
+    suyo cuando lo que pasa es que ya estaba aprobado.
     """
     from apps.accounts.roles import es_admin, es_admin_o_pm
 
@@ -288,66 +285,130 @@ def puede_aprobar(usuario, dia) -> bool:
         return True
     if not es_admin_o_pm(usuario):
         return False
-    return dia.registros.filter(proyecto__pm=usuario).exists()
+    return bool(registro.proyecto_id and registro.proyecto.pm_id == usuario.pk)
 
 
-def _exigir_aprobador(usuario, dia):
-    if not puede_aprobar(usuario, dia):
+def registros_por_aprobar(usuario):
+    """Renglones pendientes que esta persona puede firmar."""
+    from apps.accounts.roles import es_admin, es_admin_o_pm
+
+    pendientes = (
+        RegistroHoras.objects
+        .filter(estado=RegistroHoras.PENDIENTE, dia__estado=DiaLegalizado.REGISTRADO)
+        .select_related("dia", "dia__recurso", "proyecto", "tipo_actividad")
+        .order_by("dia__fecha", "dia__recurso__nombre", "id")
+    )
+    if es_admin(usuario):
+        return pendientes
+    if not es_admin_o_pm(usuario):
+        return pendientes.none()
+    return pendientes.filter(proyecto__pm=usuario)
+
+
+def dias_por_aprobar(usuario):
+    """La misma cola, agrupada por día para poder pintarla.
+
+    Cada día trae en `pendientes_mios` solo los renglones que esta persona
+    puede firmar, y en `otros` el resto —visibles, pero sin botones—: quien
+    aprueba necesita ver el día completo para juzgar sus horas en contexto, sin
+    poder tocar lo que no le corresponde.
+    """
+    mios = list(registros_por_aprobar(usuario))
+    if not mios:
+        return []
+
+    dias = {}
+    for registro in mios:
+        dias.setdefault(registro.dia_id, registro.dia)
+    completos = (
+        DiaLegalizado.objects.filter(pk__in=dias)
+        .select_related("recurso")
+        .prefetch_related("registros__proyecto", "registros__tipo_actividad")
+        .order_by("fecha", "recurso__nombre")
+    )
+
+    aprobables = {r.pk for r in mios}
+    resultado = []
+    for dia in completos:
+        registros = list(dia.registros.all())
+        dia.pendientes_mios = [r for r in registros if r.pk in aprobables]
+        dia.otros = [r for r in registros if r.pk not in aprobables]
+        dia.detalle = resumen(dia)
+        resultado.append(dia)
+    return resultado
+
+
+def _exigir_aprobador_registro(usuario, registro):
+    if not puede_aprobar_registro(usuario, registro):
+        if registro.proyecto_id:
+            raise PermissionDenied(
+                f"No puedes revisar esta actividad: no eres PM de «{registro.proyecto.codigo}»."
+            )
         raise PermissionDenied(
-            "No puedes revisar este día: no eres PM de ninguno de sus proyectos."
+            "Esta actividad no cuelga de ningún proyecto, así que solo la aprueba un administrador."
         )
 
 
-def _exigir_registrado(dia):
-    if dia.estado != DiaLegalizado.REGISTRADO:
+def _exigir_pendiente(registro):
+    if registro.estado != RegistroHoras.PENDIENTE:
         estados = {
-            DiaLegalizado.ABIERTO: "todavía no lo ha aceptado quien lo registra",
-            DiaLegalizado.APROBADO: "ya está aprobado",
+            RegistroHoras.APROBADO: "ya está aprobada",
+            RegistroHoras.DEVUELTO: "está devuelta, esperando corrección",
         }
-        raise ValidationError(f"Este día {estados.get(dia.estado, 'no se puede revisar')}.")
+        raise ValidationError(f"Esta actividad {estados.get(registro.estado, 'no se puede revisar')}.")
+    if registro.dia.estado != DiaLegalizado.REGISTRADO:
+        raise ValidationError("Este día todavía no lo ha aceptado quien lo registra.")
 
 
 @transaction.atomic
-def aprobar_dia(dia, usuario):
-    """Da el día por bueno. Sus horas pasan a contar como legalizadas."""
-    _exigir_aprobador(usuario, dia)
+def aprobar_registro(registro, usuario):
+    """Da por buena una actividad. Sus horas pasan a contar como legalizadas."""
+    _exigir_aprobador_registro(usuario, registro)
 
-    # Se relee bajo bloqueo: si un PM y un Admin aprueban a la vez, sin esto el
+    # Se relee bajo bloqueo: si el PM y un Admin firman a la vez, sin esto el
     # segundo pisaría la firma del primero.
-    dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
-    _exigir_registrado(dia)
+    registro = RegistroHoras.objects.select_for_update().select_related("dia").get(pk=registro.pk)
+    _exigir_pendiente(registro)
 
-    dia.estado = DiaLegalizado.APROBADO
-    dia.aprobado_por = usuario
-    dia.aprobado_en = timezone.now()
-    dia.motivo_devolucion = ""
-    dia.save(update_fields=[
+    registro.estado = RegistroHoras.APROBADO
+    registro.aprobado_por = usuario
+    registro.aprobado_en = timezone.now()
+    registro.motivo_devolucion = ""
+    registro.save(update_fields=[
         "estado", "aprobado_por", "aprobado_en", "motivo_devolucion", "updated_at",
     ])
-    return dia
+
+    registro.dia.recalcular_estado()
+    return registro
 
 
 @transaction.atomic
-def devolver_dia(dia, usuario, motivo):
-    """Reabre el día para que quien lo registró lo corrija.
+def devolver_registro(registro, usuario, motivo):
+    """Devuelve una actividad para que se corrija.
 
-    Es la única forma de deshacer un cierre, y exige motivo: devolver sin decir
-    qué está mal solo produce un segundo intento a ciegas.
+    Solo esa: las que otro PM ya firmó siguen aprobadas y bloqueadas. Devolver
+    el día entero obligaba a rehacer trabajo ya validado.
     """
-    _exigir_aprobador(usuario, dia)
+    _exigir_aprobador_registro(usuario, registro)
 
     motivo = (motivo or "").strip()
     if not motivo:
         raise ValidationError("Explica qué hay que corregir; el motivo lo verá quien lo registró.")
 
-    dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
-    _exigir_registrado(dia)
+    registro = RegistroHoras.objects.select_for_update().select_related("dia").get(pk=registro.pk)
+    _exigir_pendiente(registro)
 
-    dia.estado = DiaLegalizado.ABIERTO
-    dia.registrado_en = None
+    registro.estado = RegistroHoras.DEVUELTO
+    registro.motivo_devolucion = motivo[:300]
+    registro.save(update_fields=["estado", "motivo_devolucion", "updated_at"])
+
+    # El día vuelve a estar abierto para que se pueda corregir, y se deja el
+    # motivo a la vista de quien lo registró.
+    dia = registro.dia
     dia.motivo_devolucion = motivo[:300]
-    dia.save(update_fields=["estado", "registrado_en", "motivo_devolucion", "updated_at"])
-    return dia
+    dia.save(update_fields=["motivo_devolucion", "updated_at"])
+    dia.recalcular_estado()
+    return registro
 
 
 def proyectos_disponibles(recurso, fecha: date):
@@ -382,7 +443,7 @@ def proyectos_disponibles(recurso, fecha: date):
 
 @transaction.atomic
 def guardar_renglones(dia, renglones):
-    """Reemplaza de una vez todos los renglones del día.
+    """Reemplaza los renglones editables del día. Los aprobados no se tocan.
 
     La pantalla arma la lista en el navegador y no toca la base hasta que la
     persona pulsa Guardar: así puede componer el día, corregirse y reordenarse
@@ -391,11 +452,23 @@ def guardar_renglones(dia, renglones):
     Se valida todo antes de escribir nada. Si un renglón falla, no se guarda
     ninguno: un día medio guardado es peor que uno sin guardar, porque parece
     completo.
+
+    Lo que llega es **el día editable completo**, no un añadido: sustituye a lo
+    que hubiera. La pantalla precarga lo ya guardado justamente por eso — si
+    llegara vacía, guardar borraría el día. Es lo que ocurría: el editor
+    arrancaba en blanco y volver a entrar para completar las horas que faltaban
+    dejaba el día solo con lo último tecleado.
+
+    Los renglones ya aprobados quedan fuera del reemplazo. Devolver una
+    actividad no puede obligar a rehacer las que otro PM ya firmó.
     """
     _exigir_editable(dia)
 
     if not renglones:
         raise ValidationError("No has añadido ninguna actividad.")
+
+    aprobados = list(dia.registros.filter(estado=RegistroHoras.APROBADO))
+    horas_aprobadas = sum((r.horas for r in aprobados), Decimal("0"))
 
     validados = []
     total = Decimal("0")
@@ -432,13 +505,19 @@ def guardar_renglones(dia, renglones):
         total += horas
         validados.append((actividad, proyecto, horas, detalle[:300]))
 
-    if total > dia.jornada_esperada:
+    if total + horas_aprobadas > dia.jornada_esperada:
+        if horas_aprobadas:
+            raise ValidationError(
+                f"Has registrado {total} h y ya hay {horas_aprobadas} h aprobadas, "
+                f"lo que suma {total + horas_aprobadas} h sobre una jornada de "
+                f"{dia.jornada_esperada} h."
+            )
         raise ValidationError(
             f"Has registrado {total} h y la jornada de ese día es de {dia.jornada_esperada} h."
         )
 
-    # Reemplazo completo: lo que llega es el día entero, no un añadido.
-    dia.registros.all().delete()  # soft-delete
+    # Reemplaza solo lo editable: lo aprobado se queda como está.
+    dia.registros.exclude(estado=RegistroHoras.APROBADO).delete()  # soft-delete
     RegistroHoras.objects.bulk_create([
         RegistroHoras(
             dia=dia, tipo_actividad=actividad, proyecto=proyecto,

@@ -469,3 +469,124 @@ class GuardadoEnLoteTests(BaseLegalizacion):
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)
         self.assertTrue(dia.editable)
+
+
+class EditorPrecargadoTests(BaseLegalizacion):
+    """El editor tiene que arrancar con lo que ya estaba guardado.
+
+    Regresión reportada en producción: alguien cargaba 6 h, la pantalla le
+    avisaba de que faltaban 2.5 h y, al volver para completarlas, «se borraba
+    todo y había que empezar de 0».
+
+    No era un fallo de pintado. `guardar_renglones` reemplaza el día editable
+    completo —es lo correcto, porque lo que llega del navegador es el día
+    entero— pero el editor arrancaba en blanco. Así que volver a guardar no
+    añadía 2.5 h a las 6 h: dejaba el día con 2.5 h y borraba las otras.
+
+    Los tests que había no lo veían porque llamaban al servicio directamente,
+    sin pasar por la pantalla, que es donde estaba el agujero.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # La pantalla solo ofrece proyectos con asignacion aprobada esa fecha;
+        # los servicios no lo comprueban. Sin esto el POST se rechaza, que es
+        # justo lo que debe pasar.
+        from apps.assignments.models import Asignacion
+        Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.cliente,
+            fecha_inicio=self.fecha, fecha_fin=self.fecha,
+            horas_totales=34, intensidad_diaria=8.5,
+            estado="APROBADA", solicitada_por=self.pm,
+        )
+
+    def _dia_con_seis_horas(self):
+        dia = self._dia()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_proyecto, "proyecto": self.cliente,
+            "horas": "6", "detalle": "Desarrollo de la mañana",
+        }])
+        return dia
+
+    def test_al_editar_el_dia_llega_precargado(self):
+        self._dia_con_seis_horas()
+        self.client.force_login(self.ing)
+        resp = self.client.get(
+            reverse("horas"), {"fecha": self.fecha.isoformat(), "editar": "1"}
+        )
+        previos = resp.context["renglones_previos"]
+        self.assertEqual(len(previos), 1)
+        self.assertEqual(previos[0]["horas"], 6.0)
+        self.assertEqual(previos[0]["detalle"], "Desarrollo de la mañana")
+
+    def test_completar_las_horas_que_faltaban_no_borra_las_anteriores(self):
+        """El síntoma exacto que se reportó, extremo a extremo."""
+        dia = self._dia_con_seis_horas()
+        self.client.force_login(self.ing)
+
+        # Lo que ahora manda la pantalla: lo precargado MÁS lo nuevo.
+        resp = self.client.post(reverse("horas"), {
+            "accion": "guardar",
+            "fecha": self.fecha.isoformat(),
+            "renglon_tipo": [str(self.t_proyecto.pk), str(self.t_estudio.pk)],
+            "renglon_proyecto": [str(self.cliente.pk), ""],
+            "renglon_horas": ["6", "2.5"],
+            "renglon_detalle": ["Desarrollo de la mañana", "Curso de Django"],
+        })
+        self.assertEqual(resp.status_code, 302, getattr(resp, "context", {}) and resp.context.get("error"))
+
+        dia.refresh_from_db()
+        self.assertEqual(svc.resumen(dia)["total"], Decimal("8.5"))
+        self.assertEqual(dia.registros.count(), 2)
+
+    def test_el_dia_devuelto_se_abre_en_edicion_y_no_en_blanco(self):
+        """Lo que se reportó como «no sé si lo devuelve en blanco»."""
+        from apps.legalizacion import services as servicios
+
+        dia = self._dia()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_proyecto, "proyecto": self.cliente,
+            "horas": "8.5", "detalle": "Desarrollo",
+        }])
+        svc.registrar_dia(dia, self.ing)
+        servicios.devolver_registro(dia.registros.first(), self.pm, "Detalla mejor el ticket")
+
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
+
+        # Se abre para corregir sin tener que pedirlo, y con el contenido dentro.
+        self.assertTrue(resp.context["modo_edicion"])
+        previos = resp.context["renglones_previos"]
+        self.assertEqual(len(previos), 1)
+        self.assertEqual(previos[0]["detalle"], "Desarrollo")
+        self.assertTrue(previos[0]["devuelto"])
+        self.assertIn("ticket", previos[0]["motivo"])
+
+    def test_lo_ya_aprobado_no_entra_al_editor(self):
+        from apps.legalizacion import services as servicios
+
+        dia = self._dia()
+        svc.guardar_renglones(dia, [
+            {"tipo_actividad": self.t_proyecto, "proyecto": self.cliente,
+             "horas": "4", "detalle": "Cliente"},
+            {"tipo_actividad": self.t_estudio, "proyecto": None,
+             "horas": "4.5", "detalle": "Estudio"},
+        ])
+        svc.registrar_dia(dia, self.ing)
+        aprobado = dia.registros.get(proyecto=self.cliente)
+        servicios.aprobar_registro(aprobado, self.pm)
+        admin = User.objects.create_user(username="admin.editor", password="Clave2026!")
+        admin.groups.add(Group.objects.get(name=roles.ADMIN))
+        # Sin proyecto no hay PM que lo reclame: lo devuelve el Admin.
+        servicios.devolver_registro(
+            dia.registros.get(tipo_actividad=self.t_estudio), admin, "Rehazlo"
+        )
+
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
+
+        # Lo firmado se ve aparte y bloqueado; solo lo devuelto es editable.
+        self.assertEqual(len(resp.context["renglones_previos"]), 1)
+        self.assertEqual(resp.context["renglones_previos"][0]["detalle"], "Estudio")
+        self.assertEqual(len(resp.context["renglones_bloqueados"]), 1)
+        self.assertEqual(resp.context["horas_bloqueadas"], Decimal("4.0"))

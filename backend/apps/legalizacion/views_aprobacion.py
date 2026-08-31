@@ -1,8 +1,13 @@
 """Cola de aprobación de horas.
 
-La revisa el PM de los proyectos implicados. El Admin ve todas: es la válvula de
-escape para que las horas de nadie se queden bloqueadas porque su PM esté de
-vacaciones, se haya ido o simplemente tarde.
+Se aprueba **actividad por actividad**, no el día entero. Cada PM firma los
+renglones de sus proyectos; el Admin puede firmar cualquiera, y es el único que
+puede con los que no cuelgan de ningún proyecto (formación, estudio), que si no
+no se aprobarían nunca.
+
+Las actividades se agrupan por día porque quien aprueba necesita ver la jornada
+completa para juzgar sus horas en contexto — pero solo puede pulsar sobre las
+suyas.
 """
 
 from django.contrib import messages
@@ -14,7 +19,7 @@ from django.views import View
 from apps.accounts.roles import es_admin, es_admin_o_pm
 
 from . import services as svc
-from .models import DiaLegalizado
+from .models import RegistroHoras
 
 
 class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -26,18 +31,8 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         return es_admin_o_pm(self.request.user)
 
     def _ctx(self, request, **extra):
-        dias = list(
-            svc.dias_por_aprobar(request.user).prefetch_related(
-                "registros__proyecto", "registros__tipo_actividad"
-            )
-        )
-        # El desglose se calcula aquí y no en la plantilla: quien aprueba
-        # necesita ver a qué se fueron las horas, no solo el total.
-        for dia in dias:
-            dia.detalle = svc.resumen(dia)
-
         ctx = {
-            "dias": dias,
+            "dias": svc.dias_por_aprobar(request.user),
             "es_admin": es_admin(request.user),
         }
         ctx.update(extra)
@@ -47,24 +42,33 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, self.template, self._ctx(request))
 
     def post(self, request):
-        dia = DiaLegalizado.objects.filter(pk=request.POST.get("dia")).first()
-        if dia is None:
-            return render(request, self.template, self._ctx(request, error="Ese día no existe."))
+        registro = (
+            RegistroHoras.objects
+            .select_related("dia", "dia__recurso", "proyecto", "tipo_actividad")
+            .filter(pk=request.POST.get("registro"))
+            .first()
+        )
+        if registro is None:
+            return render(request, self.template, self._ctx(request, error="Esa actividad no existe."))
+
+        etiqueta = registro.proyecto.codigo if registro.proyecto_id else registro.tipo_actividad.nombre
+        quien = registro.dia.recurso.nombre
+        fecha = registro.dia.fecha
 
         accion = request.POST.get("accion")
         try:
             if accion == "aprobar":
-                svc.aprobar_dia(dia, request.user)
+                svc.aprobar_registro(registro, request.user)
                 messages.success(
                     request,
-                    f"Aprobadas las {dia.total_horas} h de {dia.recurso.nombre} "
-                    f"del {dia.fecha:%d/%m/%Y}.",
+                    f"Aprobadas {registro.horas} h de «{etiqueta}» — {quien}, {fecha:%d/%m/%Y}.",
                 )
             elif accion == "devolver":
-                svc.devolver_dia(dia, request.user, request.POST.get("motivo", ""))
+                svc.devolver_registro(registro, request.user, request.POST.get("motivo", ""))
                 messages.success(
                     request,
-                    f"Día del {dia.fecha:%d/%m/%Y} devuelto a {dia.recurso.nombre} para corregir.",
+                    f"«{etiqueta}» devuelta a {quien} para corregir. "
+                    "El resto de actividades del día no se han tocado.",
                 )
             else:
                 return render(request, self.template, self._ctx(request, error="Acción inválida."))

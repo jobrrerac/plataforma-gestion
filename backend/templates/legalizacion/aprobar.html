@@ -96,7 +96,13 @@
     </div>
 
     <div class="lineas">
-      {% for r in dia.detalle.registros %}
+      {% comment %}
+        Cada actividad se aprueba por separado. Quien firma responde por un
+        proyecto concreto: aprobar el dia entero obligaba a un PM a avalar
+        horas de formacion o de proyectos ajenos, y en un dia repartido entre
+        dos PM el primero en llegar decidia tambien por el segundo.
+      {% endcomment %}
+      {% for r in dia.pendientes_mios %}
       <div class="linea">
         <div>
           {% if r.proyecto %}
@@ -109,37 +115,65 @@
             {% endif %}
           {% else %}
             <span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>
+            <span class="chip c-mio">Sin proyecto · solo Admin</span>
           {% endif %}
+          <div class="det mt-1">{{ r.detalle }}</div>
+
+          <div class="d-flex gap-2 mt-2 flex-wrap">
+            <form method="post" onsubmit="return confirm('¿Aprobar estas {{ r.horas }} h?')">
+              {% csrf_token %}
+              <input type="hidden" name="accion" value="aprobar">
+              <input type="hidden" name="registro" value="{{ r.pk }}">
+              <button type="submit" class="btn-aprobar"><i class="bi bi-check-lg me-1"></i>Aprobar</button>
+            </form>
+            <button type="button" class="btn-devolver" data-bs-toggle="collapse"
+                    data-bs-target="#devolver-{{ r.pk }}">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Devolver
+            </button>
+          </div>
+
+          <div class="collapse mt-2" id="devolver-{{ r.pk }}">
+            <form method="post" class="d-flex gap-2 flex-wrap">
+              {% csrf_token %}
+              <input type="hidden" name="accion" value="devolver">
+              <input type="hidden" name="registro" value="{{ r.pk }}">
+              <input type="text" name="motivo" class="form-control form-control-sm"
+                     style="flex:1;min-width:220px" maxlength="300" required
+                     placeholder="¿Qué hay que corregir? Lo verá quien registró el día">
+              <button type="submit" class="btn-devolver" style="white-space:nowrap">
+                Confirmar devolución
+              </button>
+            </form>
+          </div>
+        </div>
+        <div class="h">{{ r.horas }} h</div>
+      </div>
+      {% endfor %}
+
+      {% if dia.otros %}
+      {% comment %}
+        El resto del dia se ve pero no se toca: quien aprueba necesita el
+        contexto de la jornada completa para juzgar sus horas, sin poder
+        firmar lo que no le corresponde.
+      {% endcomment %}
+      <div class="det mt-3 mb-1" style="font-weight:600">
+        Resto del día (no te corresponde firmarlo)
+      </div>
+      {% for r in dia.otros %}
+      <div class="linea" style="opacity:.62">
+        <div>
+          {% if r.proyecto %}
+            <strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
+          {% else %}
+            <span class="chip c-otra">{{ r.tipo_actividad.nombre }}</span>
+          {% endif %}
+          <span class="chip">{{ r.get_estado_display }}</span>
           <div class="det mt-1">{{ r.detalle }}</div>
         </div>
         <div class="h">{{ r.horas }} h</div>
       </div>
       {% endfor %}
-    </div>
-
-    <div class="d-flex gap-2 mt-3 flex-wrap">
-      <form method="post" onsubmit="return confirm('¿Aprobar estas horas?')">
-        {% csrf_token %}
-        <input type="hidden" name="accion" value="aprobar">
-        <input type="hidden" name="dia" value="{{ dia.pk }}">
-        <button type="submit" class="btn-aprobar"><i class="bi bi-check-lg me-1"></i>Aprobar</button>
-      </form>
-      <button type="button" class="btn-devolver" data-bs-toggle="collapse"
-              data-bs-target="#devolver-{{ dia.pk }}">
-        <i class="bi bi-arrow-counterclockwise me-1"></i>Devolver para corregir
-      </button>
-    </div>
-
-    <div class="collapse mt-3" id="devolver-{{ dia.pk }}">
-      <form method="post" class="d-flex gap-2 flex-wrap">
-        {% csrf_token %}
-        <input type="hidden" name="accion" value="devolver">
-        <input type="hidden" name="dia" value="{{ dia.pk }}">
-        <input type="text" name="motivo" class="form-control form-control-sm" style="flex:1;min-width:220px"
-               maxlength="300" required
-               placeholder="¿Qué hay que corregir? Lo verá quien registró el día">
-        <button type="submit" class="btn-devolver" style="white-space:nowrap">Confirmar devolución</button>
-      </form>
+      {% endif %}
     </div>
   </div>
   {% empty %}
