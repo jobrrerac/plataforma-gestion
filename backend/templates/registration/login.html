@@ -105,10 +105,20 @@
   <div class="login-title">Plataforma de <span>Recursos</span></div>
   <div class="login-sub">Accede con tu usuario inetumoffshore</div>
 
-  {% if form.errors %}
+  {% if error_bloqueo %}
+  {% comment %}
+    El bloqueo se pinta dentro del formulario. Antes salía como un 403 en texto
+    plano sobre la página en blanco, que parecía una caída de la aplicación en
+    vez de un límite con su motivo y su plazo.
+  {% endcomment %}
+  <div class="errornote">
+    <i class="bi bi-shield-lock me-1"></i>
+    {{ error_bloqueo }}
+  </div>
+  {% elif form.errors %}
   <div class="errornote">
     <i class="bi bi-exclamation-circle me-1"></i>
-    Usuario o contraseña incorrectos. Intentá de nuevo.
+    Usuario o contraseña incorrectos. Inténtalo de nuevo.
   </div>
   {% endif %}
 
