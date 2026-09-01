@@ -62,6 +62,10 @@ APP_ID = "d47ef129-5910-49e1-be94-36f20be7b7f5"  # Plataforma Gestion de Recurso
 DOMINIO_CORPORATIVO = "inetum.com"
 DOMINIO_ENTRA = "inetumoffshore.onmicrosoft.com"
 
+URL_APLICACION = (
+    "https://ca-platgestion-prod-eus2-001.redocean-b9f4e1e1.eastus2.azurecontainerapps.io/"
+)
+
 PLANTILLA_RECURSOS = RAIZ / "docs" / "plantillas" / "recursos.csv"
 SALIDA_CREDENCIALES = RAIZ / "credenciales_entra.csv"  # cubierto por .gitignore: credenciales*.csv
 
@@ -211,6 +215,40 @@ def crear_usuario(upn, nombre_visible, alias, password, intentos=5):
         )
 
 
+def invitar_b2b(email_corporativo, nombre_visible, url_destino, avisar=True):
+    """Invita a la persona como usuaria externa con su cuenta corporativa.
+
+    Entra crea un objeto Guest cuyo UPN es una deformacion de su correo
+    (`nombre_dominio#EXT#@tenant`). El rol NO se asigna aqui: lo pone Terraform
+    desde `invitados_b2b`, para que el control de acceso viva en un solo sitio.
+
+    Devuelve (objeto, ya_existia).
+    """
+    existente = az(
+        "ad", "user", "list",
+        "--filter", f"mail eq '{email_corporativo}' and userType eq 'Guest'",
+        "-o", "json",
+    )
+    if existente:
+        return existente[0], True
+
+    creada = az(
+        "rest", "--method", "POST",
+        "--url", "https://graph.microsoft.com/v1.0/invitations",
+        "--headers", "Content-Type=application/json",
+        "-o", "json",
+        entrada_json={
+            "invitedUserEmailAddress": email_corporativo,
+            "invitedUserDisplayName": nombre_visible,
+            "inviteRedirectUrl": url_destino,
+            "sendInvitationMessage": avisar,
+        },
+    )
+    return {"id": creada["invitedUser"]["id"],
+            "userPrincipalName": f"{email_corporativo} (invitacion enviada)",
+            "redeem_url": creada.get("inviteRedeemUrl", "")}, False
+
+
 def identidades_de(upn_entra, email_corporativo):
     """Todas las identidades de esa persona en el tenant.
 
@@ -286,7 +324,7 @@ def registrar_credencial(upn, email_corporativo, rol, password):
 
 
 # ---------------------------------------------------------------------------
-def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False, sin_rol=False):
+def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False, sin_rol=False, invitar=False):
     alias, email_corporativo, upn = normalizar_email(entrada)
     ficha = ficha_en_plantilla(email_corporativo) or {}
 
@@ -300,6 +338,21 @@ def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False, sin_ro
         raise Fallo(f"{email_corporativo}: rol '{rol}' no existe. Disponibles: {', '.join(sorted(roles))}")
 
     nombre_visible = ficha.get("nombre") or alias
+
+    if invitar:
+        if simular:
+            print("")
+            print(f"  {email_corporativo}")
+            print(f"    nombre         {nombre_visible}")
+            print("    accion         se invitaria por B2B (simulacro)")
+            return None
+        objeto, ya_estaba = invitar_b2b(email_corporativo, nombre_visible, URL_APLICACION)
+        print("")
+        print(f"  {email_corporativo}")
+        print(f"    invitacion     {'ya existia' if ya_estaba else 'enviada por correo'}")
+        print("    app role       lo asigna Terraform (invitados_b2b)")
+        return None
+
     identidades = identidades_de(upn, email_corporativo)
 
     print("")
@@ -372,6 +425,10 @@ def main():
         "--sin-rol", action="store_true", dest="sin_rol",
         help="crea la identidad y NO toca el app role; lo pone Terraform",
     )
+    p.add_argument(
+        "--invitar", action="store_true",
+        help="invita por B2B con la cuenta corporativa, en vez de crear cuenta local",
+    )
     args = p.parse_args()
 
     try:
@@ -384,7 +441,8 @@ def main():
         credenciales, errores = [], []
         for entrada in args.emails:
             try:
-                r = procesar(entrada, args.rol, roles, sp_id, args.simular, args.solo_rol, args.sin_rol)
+                r = procesar(entrada, args.rol, roles, sp_id, args.simular, args.solo_rol,
+                             args.sin_rol, args.invitar)
                 if r:
                     credenciales.append(r)
             except Fallo as e:

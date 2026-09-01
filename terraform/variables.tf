@@ -398,8 +398,37 @@ variable "invitados_b2b" {
   description = "Quien entra por B2B con su cuenta corporativa. El rol sale de roles_entra."
   type        = set(string)
   default = [
-    # Invitada el 31/08/2026 para validar el acceso B2B sin segunda contrasena.
+    # Las 28 del alta masiva, invitadas el 31/08/2026 para que entren con su
+    # cuenta corporativa y sin una segunda contrasena. El rol de cada una sale
+    # de `roles_entra`, no de aqui.
+    "andres.moreno-suarez",
+    "andres.vasquez-acosta",
+    "carmen.leon",
+    "daniel.florez-miranda",
+    "daniel.guzman",
+    "daniel.martinez-forero",
     "erika.castiblanco-monroy",
+    "gustavo.villazon-gonzalez",
+    "ingrid.cespedes-diaz",
+    "ivan.rodriguez-parra",
+    "jhonathan.gutierrez-meneses",
+    "jose-joaquin.guevara",
+    "juan.murcia-sanchez",
+    "juan.pena-ayala",
+    "julian.vera-soto",
+    "laura.paiba-celeita",
+    "luisa.acosta-pelaez",
+    "luisa.hernandez-serrato",
+    "martin.medina-novoa",
+    "michael-steven.pinzon",
+    "nicolas.paez-torres",
+    "sandra.chavarria-romero",
+    "santiago.ariza-chinchilla",
+    "santiago.martinez-herrera",
+    "victor.ortega-soto",
+    "william.franco",
+    "wilson.alarcon-sierra",
+    "yilma.espitia-sanabria",
   ]
 
   validation {
