@@ -303,7 +303,47 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
-## 14. DASH — Dashboard
+## 14. APD — Aprobador delegado
+
+**Qué es y por qué importa.** Hasta ahora las horas de un proyecto solo las
+aprobaba su PM (o un Admin como válvula). Un proyecto puede ahora designar un
+**aprobador delegado**: alguien concreto que aprueba las horas de *ese*
+proyecto sin ser su PM.
+
+Lo que hace especial este caso: **el delegado puede ser un ingeniero**. La
+autorización no viene de su rol, viene de figurar en el proyecto. Esa es la
+parte que hay que romper si se puede.
+
+**Precondición.** Un Admin abre `/admin/core/proyecto/`, entra a un proyecto y
+rellena **Aprobador delegado** con una cuenta de rol Ingeniero. Hace falta que
+ese proyecto tenga horas registradas y pendientes de aprobar.
+
+| ID | Título | Pasos | Resultado esperado |
+|---|---|---|---|
+| APD-01 | **Designar un delegado** | Como Admin, poner un ingeniero como aprobador delegado de un proyecto | Se guarda. La columna aparece en el listado de proyectos |
+| APD-02 | **El delegado ve el menú** | Entrar como ese ingeniero | Le aparece **"Aprobar horas"** en la barra superior, que antes no tenía |
+| APD-03 | **El delegado entra** | Abrir `/horas/aprobar/` | Entra (200). **No** un 403 |
+| APD-04 | **Solo ve lo suyo** | Mirar la cola | Solo las actividades del proyecto donde es delegado. Las de otros proyectos no aparecen como aprobables |
+| APD-05 | **El delegado aprueba** | Aprobar una actividad de su proyecto | Queda aprobada, y **con su nombre** como aprobador |
+| APD-06 | **El delegado devuelve** | Devolver una actividad con motivo | Vuelve a su autor, igual que si lo hiciera el PM |
+| APD-07 | **No alcanza otros proyectos** | Intentar aprobar una actividad de un proyecto donde NO es delegado | No lo permite. El mensaje dice que no es PM ni aprobador delegado |
+| APD-08 | **No aprueba lo que no cuelga de un proyecto** | Intentar aprobar una actividad de Estudio o Entrenamiento | No lo permite: sin proyecto no hay a quién delegar, eso es del Admin |
+| APD-09 | **El PM no pierde nada** | Como PM del proyecto, aprobar otra actividad | Sigue pudiendo. Designar un delegado **añade**, no sustituye |
+| APD-10 | **El Admin sigue pudiendo con todo** | Como Admin, aprobar en ese mismo proyecto | Sin cambios |
+| APD-11 | **Un ingeniero SIN delegación sigue fuera** | Con otra cuenta Ingeniero cualquiera, abrir `/horas/aprobar/` | **403**, y no le sale el enlace en el menú |
+| APD-12 | **La delegación NO abre la puerta a costos** | Como el ingeniero delegado, buscar tarifas o costos en cualquier pantalla | **No los ve en ningún sitio.** Aprobar horas no puede ser una puerta trasera a los datos económicos |
+| APD-13 | **Quitar la delegación la revoca** | Como Admin, vaciar el campo. Volver a entrar como ese ingeniero | Pierde el enlace y `/horas/aprobar/` vuelve a dar 403 |
+| APD-14 | Un proyecto sin delegado no cambia | Mirar un proyecto con el campo vacío | Se comporta como siempre: solo su PM y los Admin |
+
+**APD-12 es el caso crítico de este bloque.** Todo lo demás es funcionalidad; ese
+es el que protege una regla no negociable del proyecto — *el rol Ingeniero nunca
+ve costos*. Si se encuentra una sola pantalla donde el delegado vea una tarifa o
+un importe, es un fallo grave aunque todo lo demás funcione.
+
+**APD-11 es su pareja.** La delegación tiene que ser una llave para una puerta,
+no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
+
+## 15. DASH — Dashboard
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -315,7 +355,7 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
-## 15. AUD — Auditoría y trazabilidad
+## 16. AUD — Auditoría y trazabilidad
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -326,7 +366,7 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
-## 16. INF — Infraestructura y despliegue
+## 17. INF — Infraestructura y despliegue
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -339,7 +379,7 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
-## 17. Matriz rol × acción
+## 18. Matriz rol × acción
 
 | Acción | Ingeniero | PM | Admin |
 |---|:---:|:---:|:---:|
@@ -360,7 +400,7 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
-## 18. Comportamientos conocidos (no reportar como bug)
+## 19. Comportamientos conocidos (no reportar como bug)
 
 1. **Arranque en frío de 10-30 s** tras inactividad. Es el precio de `min-replicas 0`, decidido a propósito.
 2. **Una sola réplica.** Sin autoescalado, por decisión: se espera a ver rendimiento real.

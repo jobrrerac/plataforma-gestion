@@ -145,11 +145,11 @@ class RecursoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 class ProyectoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = [
         "codigo", "codigo_pep", "grafo", "nombre", "cliente",
-        "estado", "facturable", "pm", "fecha_inicio", "fecha_fin",
+        "estado", "facturable", "pm", "aprobador_delegado", "fecha_inicio", "fecha_fin",
     ]
     # Editables desde la propia lista: son los dos campos que más se cambian
     # sobre la marcha, y entrar a cada proyecto para marcar una casilla sobra.
     list_editable = ["estado", "facturable"]
-    list_filter = ["estado", "facturable"]
+    list_filter = ["estado", "facturable", "pm", "aprobador_delegado"]
     search_fields = ["codigo", "codigo_pep", "grafo", "nombre", "cliente"]
     exclude = ["deleted_at", "created_at", "updated_at"]

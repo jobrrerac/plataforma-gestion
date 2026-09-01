@@ -299,3 +299,111 @@ class SesionPorInactividadTests(TestCase):
             "Sin esto el plazo cuenta desde el login y echa a quien está trabajando.",
         )
         self.assertTrue(prod.SESSION_EXPIRE_AT_BROWSER_CLOSE)
+
+
+class SinPasswordNoLlegaAProduccionTests(TestCase):
+    """El backend de desarrollo no puede existir fuera de local.
+
+    Entrar sin contraseña es lo más peligroso que se le puede añadir a Django:
+    si ese backend llegara a producción, cualquiera entraría como cualquiera
+    escribiendo un nombre de usuario.
+
+    Por eso hay tres cerrojos y este test vigila el que importa: que el módulo
+    no aparezca en el perfil de producción. Los otros dos —`DEBUG` y
+    `LOGIN_SIN_PASSWORD`— se comprueban abajo.
+    """
+
+    def test_produccion_no_lo_incluye(self):
+        import importlib
+
+        prod = importlib.import_module("config.settings.production")
+        backends = " ".join(prod.AUTHENTICATION_BACKENDS)
+        self.assertNotIn("backends_dev", backends)
+        self.assertNotIn("SinPassword", backends)
+
+    def test_produccion_no_define_la_bandera(self):
+        import importlib
+
+        prod = importlib.import_module("config.settings.production")
+        self.assertFalse(getattr(prod, "LOGIN_SIN_PASSWORD", False))
+
+    def test_base_no_lo_incluye(self):
+        """`base.py` lo comparten los dos perfiles: ahí no puede estar."""
+        import importlib
+
+        base = importlib.import_module("config.settings.base")
+        self.assertNotIn("backends_dev", " ".join(base.AUTHENTICATION_BACKENDS))
+
+    @override_settings(DEBUG=False, LOGIN_SIN_PASSWORD=True)
+    def test_sin_debug_no_autentica(self):
+        from apps.accounts.backends_dev import LoginSinPasswordDevBackend
+
+        User.objects.create_user(username="dev.uno", password="x")
+        self.assertIsNone(
+            LoginSinPasswordDevBackend().authenticate(None, username="dev.uno")
+        )
+
+    @override_settings(DEBUG=True, LOGIN_SIN_PASSWORD=False)
+    def test_sin_la_bandera_no_autentica(self):
+        from apps.accounts.backends_dev import LoginSinPasswordDevBackend
+
+        User.objects.create_user(username="dev.dos", password="x")
+        self.assertIsNone(
+            LoginSinPasswordDevBackend().authenticate(None, username="dev.dos")
+        )
+
+    @override_settings(DEBUG=True, LOGIN_SIN_PASSWORD=True)
+    def test_con_los_dos_cerrojos_si_autentica(self):
+        from apps.accounts.backends_dev import LoginSinPasswordDevBackend
+
+        u = User.objects.create_user(username="dev.tres", password="x")
+        self.assertEqual(
+            LoginSinPasswordDevBackend().authenticate(None, username="dev.tres"), u
+        )
+
+    @override_settings(DEBUG=True, LOGIN_SIN_PASSWORD=True)
+    def test_una_cuenta_inactiva_sigue_fuera(self):
+        from apps.accounts.backends_dev import LoginSinPasswordDevBackend
+
+        User.objects.create_user(username="dev.baja", password="x", is_active=False)
+        self.assertIsNone(
+            LoginSinPasswordDevBackend().authenticate(None, username="dev.baja")
+        )
+
+    # Durante los tests la bandera esta forzada a False, asi que
+    # AUTHENTICATION_BACKENDS no trae el backend de desarrollo. Estos dos pasan
+    # por `authenticate()`, asi que hay que declararlo aqui.
+    BACKENDS_DEV = [
+        "apps.accounts.backends_dev.LoginSinPasswordDevBackend",
+        "django.contrib.auth.backends.ModelBackend",
+    ]
+
+    @override_settings(DEBUG=True, LOGIN_SIN_PASSWORD=True, AUTHENTICATION_BACKENDS=BACKENDS_DEV)
+    def test_el_formulario_de_produccion_no_se_usa_en_dev(self):
+        """El campo opcional no basta: hace falta el formulario.
+
+        `AuthenticationForm.clean()` solo llama a `authenticate()` cuando la
+        contraseña tiene contenido. Con el campo vacío se saltaba esa rama, el
+        formulario quedaba válido con `user_cache = None`, y el fallo aparecía
+        después al iniciar sesión con None.
+        """
+        from apps.accounts.backends_dev import LoginSinPasswordForm
+
+        User.objects.create_user(username="dev.form", password="x")
+        formulario = LoginSinPasswordForm(data={"username": "dev.form", "password": ""})
+        self.assertTrue(formulario.is_valid(), formulario.errors)
+        self.assertIsNotNone(formulario.get_user())
+
+    @override_settings(DEBUG=True, LOGIN_SIN_PASSWORD=True, AUTHENTICATION_BACKENDS=BACKENDS_DEV)
+    def test_el_formulario_rechaza_a_quien_no_existe(self):
+        from apps.accounts.backends_dev import LoginSinPasswordForm
+
+        formulario = LoginSinPasswordForm(data={"username": "fantasma", "password": ""})
+        self.assertFalse(formulario.is_valid())
+
+    def test_en_produccion_la_contrasena_sigue_siendo_obligatoria(self):
+        from django.contrib.auth.forms import AuthenticationForm
+
+        User.objects.create_user(username="prod.form", password="Clave2026!")
+        formulario = AuthenticationForm(data={"username": "prod.form", "password": ""})
+        self.assertFalse(formulario.is_valid())

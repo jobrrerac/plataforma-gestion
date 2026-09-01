@@ -228,5 +228,87 @@
     {% endif %}
   </div>
 
+  {% comment %}
+    Las dos secciones de abajo son el contraste que da sentido al modulo: arriba
+    esta lo que se le PIDIO a esta persona, aqui lo que de verdad hizo y alguien
+    dio por bueno. Y las ausencias, para que quien planifica las vea antes de
+    asignar y no cuando el calendario ya no cuadra.
+  {% endcomment %}
+
+  <!-- Proximas ausencias -->
+  <div class="mb-4">
+    <p class="section-title mb-3">Próximas ausencias</p>
+    {% if ausencias %}
+    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+      <table class="table asig-table mb-0">
+        <thead><tr><th>Tipo</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
+        <tbody>
+          {% for a in ausencias %}
+          <tr>
+            <td><span class="fw-semibold">{{ a.get_tipo_display }}</span></td>
+            <td style="white-space:nowrap;font-size:.82rem">{{ a.fecha_inicio }}</td>
+            <td style="white-space:nowrap;font-size:.82rem">{{ a.fecha_fin }}</td>
+            <td class="text-muted" style="font-size:.8rem">{{ a.motivo|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty-state"><i class="bi bi-calendar-check me-2"></i>Sin ausencias aprobadas por delante.</p>
+    {% endif %}
+  </div>
+
+  <!-- Horas aprobadas -->
+  <div class="mb-4">
+    <p class="section-title mb-3">Horas aprobadas</p>
+    {% if horas_aprobadas %}
+    <div class="d-flex gap-3 flex-wrap mb-3">
+      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">Total</div>
+        <div class="fw-bold" style="font-size:1.15rem">{{ total_aprobadas }} h</div>
+      </div>
+      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">Facturables</div>
+        <div class="fw-bold" style="font-size:1.15rem;color:var(--inet-ok)">{{ facturables_aprobadas }} h</div>
+      </div>
+      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">No facturables</div>
+        <div class="fw-bold" style="font-size:1.15rem;color:var(--inet-tenue)">{{ no_facturables_aprobadas }} h</div>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+      <table class="table asig-table mb-0">
+        <thead>
+          <tr><th>Día</th><th>Actividad</th><th>Qué hizo</th><th class="text-end">Horas</th><th>Aprobó</th></tr>
+        </thead>
+        <tbody>
+          {% for r in horas_aprobadas %}
+          <tr>
+            <td style="white-space:nowrap;font-size:.82rem">{{ r.dia.fecha }}</td>
+            <td>
+              {% if r.proyecto %}
+                <span class="fw-semibold">{{ r.proyecto.codigo }}</span>
+                {% if not r.facturable %}<span class="text-muted" style="font-size:.72rem"> · interno</span>{% endif %}
+              {% else %}
+                <span class="text-muted">{{ r.tipo_actividad.nombre }}</span>
+              {% endif %}
+            </td>
+            <td class="text-muted" style="font-size:.8rem">{{ r.detalle }}</td>
+            <td class="text-end fw-semibold">{{ r.horas }} h</td>
+            <td class="text-muted" style="font-size:.78rem">
+              {{ r.aprobado_por.get_full_name|default:r.aprobado_por.username|default:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-muted mt-2" style="font-size:.78rem">Se muestran los últimos 25 registros aprobados.</div>
+    {% else %}
+    <p class="empty-state"><i class="bi bi-clock-history me-2"></i>Todavía no hay horas aprobadas.</p>
+    {% endif %}
+  </div>
+
 </div>
 {% endblock %}

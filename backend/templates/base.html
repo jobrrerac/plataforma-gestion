@@ -349,7 +349,7 @@
          class="inet-nav-link {% block active_novedades %}{% endblock %}">
         <i class="bi bi-calendar-heart"></i> Novedades
       </a>
-      {% if es_admin_o_pm %}
+      {% if puede_aprobar_horas %}
       <a href="/horas/aprobar/"
          class="inet-nav-link {% block active_horas_aprobar %}{% endblock %}">
         <i class="bi bi-clipboard-check"></i> Aprobar horas

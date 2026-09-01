@@ -18,6 +18,8 @@ from django.views import View
 
 from apps.accounts.roles import es_admin, es_admin_o_pm
 
+from apps.core.models import Proyecto
+
 from . import services as svc
 from .models import RegistroHoras
 
@@ -28,7 +30,16 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
     raise_exception = True
 
     def test_func(self):
-        return es_admin_o_pm(self.request.user)
+        """Entra quien tenga algo que aprobar, no quien tenga cierto rol.
+
+        Un aprobador delegado puede ser ingeniero: si el permiso se pidiera por
+        rol se quedaria fuera de su propia pantalla. Se pregunta por la
+        capacidad, que es lo que de verdad importa aqui.
+        """
+        usuario = self.request.user
+        return es_admin_o_pm(usuario) or Proyecto.objects.filter(
+            aprobador_delegado=usuario
+        ).exists()
 
     def _ctx(self, request, **extra):
         ctx = {

@@ -51,6 +51,18 @@ class LoginRateLimitView(LoginView):
     que el contador por IP lo cubria: no lo hacia, y ademas bloqueaba a todos.
     """
 
+    def get_form_class(self):
+        """En desarrollo, un formulario que autentica sin contrasena.
+
+        Solo con DEBUG y LOGIN_SIN_PASSWORD activos, la misma pareja de
+        cerrojos del backend. En produccion se usa el de siempre, y hay tests
+        que lo comprueban.
+        """
+        if getattr(settings, "DEBUG", False) and getattr(settings, "LOGIN_SIN_PASSWORD", False):
+            from apps.accounts.backends_dev import LoginSinPasswordForm
+            return LoginSinPasswordForm
+        return super().get_form_class()
+
     def _bloqueada(self, request):
         clave = _clave_usuario(request)
         return bool(clave) and cache.get(clave, 0) >= _MAX_INTENTOS
