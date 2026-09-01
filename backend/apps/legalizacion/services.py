@@ -212,6 +212,11 @@ def registrar_dia(dia, usuario):
 
     # Se relee bajo bloqueo: con dos pestañas abiertas, la segunda confirmación
     # cerraría un día ya cerrado y pisaría la marca de tiempo.
+    #
+    # Ojo: esto rebindea `dia` a otro objeto. Quien llame y siga usando el suyo
+    # vera datos viejos —paso: el mensaje de exito decia "0.0 h"— asi que al
+    # final se sincroniza el original ademas de devolver el fresco.
+    original = dia
     dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
     _exigir_editable(dia)
 
@@ -244,6 +249,8 @@ def registrar_dia(dia, usuario):
     ])
     # Si todo lo que quedaba ya estaba aprobado, el día nace aprobado.
     dia.recalcular_estado()
+    if original is not dia:
+        original.refresh_from_db()
     return dia
 
 

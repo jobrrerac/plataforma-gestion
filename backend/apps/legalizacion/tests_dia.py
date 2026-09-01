@@ -719,3 +719,66 @@ class FechasNoLegalizablesTests(BaseLegalizacion):
         resp = self.client.get(reverse("horas"), {"fecha": self.fecha.isoformat()})
         self.assertTrue(resp.context["modo_edicion"])
         self.assertFalse(resp.context["fecha_no_legalizable"])
+
+
+class MensajeDeRegistroTests(BaseLegalizacion):
+    """El mensaje de éxito tiene que decir las horas que se registraron.
+
+    Reportado en producción: al cerrar el día salía «registrado con 0.0 h»
+    mientras la base guardaba 8.5.
+
+    `registrar_dia` relee el día bajo bloqueo —correcto: con dos pestañas
+    abiertas la segunda confirmación pisaría la primera— pero eso **rebindea**
+    la variable a otro objeto. La vista se quedaba con el suyo, anterior, cuyo
+    `total_horas` sigue a cero porque solo se rellena al registrar.
+
+    No había riesgo para los datos: lo guardado siempre estuvo bien. Lo que
+    mentía era la pantalla, que es peor de lo que parece — quien lee «0.0 h»
+    razonablemente piensa que su día se perdió.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.assignments.models import Asignacion
+        Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.cliente,
+            fecha_inicio=self.fecha, fecha_fin=self.fecha,
+            horas_totales=34, intensidad_diaria=8.5,
+            estado="APROBADA", solicitada_por=self.pm,
+        )
+        self.client.force_login(self.ing)
+
+    def _dia_completo(self):
+        dia = self._dia()
+        svc.guardar_renglones(dia, [{
+            "tipo_actividad": self.t_proyecto, "proyecto": self.cliente,
+            "horas": "8.5", "detalle": "Revision de casos",
+        }])
+        return dia
+
+    def test_el_mensaje_dice_las_horas_reales(self):
+        self._dia_completo()
+        resp = self.client.post(reverse("horas"), {
+            "accion": "registrar", "fecha": self.fecha.isoformat(),
+        }, follow=True)
+        mensajes = [str(m) for m in resp.context["messages"]]
+        self.assertTrue(mensajes, "no se emitio ningun mensaje")
+        self.assertIn("8,5 h", mensajes[0].replace(".", ","))
+        self.assertNotIn("0,0 h", mensajes[0].replace(".", ","))
+
+    def test_lo_guardado_coincide_con_lo_que_dice_el_mensaje(self):
+        dia = self._dia_completo()
+        self.client.post(reverse("horas"), {
+            "accion": "registrar", "fecha": self.fecha.isoformat(),
+        })
+        dia.refresh_from_db()
+        self.assertEqual(dia.total_horas, Decimal("8.5"))
+
+    def test_el_servicio_deja_al_dia_de_quien_llama_actualizado(self):
+        """Guarda contra que el error vuelva por otro llamador."""
+        dia = self._dia_completo()
+        self.assertEqual(dia.total_horas, Decimal("0"))
+        svc.registrar_dia(dia, self.ing)
+        # Sin refrescar a mano: el servicio deja el objeto recibido al dia.
+        self.assertEqual(dia.total_horas, Decimal("8.5"))
+        self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)

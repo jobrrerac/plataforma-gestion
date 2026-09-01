@@ -211,9 +211,13 @@ class LegalizarDiaView(LoginRequiredMixin, View):
         if dia is None:
             raise ValidationError("No hay nada que registrar en este día.")
 
-        svc.registrar_dia(dia, request.user)
+        # El servicio relee el dia bajo bloqueo y devuelve ESE objeto. Usar el
+        # de aqui hacia que el mensaje dijera "registrado con 0.0 h", porque
+        # `total_horas` solo se rellena al registrar y esta copia era anterior.
+        dia = svc.registrar_dia(dia, request.user)
         messages.success(
             request,
-            f"Día {fecha:%d/%m/%Y} registrado con {dia.total_horas} h. Ya no se puede modificar.",
+            f"Día {fecha:%d/%m/%Y} registrado con {dia.total_horas} h. "
+            "Queda pendiente de aprobación y ya no se puede modificar.",
         )
         return redirect(f"{request.path}?fecha={fecha.isoformat()}")
