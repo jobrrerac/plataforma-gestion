@@ -39,3 +39,30 @@ if LOGIN_SIN_PASSWORD:
         "apps.accounts.backends_dev.LoginSinPasswordDevBackend",
         *AUTHENTICATION_BACKENDS,
     ]
+
+# ---------------------------------------------------------------------------
+# Compartir el localhost por un tunel (SOLO desarrollo)
+# ---------------------------------------------------------------------------
+# Al abrir un tunel —los de VS Code, ngrok, Cloudflare— quien entra por esa URL
+# manda un `Host` que no es localhost, y Django responde 400 con "Invalid
+# HTTP_HOST header". Quien monta el tunel no lo ve, porque el sigue entrando por
+# localhost: solo falla para la persona de fuera.
+#
+# El punto delante del dominio es la forma de Django de decir "y sus
+# subdominios". CSRF_TRUSTED_ORIGINS hace falta ademas del host: sin el, la
+# pagina carga pero el login falla al enviar el formulario.
+#
+# Esto vive SOLO aqui. produccion.py fija sus hosts a partir del FQDN real.
+ALLOWED_HOSTS += [
+    ".devtunnels.ms",       # tuneles de VS Code
+    ".ngrok-free.app",
+    ".ngrok.io",
+    ".trycloudflare.com",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.devtunnels.ms",
+    "https://*.ngrok-free.app",
+    "https://*.ngrok.io",
+    "https://*.trycloudflare.com",
+]
