@@ -5,9 +5,19 @@ tener que crear a mano un cronograma entero. Las asignaciones nacen SOLICITADAS
 y pasan por la aprobación normal: este comando no aprueba nada ni se salta la
 validación de capacidad.
 
+DÓNDE VA EL ARCHIVO: en `backend/planes/`, no aquí al lado. El código va en
+`apps/`, los datos en `planes/`. Esa carpeta se ve como `planes/` dentro del
+contenedor —`docker-compose.yml` monta `./backend:/app` y el Dockerfile copia
+`backend/` entero— así que el mismo archivo sirve en local y en producción sin
+tocar la ruta. Ver `backend/planes/README.md`.
+
 Formato de entrada (TSV, una fila por tarea; es tal cual se copia de un Excel):
 
     recurso <TAB> actividad <TAB> fecha_inicio <TAB> fecha_fin <TAB> horas
+
+Separador TABULADOR, no espacios. Pegado desde Excel sale bien solo; escrito a
+mano en un editor que convierte tabuladores a espacios, no. Si una línea no
+tiene 5 columnas el comando dice cuál es y no escribe nada.
 
   - recurso: el correo, o un nombre parcial que identifique a UNA sola persona.
     "Daniel Guzman" encuentra a "Guzman-Mejia Daniel-Fernando" porque contiene
@@ -23,13 +33,14 @@ persona). Como `intensidad_diaria` guarda un solo decimal, el reparto se
 redondea y el total efectivo puede desviarse unas décimas del pedido; cuando
 pasa, se reporta fila por fila en vez de callarlo.
 
-Uso:
-    python manage.py cargar_asignaciones plan.tsv --proyecto V-25188808/Q \\
-        --solicitante inetum_admin --simular
-    python manage.py cargar_asignaciones plan.tsv --proyecto V-25188808/Q \\
-        --solicitante inetum_admin --confirmar
+Uso (la ruta es relativa a /app, donde corre manage.py):
+    python manage.py cargar_asignaciones planes/mi-plan.tsv \\
+        --proyecto V-25188808/Q --solicitante inetum_admin --simular
+    python manage.py cargar_asignaciones planes/mi-plan.tsv \\
+        --proyecto V-25188808/Q --solicitante inetum_admin --confirmar
 
-Con "-" como archivo lee de la entrada estándar.
+Siempre `--simular` primero: imprime el reparto fila por fila y marca lo que ya
+existe. Una ruta absoluta también vale, y con "-" lee de la entrada estándar.
 """
 
 import csv
@@ -124,10 +135,18 @@ def leer_fecha(valor: str):
 
 
 class Command(BaseCommand):
-    help = "Crea solicitudes de recurso en bloque desde un plan de trabajo en TSV."
+    help = (
+        "Crea solicitudes de recurso en bloque desde un plan de trabajo en TSV "
+        "(recurso, actividad, fecha inicio, fecha fin, horas TOTALES de la tarea). "
+        "El archivo va en backend/planes/, que dentro del contenedor se ve como "
+        "planes/. Ver backend/planes/README.md."
+    )
 
     def add_arguments(self, parser):
-        parser.add_argument("archivo", help="TSV con el plan; '-' para leer de stdin.")
+        parser.add_argument(
+            "archivo",
+            help="Ruta del TSV, relativa a /app (ej: planes/mi-plan.tsv). '-' lee de stdin.",
+        )
         parser.add_argument("--proyecto", required=True, help="Código del proyecto (ej: V-25188808/Q).")
         parser.add_argument(
             "--solicitante", required=True,
