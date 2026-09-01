@@ -178,16 +178,37 @@ def buscar_usuario(upn):
     return encontrados[0] if encontrados else None
 
 
-def crear_usuario(upn, nombre_visible, alias, password):
-    return az(
-        "ad", "user", "create",
-        "--display-name", nombre_visible,
-        "--user-principal-name", upn,
-        "--mail-nickname", alias,
-        "--password", password,
-        "--force-change-password-next-sign-in", "true",
-        "-o", "json",
-    )
+def crear_usuario(upn, nombre_visible, alias, password, intentos=5):
+    """Crea la cuenta, reintentando con otra contrasena si Entra la rechaza.
+
+    Entra no solo exige complejidad: tambien rechaza contrasenas que contengan
+    fragmentos del nombre o del UPN. Con nombres largos eso pasa por puro azar
+    —tres de diez altas fallaron asi la primera vez—, y como la contrasena es
+    aleatoria, generar otra lo resuelve. Fallar el alta entera por eso obligaria
+    a repetir el comando a mano.
+    """
+    ultimo_error = None
+    for intento in range(intentos):
+        try:
+            return az(
+                "ad", "user", "create",
+                "--display-name", nombre_visible,
+                "--user-principal-name", upn,
+                "--mail-nickname", alias,
+                "--password", password,
+                "--force-change-password-next-sign-in", "true",
+                "-o", "json",
+            ), password
+        except Fallo as e:
+            if "password" not in str(e).lower():
+                raise
+            ultimo_error = e
+            password = generar_password()
+            if intento == 0:
+                print("    aviso          Entra rechazo la contrasena; probando con otra")
+        raise Fallo(
+            f"{upn}: Entra rechazo {intentos} contrasenas seguidas. {ultimo_error}"
+        )
 
 
 def identidades_de(upn_entra, email_corporativo):
@@ -265,7 +286,7 @@ def registrar_credencial(upn, email_corporativo, rol, password):
 
 
 # ---------------------------------------------------------------------------
-def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False):
+def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False, sin_rol=False):
     alias, email_corporativo, upn = normalizar_email(entrada)
     ficha = ficha_en_plantilla(email_corporativo) or {}
 
@@ -300,10 +321,21 @@ def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False):
         if solo_rol:
             raise Fallo(f"{email_corporativo}: no existe en el tenant y se pidió --solo-rol.")
         password = generar_password()
-        identidades = [crear_usuario(upn, nombre_visible, alias, password)]
+        creado, password = crear_usuario(upn, nombre_visible, alias, password)
+        identidades = [creado]
         print("    cuenta         creada, con cambio de contraseña obligatorio en el primer acceso")
     else:
         print("    cuenta         ya existía, no se toca (ni la contraseña)")
+
+    if sin_rol:
+        # El rol lo pone Terraform desde `roles_entra`, que es donde vive el
+        # control de acceso. Que lo asignara tambien el script es lo que dejo a
+        # daniel.guzman con acceso fuera del estado de Terraform.
+        print("    app role       lo asigna Terraform (--sin-rol)")
+        if password:
+            registrar_credencial(upn, email_corporativo, rol, password)
+            return {"upn": upn, "password": password, "rol": rol}
+        return None
 
     nombres_rol = {v: k for k, v in roles.items()}
     for u in identidades:
@@ -336,6 +368,10 @@ def main():
         "--solo-rol", action="store_true", dest="solo_rol",
         help="solo ajusta el rol de quien ya existe; no da de alta a nadie",
     )
+    p.add_argument(
+        "--sin-rol", action="store_true", dest="sin_rol",
+        help="crea la identidad y NO toca el app role; lo pone Terraform",
+    )
     args = p.parse_args()
 
     try:
@@ -348,7 +384,7 @@ def main():
         credenciales, errores = [], []
         for entrada in args.emails:
             try:
-                r = procesar(entrada, args.rol, roles, sp_id, args.simular, args.solo_rol)
+                r = procesar(entrada, args.rol, roles, sp_id, args.simular, args.solo_rol, args.sin_rol)
                 if r:
                     credenciales.append(r)
             except Fallo as e:

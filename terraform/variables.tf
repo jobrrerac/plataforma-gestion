@@ -369,9 +369,19 @@ variable "roles_entra" {
     "wilson.alarcon-sierra"     = "Ingeniero"
     "yilma.espitia-sanabria"    = "Ingeniero"
 
-    # Sin cuenta en la plataforma todavia. Descomentar al decidir su rol.
-    # "diego.sautter"    = "Ingeniero"
-    # "santiago.hernaiz" = "Ingeniero"
+    "andres.moreno-suarez"        = "Ingeniero"
+    "andres.vasquez-acosta"       = "Ingeniero"
+    "daniel.florez-miranda"       = "Ingeniero"
+    "daniel.martinez-forero"      = "Ingeniero"
+    "jhonathan.gutierrez-meneses" = "Ingeniero"
+    "jose-joaquin.guevara"        = "Ingeniero"
+    "laura.paiba-celeita"         = "Ingeniero"
+    "martin.medina-novoa"         = "Ingeniero"
+    "santiago.martinez-herrera"   = "Ingeniero"
+    "william.franco"              = "Ingeniero"
+
+    # diego.sautter y santiago.hernaiz siguen sin cuenta en la plataforma.
+    # Darles rol es una decision, no un efecto secundario del despliegue.
   }
 
   validation {
