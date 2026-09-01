@@ -107,7 +107,7 @@ def leer_horas(valor: str) -> float:
     try:
         horas = float(texto)
     except ValueError:
-        raise CommandError(f"'{valor}' no son unas horas válidas.")
+        raise CommandError(f"'{valor}' no son unas horas válidas.") from None
     if horas <= 0:
         raise CommandError(f"Las horas deben ser mayores que 0 (llegó '{valor}').")
     return horas
