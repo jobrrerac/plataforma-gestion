@@ -20,7 +20,20 @@ def roles_usuario(request):
         "es_admin": roles.es_admin(usuario),
         "es_admin_o_pm": roles.es_admin_o_pm(usuario),
         "puede_ver_costos": roles.puede_ver_costos(usuario),
+        # Aprobar horas ya no depende del rol: un proyecto puede designar a
+        # cualquiera como aprobador delegado. Sin esto el enlace no le
+        # aparecería y tendría que conocer la URL de memoria.
+        "puede_aprobar_horas": _puede_aprobar_horas(usuario),
     }
+
+
+def _puede_aprobar_horas(usuario):
+    if not usuario or not usuario.is_authenticated:
+        return False
+    if roles.es_admin_o_pm(usuario):
+        return True
+    from apps.core.models import Proyecto
+    return Proyecto.objects.filter(aprobador_delegado=usuario).exists()
 
 
 def _dias_para_caducar():

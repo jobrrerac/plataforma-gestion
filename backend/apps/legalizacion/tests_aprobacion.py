@@ -404,3 +404,91 @@ class FacturablesTests(BaseAprobacion):
         datos = svc.resumen(dia)
         self.assertEqual(datos["aprobadas"], Decimal("4.0"))
         self.assertEqual(len(datos["pendientes"]), 1)
+
+
+class AprobadorDelegadoTests(BaseAprobacion):
+    """Un proyecto puede designar a alguien que apruebe sus horas sin ser PM.
+
+    El punto del diseño: hasta ahora la autorización era **primero el rol** y
+    después el alcance, así que un ingeniero designado moría en el primer
+    filtro. Ahora la designación en el proyecto **es** la autorización.
+
+    Lo que NO le da: costos, tarifas, ni ninguna otra pantalla. Eso lo sigue
+    decidiendo `roles.py`, y esto no lo toca.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # Un ingeniero cualquiera, sin rol de PM ni de Admin.
+        self.delegado = User.objects.create_user(username="delegado.ing", password="Clave2026!")
+        self.delegado.groups.add(Group.objects.get(name=roles.INGENIERO))
+        self.proyecto.aprobador_delegado = self.delegado
+        self.proyecto.save(update_fields=["aprobador_delegado"])
+
+    def test_el_delegado_puede_aprobar_aunque_sea_ingeniero(self):
+        dia = self._dia_repartido()
+        renglon = self._renglon(dia, proyecto=self.proyecto)
+        svc.aprobar_registro(renglon, self.delegado)
+        renglon.refresh_from_db()
+        self.assertEqual(renglon.estado, RegistroHoras.APROBADO)
+        self.assertEqual(renglon.aprobado_por, self.delegado)
+
+    def test_el_delegado_solo_alcanza_su_proyecto(self):
+        dia = self._dia_dos_proyectos()
+        with self.assertRaises(PermissionDenied):
+            svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto_ajeno), self.delegado)
+
+    def test_el_delegado_no_aprueba_actividades_sin_proyecto(self):
+        # Sin proyecto no hay a quién delegar: eso es del Admin.
+        dia = self._dia_repartido()
+        with self.assertRaises(PermissionDenied):
+            svc.aprobar_registro(self._renglon(dia, tipo=self.t_estudio), self.delegado)
+
+    def test_la_cola_del_delegado_trae_lo_suyo(self):
+        self._dia_dos_proyectos()
+        pendientes = list(svc.registros_por_aprobar(self.delegado))
+        self.assertEqual([r.proyecto for r in pendientes], [self.proyecto])
+
+    def test_el_delegado_entra_a_la_pantalla(self):
+        """Sin esto se quedaría fuera de su propia pantalla por no ser PM."""
+        self._dia_repartido()
+        self.client.force_login(self.delegado)
+        self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 200)
+
+    def test_al_delegado_le_sale_el_enlace_en_el_menu(self):
+        self.client.force_login(self.delegado)
+        html = self.client.get(reverse("dashboard")).content.decode()
+        self.assertIn("/horas/aprobar/", html)
+
+    def test_un_ingeniero_sin_delegacion_sigue_fuera(self):
+        """La delegación no puede convertirse en una puerta para cualquiera."""
+        otro = User.objects.create_user(username="otro.ing", password="Clave2026!")
+        otro.groups.add(Group.objects.get(name=roles.INGENIERO))
+        self._dia_repartido()
+
+        self.client.force_login(otro)
+        self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 403)
+        self.assertEqual(len(list(svc.registros_por_aprobar(otro))), 0)
+
+    def test_el_delegado_ingeniero_sigue_sin_ver_costos(self):
+        """Regla no negociable: el rol Ingeniero NUNCA ve costos.
+
+        Aprobar horas no puede ser una puerta trasera a las tarifas.
+        """
+        from apps.accounts import roles as r
+        self.assertFalse(r.puede_ver_costos(self.delegado))
+        self.assertFalse(r.puede_ver_datos_personales(self.delegado))
+
+    def test_el_pm_sigue_pudiendo_con_su_proyecto(self):
+        """Designar un delegado no le quita nada al PM."""
+        dia = self._dia_repartido()
+        svc.aprobar_registro(self._renglon(dia, proyecto=self.proyecto), self.pm)
+        self.assertEqual(self._renglon(dia, proyecto=self.proyecto).aprobado_por, self.pm)
+
+    def test_devolver_tambien_lo_puede_el_delegado(self):
+        dia = self._dia_repartido()
+        svc.devolver_registro(
+            self._renglon(dia, proyecto=self.proyecto), self.delegado, "Detalla mejor",
+        )
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)

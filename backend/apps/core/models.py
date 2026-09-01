@@ -280,6 +280,17 @@ class Proyecto(SoftDeleteModel):
     fecha_fin = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="ACTIVO")
     pm = models.ForeignKey(User, on_delete=models.PROTECT, related_name="proyectos_pm")
+    aprobador_delegado = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="proyectos_aprobador",
+        verbose_name="Aprobador delegado",
+        help_text=(
+            "Quien puede aprobar las horas de este proyecto ademas del PM. "
+            "Puede ser cualquiera —un ingeniero, un admin, otro PM—: la "
+            "delegacion ES la autorizacion, no hace falta que tenga un rol "
+            "concreto. No da acceso a costos ni a nada mas del proyecto."
+        ),
+    )
     facturable = models.BooleanField(
         default=True,
         help_text=(

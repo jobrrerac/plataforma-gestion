@@ -119,9 +119,40 @@
         <label class="fw-semibold mb-0" style="font-size:.82rem;white-space:nowrap">Hasta</label>
         <input type="text" id="fecha-fin" class="form-control form-control-sm" style="width:130px">
       </div>
+      {% comment %}
+        Filtros. Recurso y proyecto se resuelven en la consulta; ocupacion y
+        "sin registrar" se aplican sobre lo ya calculado, porque dependen de la
+        carga del dia y del calendario.
+      {% endcomment %}
+      <select id="f-proyecto" class="form-select form-select-sm" style="width:190px">
+        <option value="">Todos los proyectos</option>
+        {% for p in proyectos_filtro %}
+        <option value="{{ p.pk }}">{{ p.codigo }} — {{ p.nombre|truncatechars:26 }}</option>
+        {% endfor %}
+      </select>
+      <select id="f-recurso" class="form-select form-select-sm" style="width:180px">
+        <option value="">Todas las personas</option>
+        {% for r in recursos_filtro %}
+        <option value="{{ r.pk }}">{{ r.nombre }}</option>
+        {% endfor %}
+      </select>
+      <select id="f-ocupacion" class="form-select form-select-sm" style="width:130px">
+        <option value="">Ocupados y bench</option>
+        <option value="OCUPADO">Solo ocupados</option>
+        <option value="BENCH">Solo bench</option>
+      </select>
+      <div class="form-check mb-0" style="white-space:nowrap">
+        <input class="form-check-input" type="checkbox" id="f-sin-registrar">
+        <label class="form-check-label" for="f-sin-registrar" style="font-size:.8rem">
+          Pendiente de registrar
+        </label>
+      </div>
       <button id="btn-cargar" class="btn btn-sm fw-semibold px-3"
               style="background:var(--inet-pink);color:#fff;border:none">
         <i class="bi bi-search me-1"></i>Cargar
+      </button>
+      <button id="btn-limpiar" class="btn btn-sm btn-outline-secondary px-3" type="button">
+        Limpiar
       </button>
     </div>
   </div>
@@ -297,7 +328,16 @@
     document.getElementById("loading").classList.add("show");
     document.getElementById("btn-cargar").disabled = true;
     try {
-      const resp = await fetch(`/api/dashboard/ocupacion/?fecha_inicio=${inicio}&fecha_fin=${fin}`, {
+      const q = new URLSearchParams({ fecha_inicio: inicio, fecha_fin: fin });
+      const proyecto  = document.getElementById("f-proyecto").value;
+      const recurso   = document.getElementById("f-recurso").value;
+      const ocupacion = document.getElementById("f-ocupacion").value;
+      if (proyecto)  { q.set("proyecto", proyecto); }
+      if (recurso)   { q.set("recurso", recurso); }
+      if (ocupacion) { q.set("ocupacion", ocupacion); }
+      if (document.getElementById("f-sin-registrar").checked) { q.set("sin_registrar", "1"); }
+
+      const resp = await fetch(`/api/dashboard/ocupacion/?${q}`, {
         headers: { "X-Requested-With": "XMLHttpRequest" }
       });
       if (!resp.ok) {
@@ -318,6 +358,17 @@
   }
 
   document.getElementById("btn-cargar").addEventListener("click", cargar);
+  document.getElementById("btn-limpiar").addEventListener("click", function () {
+    document.getElementById("f-proyecto").value = "";
+    document.getElementById("f-recurso").value = "";
+    document.getElementById("f-ocupacion").value = "";
+    document.getElementById("f-sin-registrar").checked = false;
+    cargar();
+  });
+  ["f-proyecto", "f-recurso", "f-ocupacion", "f-sin-registrar"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", cargar);
+  });
+
   cargar();
 </script>
 {% endblock %}

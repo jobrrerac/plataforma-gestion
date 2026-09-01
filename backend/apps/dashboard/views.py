@@ -37,6 +37,18 @@ class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/ocupacion.html"
     login_url = "/login/"
 
+    def get_context_data(self, **kwargs):
+        """Opciones de los desplegables de filtro.
+
+        Se pintan desde el servidor y no por una llamada aparte: son dos listas
+        cortas y estables, y una peticion extra solo para rellenar dos selects
+        es ruido.
+        """
+        ctx = super().get_context_data(**kwargs)
+        ctx["proyectos_filtro"] = Proyecto.objects.filter(estado="ACTIVO").order_by("codigo")
+        ctx["recursos_filtro"] = recursos_asignables().order_by("nombre")
+        return ctx
+
 
 class OcupacionAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -59,6 +71,8 @@ class OcupacionAPIView(APIView):
         if (fecha_fin - fecha_inicio).days > 90:
             return Response({"error": "El rango máximo es 90 días."}, status=400)
 
+        params = request.query_params
+
         # Solo recursos asignables: los Admin/PM/staff no aparecen en el heatmap
         recursos = recursos_asignables().order_by("nombre")
 
@@ -69,6 +83,20 @@ class OcupacionAPIView(APIView):
         if not es_admin_o_pm(request.user):
             propio = Recurso.objects.filter(usuario=request.user).first()
             recursos = recursos.filter(pk=propio.pk) if propio else recursos.none()
+
+        # Filtros de la pantalla. Los de recurso y proyecto se aplican ANTES de
+        # calcular: filtrar despues obligaria a construir el heatmap entero para
+        # tirar casi todo.
+        if params.get("recurso"):
+            recursos = recursos.filter(pk=params["recurso"])
+        if params.get("proyecto"):
+            recursos = recursos.filter(
+                asignaciones__proyecto_id=params["proyecto"],
+                asignaciones__estado="APROBADA",
+                asignaciones__deleted_at__isnull=True,
+                asignaciones__fecha_inicio__lte=fecha_fin,
+                asignaciones__fecha_fin__gte=fecha_inicio,
+            ).distinct()
 
         recursos = list(recursos)
 
@@ -172,6 +200,19 @@ class OcupacionAPIView(APIView):
             if ve_datos_personales:
                 entry["email"] = recurso.email
             result.append(entry)
+
+        # Estos dos dependen de lo ya calculado, asi que se aplican al final.
+        ocupacion = params.get("ocupacion")
+        if ocupacion in ("OCUPADO", "BENCH"):
+            result = [r for r in result if r["estado"] == ocupacion]
+
+        if params.get("sin_registrar") in ("1", "true", "si"):
+            # Dias habiles del rango sin horas legalizadas. Es la pregunta que
+            # de verdad se hace un PM: a quien tengo que perseguir.
+            result = [
+                r for r in result
+                if any(d["horas"] is None and not d["no_habil"] for d in r["detalle_por_dia"])
+            ]
 
         return Response({
             "periodo": {"inicio": fecha_inicio.isoformat(), "fin": fecha_fin.isoformat()},
@@ -724,10 +765,41 @@ class RecursoDetalleView(View):
         en_curso = [a for a in asignaciones if a.fecha_inicio <= hoy]
         proximas = [a for a in asignaciones if a.fecha_inicio > hoy]
 
+        # Horas ya aprobadas: lo que esta persona hizo y alguien dio por bueno.
+        # La asignación dice qué se le pidió; esto dice qué salió de verdad, y
+        # contrastarlo es el motivo de que exista el módulo de legalización.
+        from apps.legalizacion.models import RegistroHoras
+
+        horas_aprobadas = list(
+            RegistroHoras.objects
+            .filter(dia__recurso=recurso, estado=RegistroHoras.APROBADO)
+            .select_related("dia", "proyecto", "tipo_actividad", "aprobado_por")
+            .order_by("-dia__fecha", "id")[:25]
+        )
+        total_aprobadas = sum((r.horas for r in horas_aprobadas), Decimal("0"))
+        facturables_aprobadas = sum(
+            (r.horas for r in horas_aprobadas if r.facturable), Decimal("0")
+        )
+
+        # Ausencias que vienen: quien planifica necesita verlas antes de asignar,
+        # no descubrirlas cuando el calendario ya no cuadra.
+        from apps.calendar_engine.models import Indisponibilidad
+
+        ausencias = list(
+            Indisponibilidad.objects
+            .filter(recurso=recurso, estado="APROBADA", fecha_fin__gte=hoy)
+            .order_by("fecha_inicio")[:10]
+        )
+
         return render(request, "dashboard/recurso_detalle.html", {
             "recurso": recurso,
             "en_curso": en_curso,
             "proximas": proximas,
+            "horas_aprobadas": horas_aprobadas,
+            "total_aprobadas": total_aprobadas,
+            "facturables_aprobadas": facturables_aprobadas,
+            "no_facturables_aprobadas": total_aprobadas - facturables_aprobadas,
+            "ausencias": ausencias,
             "hoy": hoy,
         })
 

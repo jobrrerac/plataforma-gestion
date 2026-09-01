@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.assignments.services import capacidad_maxima_dia
@@ -297,27 +298,39 @@ def actividades_disponibles():
 def puede_aprobar_registro(usuario, registro) -> bool:
     """Si esta persona puede firmar este renglón concreto.
 
-    - **PM del proyecto**: lo suyo, y solo lo suyo.
     - **Admin**: cualquiera. No es un lujo: los renglones sin proyecto
       —formación, estudio— no tienen PM que los reclame, y sin el Admin no se
       aprobarían nunca. Sirve además de válvula si un PM tarda o se va.
+    - **PM del proyecto**: lo suyo, y solo lo suyo.
+    - **Aprobador delegado del proyecto**: lo mismo que el PM, para ese proyecto.
+
+    El delegado **no necesita ningún rol**. Esa es la idea: hasta ahora la
+    autorización era primero el rol y después el alcance, así que un ingeniero
+    designado moría en el primer filtro. La designación en el proyecto ES la
+    autorización.
+
+    Lo que no le da: costos, tarifas ni ninguna otra pantalla. Un ingeniero
+    delegado sigue sin ver dinero, porque eso lo decide `roles.py` y esto no lo
+    toca.
 
     Mira el alcance, no el estado: son dos preguntas distintas y mezclarlas
     produce mensajes falsos, como decirle a un PM legítimo que el renglón no es
     suyo cuando lo que pasa es que ya estaba aprobado.
     """
-    from apps.accounts.roles import es_admin, es_admin_o_pm
+    from apps.accounts.roles import es_admin
 
     if es_admin(usuario):
         return True
-    if not es_admin_o_pm(usuario):
+    if not registro.proyecto_id:
+        # Sin proyecto no hay a quién delegar: es del Admin.
         return False
-    return bool(registro.proyecto_id and registro.proyecto.pm_id == usuario.pk)
+    proyecto = registro.proyecto
+    return usuario.pk in (proyecto.pm_id, proyecto.aprobador_delegado_id)
 
 
 def registros_por_aprobar(usuario):
     """Renglones pendientes que esta persona puede firmar."""
-    from apps.accounts.roles import es_admin, es_admin_o_pm
+    from apps.accounts.roles import es_admin
 
     pendientes = (
         RegistroHoras.objects
@@ -327,9 +340,11 @@ def registros_por_aprobar(usuario):
     )
     if es_admin(usuario):
         return pendientes
-    if not es_admin_o_pm(usuario):
-        return pendientes.none()
-    return pendientes.filter(proyecto__pm=usuario)
+    # Un delegado puede no tener ningun rol: lo que cuenta es figurar en el
+    # proyecto, como PM o como aprobador.
+    return pendientes.filter(
+        Q(proyecto__pm=usuario) | Q(proyecto__aprobador_delegado=usuario)
+    )
 
 
 def dias_por_aprobar(usuario):
@@ -369,7 +384,8 @@ def _exigir_aprobador_registro(usuario, registro):
     if not puede_aprobar_registro(usuario, registro):
         if registro.proyecto_id:
             raise PermissionDenied(
-                f"No puedes revisar esta actividad: no eres PM de «{registro.proyecto.codigo}»."
+                f"No puedes revisar esta actividad: no eres PM ni aprobador "
+                f"delegado de «{registro.proyecto.codigo}»."
             )
         raise PermissionDenied(
             "Esta actividad no cuelga de ningún proyecto, así que solo la aprueba un administrador."
