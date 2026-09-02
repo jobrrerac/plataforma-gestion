@@ -1,7 +1,7 @@
 # Triaje de horas — asistir la aprobación sin que nada la firme solo
 
-Estado: **Fases 0 y 1 implementadas y en producción. Las fases 2 a 5 siguen
-pendientes** — están diseñadas y decididas, sin escribir. No se han descartado:
+Estado: **Fases 0 y 1 en producción. La mitad léxica de la fase 2, en dev.
+Las fases 3 a 5 siguen pendientes** — están diseñadas y decididas, sin escribir. No se han descartado:
 esperan a que el piloto de la fase 1 dé números sobre cuánto acierta la
 clasificación.
 
@@ -217,10 +217,33 @@ modelo dice», se muestra el precedente concreto con enlace.
 La firma en bloque es una interacción, pero sigue escribiendo `aprobado_por`
 renglón a renglón: la unidad de aprobación ya es el renglón.
 
-### Fase 2 — pgvector e híbrida, sobre las no facturables · sin LLM
+### Fase 2 — búsqueda de precedentes · sin LLM · **mitad léxica hecha**
 
 Recuperación pura, sin generación: al lado de cada renglón dudoso, los
-precedentes reales enlazados.
+precedentes reales.
+
+**Se parte en dos mitades, y solo la primera está hecha.** La búsqueda híbrida
+del diseño son dos cosas: parecido de palabras y parecido de significado. La
+primera no necesita nada externo —`pg_trgm`, que ya está en el servidor—; la
+segunda necesita un modelo de embeddings, y *dónde corre el modelo* sigue sin
+decidirse. Construir el vector ahora habría dejado una columna sin nada que la
+llene, así que espera a esa decisión.
+
+Lo que la mitad léxica encuentra: el copiar y pegar, las variantes de una misma
+tarea, los textos calcados con otra fecha. Lo que **no** encuentra: lo que
+significa lo mismo dicho de otra forma. Eso es la mitad que falta.
+
+Tres decisiones de la implementación:
+
+- **Filtrar antes de buscar.** El vecino más parecido del histórico entero es
+  ruido; dentro de la misma persona o del mismo proyecto es precedente. El
+  alcance —y una ventana de doce meses— se aplica antes que la similitud.
+- **Lo devuelto va primero.** `motivo_devolucion` es la única etiqueta real de
+  qué se rechaza aquí: si algo parecido ya se devolvió, pesa más que diez
+  aprobaciones rutinarias.
+- **Solo para los renglones marcados, y con tope.** La consulta es una por
+  renglón; sin tope, una cola de cien serían cien consultas. Los de rutina no
+  los piden, precisamente porque no hay nada que decidir en ellos.
 
 **Corpus** (una fila = un `RegistroHoras`; no hace falta trocear nada, el detalle
 son 300 caracteres):

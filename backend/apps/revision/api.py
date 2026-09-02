@@ -15,6 +15,7 @@ from collections import defaultdict
 from apps.assignments.models import Asignacion
 from apps.legalizacion.models import RegistroHoras
 
+from . import precedentes as prec
 from . import senales as sn
 
 
@@ -182,4 +183,8 @@ def clasificar(dias, usuario=None):
     # Lo que necesita mirarse primero, primero. Dentro de cada banda se conserva
     # el orden que traía (fecha y nombre), que es el que hace la lista legible.
     dias.sort(key=lambda d: -sn.ORDEN[d.banda])
+
+    # Precedentes: qué declaró antes esta persona para algo parecido. Va después
+    # de ordenar para que el tope de renglones se gaste en los que salen arriba.
+    prec.adjuntar(dias)
     return recuento
