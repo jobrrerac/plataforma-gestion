@@ -14,7 +14,7 @@ siguen aplicando.
 """
 
 import sys
-from datetime import date, timedelta
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
