@@ -65,7 +65,7 @@ ciclo estructural o una dependencia hacia arriba. Si hace falta una dependencia
 puntual hacia una capa superior, va **dentro de la función**, no en el cuerpo del
 módulo.
 
-Sirve para que un cambio no obligue a repasar los 228 casos de QA a mano.
+Sirve para que un cambio no obligue a repasar los 229 casos de QA a mano.
 `docs/ARQUITECTURA_MODULOS.md` mapea cada módulo a sus bloques de QA:
 **todo PR dice en su descripción qué bloques hay que reprobar.** Una app nueva
 se sitúa en `CAPAS` y en ese mapa, o el test no pasa.
