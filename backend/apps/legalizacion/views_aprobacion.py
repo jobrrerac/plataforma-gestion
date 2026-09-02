@@ -21,7 +21,7 @@ from apps.accounts.roles import es_admin, es_admin_o_pm
 from apps.core.models import Proyecto
 
 from . import services as svc
-from .models import RegistroHoras
+from .models import DiaLegalizado, RegistroHoras
 
 
 class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -45,7 +45,7 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         dias = svc.dias_por_aprobar(request.user)
         # El triaje ordena la cola y explica por que; si el modulo no esta,
         # `recuento` viene vacio y la pantalla se pinta como antes.
-        recuento = svc.triar(dias)
+        recuento = svc.triar(dias, request.user)
         ctx = {
             "dias": dias,
             "recuento": recuento,
@@ -59,6 +59,9 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, self.template, self._ctx(request))
 
     def post(self, request):
+        if request.POST.get("accion") == "aprobar_dia":
+            return self._aprobar_dia(request)
+
         registro = (
             RegistroHoras.objects
             .select_related("dia", "dia__recurso", "proyecto", "tipo_actividad")
@@ -93,4 +96,31 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
             mensaje = "; ".join(getattr(exc, "messages", [str(exc)]))
             return render(request, self.template, self._ctx(request, error=mensaje))
 
+        return redirect("horas-aprobar")
+
+    def _aprobar_dia(self, request):
+        """Firma de una vez un día interno completo. Solo Admin.
+
+        El servicio revalida la elegibilidad por su cuenta: aquí no se decide
+        nada, solo se traduce el resultado a un mensaje.
+        """
+        dia = (
+            DiaLegalizado.objects
+            .filter(pk=request.POST.get("dia"))
+            .select_related("recurso")
+            .first()
+        )
+        if dia is None:
+            return render(request, self.template, self._ctx(request, error="Ese día no existe."))
+        try:
+            cuantos = svc.aprobar_dia_completo(dia, request.user)
+        except (ValidationError, PermissionDenied) as exc:
+            mensaje = "; ".join(getattr(exc, "messages", [str(exc)]))
+            return render(request, self.template, self._ctx(request, error=mensaje))
+
+        messages.success(
+            request,
+            f"Aprobadas las {cuantos} actividades internas de {dia.recurso.nombre}, "
+            f"{dia.fecha:%d/%m/%Y}.",
+        )
         return redirect("horas-aprobar")

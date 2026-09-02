@@ -44,6 +44,11 @@
   .s-revisar  { background:#fbf1e3; color:#7d4915; }
   .contexto { font-size:.78rem; color:#97591a; }
 
+  .bloque-dia { display:flex; align-items:center; justify-content:space-between; gap:14px;
+                flex-wrap:wrap; margin-top:14px; padding:12px 14px; border-radius:8px;
+                background:#e8f2ec; border:1px solid #1f6b45; }
+  .bloque-txt { font-size:.83rem; color:#125033; line-height:1.45; }
+
   /* Lo que decia el cronograma, para poder contrastarlo con lo declarado. */
   .planificado { color:#4b5563; font-size:.78rem; }
   .planificado-et { font-size:.64rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
@@ -258,6 +263,29 @@
         <div class="h">{{ r.horas }} h</div>
       </div>
       {% endfor %}
+      {% endif %}
+
+      {% if dia.aprobable_en_bloque %}
+      {% comment %}
+        Solo aparece cuando el dia entero es interno, esta partido en varias
+        actividades y ninguna trae aviso. Pulsarlo no salta ninguna regla: el
+        servicio revalida y firma renglon a renglon, cada uno con su firma.
+      {% endcomment %}
+      <div class="bloque-dia">
+        <div class="bloque-txt">
+          <strong>Todo el día es interno y ninguna actividad tiene avisos.</strong>
+          Puedes firmarlas de una vez en lugar de una por una.
+        </div>
+        <form method="post" class="m-0"
+              onsubmit="return confirm('¿Aprobar las {{ dia.pendientes_mios|length }} actividades internas de este día?')">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="aprobar_dia">
+          <input type="hidden" name="dia" value="{{ dia.pk }}">
+          <button type="submit" class="btn-aprobar">
+            <i class="bi bi-check2-all me-1"></i>Aprobar el día ({{ dia.pendientes_mios|length }})
+          </button>
+        </form>
+      </div>
       {% endif %}
     </div>
   </div>

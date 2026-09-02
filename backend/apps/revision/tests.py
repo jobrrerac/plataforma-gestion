@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -325,3 +326,141 @@ class SePuedeApagarTests(BaseTriaje):
         self.assertEqual(recuento, {})
         self.assertEqual(len(dias), 1)
         self.assertFalse(hasattr(dias[0], "banda"))
+
+
+class AprobarElDiaEnteroTests(BaseTriaje):
+    """El botón de firmar un día interno de una vez.
+
+    Lo pidió un caso concreto: alguien en bench que reparte su jornada en varias
+    tareas internas, cada una descrita y acotada. Revisarlas de a una no aporta
+    nada, y obligar a hacerlo es lo que lleva a firmar sin mirar.
+
+    Casi todas estas pruebas comprueban cuándo **no** debe ofrecerse. Un botón
+    de aprobación en bloque que aparece donde no toca es peor que no tenerlo:
+    convierte el triaje en una aprobación automática de hecho.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth.models import Group
+        self.admin = User.objects.create_user("admin_bloque", "adm@test.com", "x")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+
+    def _dia_interno_limpio(self):
+        """Un dia de bench repartido en tareas atomicas.
+
+        Ninguna llega a media jornada a proposito: ese es justo el corte que
+        separa este caso del renglon de estudio de 7,5 h.
+        """
+        dia = self._dia()
+        self._renglon(dia, "3", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        self._renglon(dia, "3", "Documentacion del procedimiento de altas", proyecto=self.interno)
+        self._renglon(dia, "2.5", "Revision de tickets de soporte interno", proyecto=self.interno)
+        return dia
+
+    def _cola(self, usuario):
+        dias = svc.dias_por_aprobar(usuario)
+        clasificar(dias, usuario)
+        return dias
+
+    # ── cuándo sí ───────────────────────────────────────────────────────────
+
+    def test_se_ofrece_en_un_dia_interno_bien_descrito(self):
+        self._dia_interno_limpio()
+        dia = self._cola(self.admin)[0]
+        self.assertTrue(dia.aprobable_en_bloque)
+
+    def test_firma_todos_los_renglones_con_su_nombre(self):
+        dia = self._dia_interno_limpio()
+        cuantos = svc.aprobar_dia_completo(dia, self.admin)
+
+        self.assertEqual(cuantos, 3)
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
+        for registro in dia.registros.all():
+            self.assertEqual(registro.estado, RegistroHoras.APROBADO)
+            self.assertEqual(registro.aprobado_por, self.admin)
+            self.assertIsNotNone(registro.aprobado_en)
+
+    # ── cuándo no ───────────────────────────────────────────────────────────
+
+    def test_no_se_ofrece_a_un_pm(self):
+        """Un PM responde por su proyecto, no por la jornada de otro."""
+        self._dia_interno_limpio()
+        dia = self._cola(self.pm)[0]
+        self.assertFalse(dia.aprobable_en_bloque)
+
+    def test_un_pm_no_puede_aunque_lo_intente(self):
+        dia = self._dia_interno_limpio()
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.pm)
+        self.assertEqual(
+            dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0,
+        )
+
+    def test_no_se_ofrece_si_queda_algo_facturable(self):
+        dia = self._dia()
+        self._plan(self.cliente, "4.0")
+        self._renglon(dia, "4", "Ajustes al conector de Oracle y pruebas", proyecto=self.cliente)
+        self._renglon(dia, "4.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+
+        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+
+    def test_no_se_ofrece_si_algun_detalle_es_pobre(self):
+        dia = self._dia()
+        self._renglon(dia, "4", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        self._renglon(dia, "4.5", "muchas tareas", proyecto=self.interno)
+
+        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+
+    def test_no_se_ofrece_con_un_solo_renglon(self):
+        """Con uno, el boton de siempre hace exactamente lo mismo."""
+        dia = self._dia()
+        self._renglon(dia, "8.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+
+    def test_no_se_ofrece_si_el_plan_ya_ocupaba_la_jornada(self):
+        """Un dia planificado al completo que acaba en horas internas no es
+        rutina: o el plan se corrio o desplazaron trabajo de cliente."""
+        dia = self._dia()
+        self._plan(self.cliente, "8.5")
+        self._renglon(dia, "4", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        self._renglon(dia, "4.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+
+        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+
+    def test_el_servicio_revalida_aunque_el_boton_se_hubiera_pintado(self):
+        """Entre que se cargo la pantalla y llega el POST, el dia pudo cambiar."""
+        dia = self._dia_interno_limpio()
+        self.assertTrue(self._cola(self.admin)[0].aprobable_en_bloque)
+
+        # Alguien empeora un detalle antes de que llegue el POST.
+        renglon = dia.registros.first()
+        renglon.detalle = "varias cosas"
+        renglon.save(update_fields=["detalle"])
+
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.admin)
+        self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
+
+    def test_sin_el_modulo_no_hay_aprobacion_por_dia(self):
+        dia = self._dia_interno_limpio()
+        with self.modify_settings(INSTALLED_APPS={"remove": ["apps.revision"]}):
+            with self.assertRaises(ValidationError):
+                svc.aprobar_dia_completo(dia, self.admin)
+
+    def test_una_tarea_interna_de_media_jornada_bloquea_el_boton(self):
+        """El renglon de estudio de 7,5 h no puede colarse por aqui.
+
+        Es el corte que hace util el boton: un dia repartido en tareas acotadas
+        se firma de una vez; uno donde una sola cosa se lleva medio dia se mira.
+        """
+        dia = self._dia()
+        self._renglon(
+            dia, "7.5",
+            "Escoger certificacion y ver que ruta de estudio tomar por parte de learn microsoft",
+            tipo=self.estudio,
+        )
+        self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
+
+        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)

@@ -99,7 +99,51 @@ class Contexto:
         return self._devoluciones.get(recurso_id, 0)
 
 
-def clasificar(dias):
+def aprobable_en_bloque(dia, usuario, pendientes=None) -> bool:
+    """Si este día se puede firmar de una vez, sin mirar renglón a renglón.
+
+    Cuatro condiciones, y hacen falta las cuatro:
+
+    1. **Solo Admin.** Un PM responde por su proyecto; firmar un día entero de
+       otra persona no es lo mismo que firmar lo suyo.
+    2. **Todo lo pendiente del día no es facturable.** Si queda un renglón de
+       cliente sin firmar, esto no es «el día»: es una parte, y la otra la debe
+       ver su PM.
+    3. **Todos en Rutina.** Es la versión comprobable de «los comentarios son
+       atómicos, se ajustan a la tarea y son descriptivos»: ningún detalle pobre,
+       ningún texto copiado de otro día, ningún plan que ya ocupaba la jornada.
+    4. **Más de un renglón.** Con uno solo, el botón de siempre hace lo mismo.
+
+    Un día interno de un solo renglón gordo no califica —`NO_FACTURABLE_MEDIA_
+    JORNADA` lo saca de Rutina— y así debe ser: ahí hay algo que mirar. Lo que
+    califica es el día partido en tareas concretas y descritas, que es
+    precisamente cuando revisarlo de a una no aporta nada.
+
+    Esto decide si el botón se ofrece. Que se pueda pulsar no autoriza nada: el
+    servicio vuelve a comprobarlo todo antes de escribir.
+    """
+    from apps.accounts.roles import es_admin
+    from apps.legalizacion.models import RegistroHoras
+
+    if not es_admin(usuario):
+        return False
+
+    # `pendientes` se recibe ya evaluado cuando quien llama tiene los objetos en
+    # la mano. Releerlos de la base traeria instancias distintas, sin la
+    # evaluacion puesta, y entonces esto diria que no siempre.
+    if pendientes is None:
+        pendientes = [r for r in dia.registros.all() if r.estado == RegistroHoras.PENDIENTE]
+    if len(pendientes) < 2:
+        return False
+    if any(r.facturable for r in pendientes):
+        return False
+    return all(
+        getattr(r, "evaluacion", None) is not None and r.evaluacion.banda == sn.RUTINA
+        for r in pendientes
+    )
+
+
+def clasificar(dias, usuario=None):
     """Anota cada renglón con su evaluación y cada día con su banda.
 
     Muta los objetos que recibe, igual que `dias_por_aprobar` ya hace con
@@ -126,6 +170,9 @@ def clasificar(dias):
         )
         for registro in dia.pendientes_mios:
             recuento[registro.evaluacion.banda] += 1
+        dia.aprobable_en_bloque = (
+            aprobable_en_bloque(dia, usuario) if usuario is not None else False
+        )
 
     # Lo que necesita mirarse primero, primero. Dentro de cada banda se conserva
     # el orden que traía (fecha y nombre), que es el que hace la lista legible.

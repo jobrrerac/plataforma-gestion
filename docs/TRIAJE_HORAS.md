@@ -160,10 +160,36 @@ embeddings: una división. El de `INT-DEPART` dispara además `DETALLE_POBRE`.
   espacios, no con trigramas. No hace falta habilitar `pg_trgm` para cazar el
   copiar y pegar, que es el caso real. La similitud parcial se añade el día que
   haga falta.
-- **La firma en bloque no está.** Es una mutación, y solo es segura cuando el
-  carril de rutina ya se ganó la confianza: si la clasificación falla, firmar en
-  bloque multiplica el error en vez de contenerlo. Primero se valida que Rutina
-  sea rutina de verdad.
+#### Aprobar el día entero
+
+Hay un botón para firmar de una vez un día interno completo. Aparece cuando se
+cumplen **las cuatro**:
+
+1. **Quien mira es Admin.** Un PM responde por su proyecto; firmar la jornada
+   entera de otra persona no es lo mismo que firmar lo suyo.
+2. **Nada pendiente del día es facturable.** Si queda un renglón de cliente sin
+   firmar, esto no es «el día»: es una parte, y la otra la debe ver su PM.
+3. **Todos los renglones en Rutina.** Es la versión comprobable de «los
+   comentarios son atómicos, se ajustan a la tarea y son descriptivos».
+4. **Más de un renglón.** Con uno solo, el botón de siempre hace lo mismo.
+
+El corte que hace útil el botón está en la condición 3, y conviene entenderlo:
+como `NO_FACTURABLE_MEDIA_JORNADA` saca de Rutina cualquier renglón que se lleve
+media jornada, **un día solo califica si ninguna tarea interna ocupa más de la
+mitad**. Un día de bench repartido en tres tareas de tres horas califica; el
+renglón de estudio de 7,5 h no, y así debe ser: ahí hay algo que mirar.
+
+Aprobar en bloque es **una sola interacción, no una excepción a las reglas**.
+Cada renglón se firma con `aprobar_registro`, uno a uno, conservando el bloqueo,
+la validación de estado y su propio `aprobado_por`. Y el servicio **revalida la
+elegibilidad al recibir el POST**: que el botón se haya pintado no autoriza
+nada, porque entre la carga de la pantalla y el envío alguien pudo editar un
+renglón o revocar una asignación.
+
+Lo que sigue sin existir es la firma en bloque del carril de Rutina completo,
+con horas de cliente incluidas. Esa espera a tener números sobre cuánto acierta
+la clasificación: si falla, firmar en bloque multiplica el error en vez de
+contenerlo.
 
 Reglas de interfaz que sostienen el invariante 1: la banda **ordena, no
 decide** —los tres carriles llevan los mismos botones— y nunca se escribe «el
