@@ -41,6 +41,16 @@ Uso (la ruta es relativa a /app, donde corre manage.py):
 
 Siempre `--simular` primero: imprime el reparto fila por fila y marca lo que ya
 existe. Una ruta absoluta también vale, y con "-" lee de la entrada estándar.
+
+REEMPLAZAR UN PLAN: cuando el cronograma cambia entero, `--reemplazar` retira
+antes las asignaciones que esas personas ya tuvieran a ese proyecto. Sin eso las
+nuevas se SUMAN a las viejas y la persona acaba con el doble de horas ese día,
+que es justo lo que la validación de capacidad rechazará al aprobar.
+
+Retirar no es borrar: una asignación aprobada se REVOCA y una solicitada se
+RECHAZA, cada una por su servicio de siempre, con su bloqueo y su entrada en el
+log. Solo se tocan las de las personas que aparecen en el plan: si otra gente
+sigue en ese proyecto por otra vía, se queda como está.
 """
 
 import csv
@@ -55,6 +65,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.assignments.models import Asignacion, LogAuditoria
+from apps.assignments.services import rechazar_asignacion, revocar_asignacion
 from apps.assignments.services import capacidad_maxima_dia, mapa_carga
 from apps.calendar_engine.services import CalendarioRango, contar_dias_habiles
 from apps.core.models import Proyecto, Recurso
@@ -154,6 +165,14 @@ class Command(BaseCommand):
         )
         parser.add_argument("--simular", action="store_true", help="Muestra qué se crearía, sin tocar nada.")
         parser.add_argument("--confirmar", action="store_true", help="Obligatorio para crear de verdad.")
+        parser.add_argument(
+            "--reemplazar", action="store_true",
+            help=(
+                "Retira las asignaciones que esas personas ya tuvieran a ese proyecto "
+                "antes de crear las nuevas. Para cuando el cronograma cambia y el "
+                "plan anterior deja de valer."
+            ),
+        )
 
     def handle(self, *args, **opciones):
         simular = opciones["simular"]
@@ -166,6 +185,7 @@ class Command(BaseCommand):
         proyecto = self._buscar_proyecto(opciones["proyecto"])
         solicitante = self._buscar_solicitante(opciones["solicitante"])
         filas = self._leer_plan(opciones["archivo"])
+        reemplazar = opciones["reemplazar"]
 
         self.stdout.write("")
         self.stdout.write(f"Proyecto     {proyecto.codigo} — {proyecto.nombre}")
@@ -173,10 +193,15 @@ class Command(BaseCommand):
         self.stdout.write(f"Filas        {len(filas)}")
         self.stdout.write("")
 
-        plan = [self._preparar(fila, proyecto) for fila in filas]
+        plan = [self._preparar(fila, proyecto, reemplazar) for fila in filas]
         self._marcar_repetidas_del_propio_plan(plan)
+
+        a_retirar = self._a_retirar(plan, proyecto) if reemplazar else []
+        if reemplazar:
+            self._mostrar_retiradas(a_retirar)
+
         self._mostrar(plan)
-        self._avisar_sobrecarga(plan, proyecto)
+        self._avisar_sobrecarga(plan, proyecto, a_retirar)
 
         a_crear = [p for p in plan if p["motivo_omision"] is None]
         if simular:
@@ -187,10 +212,22 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
+            # Retirar primero: si se creara antes, las nuevas chocarian con las
+            # viejas en la validacion de capacidad al aprobarlas.
+            for vieja in a_retirar:
+                motivo = f"El plan de {proyecto.codigo} se reemplazo por uno nuevo."
+                if vieja.estado == "APROBADA":
+                    revocar_asignacion(vieja, solicitante, motivo)
+                else:
+                    rechazar_asignacion(vieja, solicitante, motivo)
             for p in a_crear:
                 p["asignacion"] = self._crear(p, proyecto, solicitante)
 
         self.stdout.write("")
+        if a_retirar:
+            self.stdout.write(self.style.SUCCESS(
+                f"Retiradas {len(a_retirar)} asignaciones del plan anterior."
+            ))
         self.stdout.write(self.style.SUCCESS(
             f"Creadas {len(a_crear)} asignaciones SOLICITADAS en {proyecto.codigo}. "
             "Faltan aprobarlas."
@@ -252,7 +289,7 @@ class Command(BaseCommand):
 
     # ── cálculo por fila ────────────────────────────────────────────────────
 
-    def _preparar(self, fila, proyecto):
+    def _preparar(self, fila, proyecto, reemplazar=False):
         recurso = buscar_recurso(fila["recurso"])
         fecha_inicio = leer_fecha(fila["fecha_inicio"])
         fecha_fin = leer_fecha(fila["fecha_fin"])
@@ -279,7 +316,9 @@ class Command(BaseCommand):
             intensidad = Decimal("0.1")
         horas_efectivas = intensidad * Decimal(dias)
 
-        existente = Asignacion.objects.filter(
+        # Al reemplazar no hay duplicados que evitar: lo que ya existe se
+        # retira antes, asi que todas las filas del plan nuevo se crean.
+        existente = None if reemplazar else Asignacion.objects.filter(
             recurso=recurso, proyecto=proyecto,
             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
             estado__in=ESTADOS_VIGENTES,
@@ -317,6 +356,35 @@ class Command(BaseCommand):
             else:
                 vistas[clave] = p["linea"]
 
+    def _a_retirar(self, plan, proyecto):
+        """Asignaciones vivas de esa gente a ese proyecto, que el plan sustituye.
+
+        Solo de las personas que aparecen en el plan. Si hay mas gente en el
+        proyecto por otra via, no es asunto de este archivo y se queda.
+        """
+        recursos = {p["recurso"].pk for p in plan}
+        return list(
+            Asignacion.objects
+            .filter(proyecto=proyecto, recurso_id__in=recursos, estado__in=ESTADOS_VIGENTES)
+            .select_related("recurso")
+            .order_by("recurso__nombre", "fecha_inicio")
+        )
+
+    def _mostrar_retiradas(self, a_retirar):
+        if not a_retirar:
+            self.stdout.write("Nada que retirar: esas personas no tenian asignaciones vivas aqui.")
+            self.stdout.write("")
+            return
+        self.stdout.write(self.style.WARNING("SE RETIRA (plan anterior):"))
+        for a in a_retirar:
+            verbo = "revoca " if a.estado == "APROBADA" else "rechaza"
+            self.stdout.write(self.style.WARNING(
+                f"  {verbo} #{a.pk:<4} {a.recurso.nombre[:30]:30} "
+                f"{a.fecha_inicio:%d/%m} a {a.fecha_fin:%d/%m}  "
+                f"{float(a.intensidad_diaria or 0):4.1f} h/d  {a.actividad[:32]}"
+            ))
+        self.stdout.write("")
+
     # ── salida ──────────────────────────────────────────────────────────────
 
     def _mostrar(self, plan):
@@ -339,7 +407,7 @@ class Command(BaseCommand):
                     f"({float(p['desvio']):+g} h)"
                 ))
 
-    def _avisar_sobrecarga(self, plan, proyecto):
+    def _avisar_sobrecarga(self, plan, proyecto, a_retirar=()):
         """Avisa de los días en que la persona pasaría de su jornada al aprobar.
 
         No bloquea: crear la solicitud está permitido igual que desde la
@@ -354,8 +422,22 @@ class Command(BaseCommand):
         fin = max(p["fecha_fin"] for p in a_crear)
         recursos = {p["recurso"].pk: p["recurso"] for p in a_crear}
 
-        # Carga ya aprobada en la base + la que sumaría este plan.
+        # Carga ya aprobada en la base + la que sumaría este plan. Lo que se va
+        # a retirar no cuenta: avisar de un choque con algo que dejara de
+        # existir en la misma transaccion seria una alarma falsa.
         carga = mapa_carga(list(recursos), inicio, fin)
+        for vieja in a_retirar:
+            if vieja.estado != "APROBADA":
+                continue
+            por_dia = carga.setdefault(vieja.recurso_id, {})
+            fecha = max(vieja.fecha_inicio, inicio)
+            hasta = min(vieja.fecha_fin, fin)
+            while fecha <= hasta:
+                if fecha in por_dia:
+                    por_dia[fecha] = max(
+                        0.0, por_dia[fecha] - float(vieja.intensidad_diaria or 0)
+                    )
+                fecha += timedelta(days=1)
         cal = CalendarioRango(inicio, fin, list(recursos.values()))
         for p in a_crear:
             fecha = p["fecha_inicio"]

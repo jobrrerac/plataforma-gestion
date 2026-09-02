@@ -346,3 +346,63 @@ class OcupacionAPIJornadaCompletaTests(TestCase):
         lunes = next(d for d in recurso["detalle_por_dia"] if d["fecha"] == "2025-01-13")
         self.assertEqual(lunes["horas_asignadas"], 4.0)
         self.assertEqual(lunes["porcentaje"], round(4.0 / 8.5 * 100, 1))
+
+
+class OcupacionFiltradaPorProyectoTests(TestCase):
+    """Filtrar por proyecto elige a QUIÉN se muestra, no cuánto se pinta.
+
+    El color de la celda sigue siendo la ocupación TOTAL de la persona, y tiene
+    que seguir siéndolo: si alguien está al 100% en otro proyecto y la celda
+    dijera 12%, el tablero estaría mintiendo sobre su disponibilidad, que es
+    justo para lo que se mira.
+
+    Lo que faltaba era poder ver las dos cifras. Sin eso, filtrar por un
+    proyecto y encontrarse un 100% que no es suyo se lee como que las horas no
+    cuadran — y lo que no cuadraba era la pantalla.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user("viewer_filtro", password="pass")
+        self.user.groups.add(Group.objects.get_or_create(name=roles.PM)[0])
+        self.client.force_login(self.user)
+        self.pm = User.objects.create_user("pm_filtro", password="pass")
+        self.recurso = Recurso.objects.create(
+            nombre="DevDoble", email="devdoble@test.com", banda="SR",
+        )
+        self.mirado = Proyecto.objects.create(
+            codigo="P-MIRADO", nombre="El que se filtra", cliente="X",
+            fecha_inicio=date(2025, 1, 1), pm=self.pm,
+        )
+        self.otro = Proyecto.objects.create(
+            codigo="P-OTRO", nombre="Otro cualquiera", cliente="X",
+            fecha_inicio=date(2025, 1, 1), pm=self.pm,
+        )
+        for proyecto, intensidad in ((self.mirado, 2.0), (self.otro, 4.0)):
+            Asignacion.objects.create(
+                recurso=self.recurso, proyecto=proyecto,
+                fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 13),
+                horas_totales=int(intensidad), intensidad_diaria=intensidad,
+                estado="APROBADA", solicitada_por=self.pm,
+            )
+
+    def _dia(self, **extra):
+        resp = self.client.get("/api/dashboard/ocupacion/", {
+            "fecha_inicio": "2025-01-13", "fecha_fin": "2025-01-13", **extra,
+        })
+        self.assertEqual(resp.status_code, 200)
+        recurso = next(r for r in resp.json()["recursos"] if r["id"] == self.recurso.pk)
+        return recurso["detalle_por_dia"][0]
+
+    def test_con_filtro_se_desglosan_las_dos_cifras(self):
+        dia = self._dia(proyecto=self.mirado.pk)
+        self.assertEqual(dia["horas_proyecto"], 2.0, "no desglosó lo del proyecto filtrado")
+        self.assertEqual(dia["horas_asignadas"], 6.0, "el total dejó de ser el total")
+
+    def test_el_color_sigue_siendo_la_ocupacion_total(self):
+        """Si esto bajara a 24%, alguien al 71% pareceria casi libre."""
+        dia = self._dia(proyecto=self.mirado.pk)
+        self.assertEqual(dia["porcentaje"], round(100 * 6.0 / 8.5, 1))
+
+    def test_sin_filtro_no_hay_desglose(self):
+        """None y no 0: el cliente distingue «no aplica» de «cero horas»."""
+        self.assertIsNone(self._dia()["horas_proyecto"])

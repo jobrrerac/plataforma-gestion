@@ -213,6 +213,10 @@
     return "cell-full";
   }
   function fmtPct(pct) { return pct > 0 ? pct.toFixed(0) + "%" : ""; }
+  function hayFiltroProyecto() {
+    const sel = document.getElementById("f-proyecto");
+    return !!(sel && sel.value);
+  }
   function nombreDia(isoDate) {
     const d = new Date(isoDate + "T12:00:00");
     return ["D","L","M","X","J","V","S"][d.getDay()];
@@ -284,6 +288,13 @@
         } else {
           if (d.porcentaje > 0) {
             tooltip = `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}`;
+            // Con filtro de proyecto, desglosar cuanto de ese total es suyo.
+            // La celda pinta la ocupacion TOTAL a proposito: decir 12% cuando
+            // la persona esta al 100% en otro proyecto seria mentir sobre su
+            // disponibilidad, que es justo para lo que se mira este tablero.
+            if (d.horas_proyecto !== null && d.horas_proyecto !== undefined) {
+              tooltip = `${d.horas_proyecto}h de este proyecto · ${d.horas_asignadas}h en total (${d.porcentaje}%) · ${d.proyectos.join(", ")}`;
+            }
           } else if (d.horas_internas > 0) {
             tooltip = `${d.horas_internas}h en proyecto interno · disponible para cliente`;
           } else {
@@ -313,6 +324,7 @@
       </div>
       <p class="text-muted px-3 pt-2 pb-1" style="font-size:.75rem">
         Período: ${periodo.inicio} → ${periodo.fin} &nbsp;·&nbsp; Hover sobre cada celda para ver detalle.
+        ${hayFiltroProyecto() ? `<br><b>Con filtro de proyecto, el color sigue siendo la ocupación TOTAL de cada persona</b>, no solo la de ese proyecto — si no, alguien al 100% en otro sitio parecería libre. El detalle de cada celda desglosa las dos cifras.` : ""}
       </p>
     `;
   }

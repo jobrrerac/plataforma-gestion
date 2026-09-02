@@ -138,6 +138,17 @@ class OcupacionAPIView(APIView):
         cargas_internas = mapa_carga_interna(
             [r.pk for r in recursos], fecha_inicio, fecha_fin,
         )
+        # Con filtro de proyecto puesto, cuanto de la carga es de ESE proyecto.
+        # La celda sigue pintando el total —decir 12% cuando alguien esta al
+        # 100% en otro sitio seria mentir sobre su disponibilidad— pero el
+        # detalle lo desglosa, que es lo que se venia a comprobar al filtrar.
+        cargas_proyecto = (
+            mapa_carga(
+                [r.pk for r in recursos], fecha_inicio, fecha_fin,
+                proyecto_id=params["proyecto"],
+            )
+            if params.get("proyecto") else {}
+        )
 
         ve_datos_personales = puede_ver_datos_personales(request.user)
 
@@ -160,6 +171,7 @@ class OcupacionAPIView(APIView):
             asig_recurso = [a for a in asignaciones if a.recurso_id == recurso.pk]
             carga_dias = cargas.get(recurso.pk, {})
             interna_dias = cargas_internas.get(recurso.pk, {})
+            proyecto_dias = cargas_proyecto.get(recurso.pk, {})
 
             detalle_por_dia = []
             cur = fecha_inicio
@@ -182,6 +194,12 @@ class OcupacionAPIView(APIView):
                         # Trabajo interno con equipo: ocupa el dia pero no la
                         # capacidad. Se manda aparte para poder pintarlo en gris.
                         "horas_internas": round(interna_dias.get(cur, 0.0), 2),
+                        # None cuando no hay filtro: el cliente distingue "no
+                        # aplica" de "cero horas en ese proyecto".
+                        "horas_proyecto": (
+                            round(proyecto_dias.get(cur, 0.0), 2)
+                            if params.get("proyecto") else None
+                        ),
                         "proyectos": list({a.proyecto.codigo for a in asig_hoy}),
                         # None | "REGISTRADO" | "APROBADO". Se distinguen porque
                         # no significan lo mismo: registrado es "ya lo declaro",

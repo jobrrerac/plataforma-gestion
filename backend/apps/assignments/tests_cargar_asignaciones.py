@@ -214,3 +214,106 @@ class CargarAsignacionesTests(TestCase):
         salida = ejecutar(plan, simular=True)
         self.assertIn("superarían la jornada", salida)
         self.assertIn("14/09/2026", salida)
+
+
+class ReemplazarUnPlanTests(TestCase):
+    """Cuando el cronograma cambia entero.
+
+    Sin retirar lo anterior, el plan nuevo se SUMA al viejo y la persona acaba
+    con el doble de horas ese día: exactamente lo que la validación de capacidad
+    rechazará al aprobar. Y como las asignaciones no se borran —se revocan o se
+    rechazan— el rastro de lo que hubo antes se conserva.
+    """
+
+    def setUp(self):
+        # El helper `ejecutar` usa este nombre y el codigo V-25999999/Q.
+        self.pm = User.objects.create_user("pm_prueba", "pm@test.com", "clave-larga-123")
+        self.proyecto = Proyecto.objects.create(
+            codigo="V-25999999/Q", nombre="Simulador", cliente="ANECOOP",
+            fecha_inicio=date(2026, 1, 1), estado="ACTIVO", pm=self.pm,
+        )
+        self.otro_proyecto = Proyecto.objects.create(
+            codigo="V-25888888/Q", nombre="Otro", cliente="ANECOOP",
+            fecha_inicio=date(2026, 1, 1), estado="ACTIVO", pm=self.pm,
+        )
+        self.daniel = Recurso.objects.create(
+            nombre="Guzman-Mejia Daniel-Fernando",
+            email="daniel.guzman@test.com", banda="SR",
+        )
+        self.ajeno = Recurso.objects.create(
+            nombre="Paiba-Celeita Laura-Alejandra", email="laura@test.com", banda="JR",
+        )
+
+    def _vieja(self, recurso=None, proyecto=None, estado="APROBADA"):
+        return Asignacion.objects.create(
+            recurso=recurso or self.daniel, proyecto=proyecto or self.proyecto,
+            modo_asignacion="RANGO",
+            fecha_inicio=date(2026, 8, 31), fecha_fin=date(2026, 9, 4),
+            dias_habiles=5, horas_totales=30, intensidad_diaria=Decimal("6.0"),
+            estado=estado, solicitada_por=self.pm,
+        )
+
+    def test_retira_lo_aprobado_y_crea_lo_nuevo(self):
+        vieja = self._vieja()
+        ejecutar(PLAN_BASE, confirmar=True, reemplazar=True)
+
+        vieja.refresh_from_db()
+        self.assertEqual(vieja.estado, "REVOCADA")
+        self.assertEqual(Asignacion.objects.filter(estado="SOLICITADA").count(), 1)
+
+    def test_una_solicitada_se_rechaza(self):
+        vieja = self._vieja(estado="SOLICITADA")
+        ejecutar(PLAN_BASE, confirmar=True, reemplazar=True)
+
+        vieja.refresh_from_db()
+        self.assertEqual(vieja.estado, "RECHAZADA")
+
+    def test_sin_la_bandera_no_retira_nada(self):
+        """Y entonces la fila se omite por duplicada, que es el comportamiento
+        de siempre."""
+        vieja = self._vieja()
+        salida = ejecutar(PLAN_BASE, confirmar=True)
+
+        vieja.refresh_from_db()
+        self.assertEqual(vieja.estado, "APROBADA")
+        self.assertIn("ya existe", salida)
+
+    def test_no_toca_otros_proyectos(self):
+        """Esa persona puede estar en mas sitios: el plan solo habla de uno."""
+        otra = self._vieja(proyecto=self.otro_proyecto)
+        ejecutar(PLAN_BASE, confirmar=True, reemplazar=True)
+
+        otra.refresh_from_db()
+        self.assertEqual(otra.estado, "APROBADA")
+
+    def test_no_toca_a_quien_no_esta_en_el_plan(self):
+        """Si hay mas gente en ese proyecto por otra via, no es asunto del
+        archivo que se esta cargando."""
+        ajena = self._vieja(recurso=self.ajeno)
+        ejecutar(PLAN_BASE, confirmar=True, reemplazar=True)
+
+        ajena.refresh_from_db()
+        self.assertEqual(ajena.estado, "APROBADA")
+
+    def test_simular_no_retira_nada(self):
+        vieja = self._vieja()
+        salida = ejecutar(PLAN_BASE, simular=True, reemplazar=True)
+
+        vieja.refresh_from_db()
+        self.assertEqual(vieja.estado, "APROBADA")
+        self.assertIn("SE RETIRA", salida)
+        self.assertIn("No se tocó nada", salida)
+
+    def test_no_avisa_de_choques_con_lo_que_se_va_a_retirar(self):
+        """Seria una alarma falsa: eso deja de existir en la misma transaccion."""
+        self._vieja()  # 6 h/dia en las mismas fechas del plan
+        salida = ejecutar(PLAN_BASE, simular=True, reemplazar=True)
+        self.assertNotIn("superarían la jornada", salida)
+
+    def test_sin_la_bandera_ese_choque_si_se_avisa(self):
+        """Fechas distintas pero solapadas: no es duplicado, asi que la fila se
+        crea, y entonces si hay que avisar de que chocara al aprobar."""
+        self._vieja()  # aprobada 31/08–04/09 a 6 h/dia
+        plan = "Daniel Guzman\tOtra cosa\t01/09/2026\t03/09/2026\t15\n"
+        salida = ejecutar(plan, simular=True)
+        self.assertIn("superarían la jornada", salida)

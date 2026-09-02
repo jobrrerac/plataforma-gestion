@@ -82,6 +82,34 @@ lo que ya existe y avisa de los días que superarían la jornada al aprobar.
 Las asignaciones nacen **SOLICITADAS**. Aprobarlas sigue siendo un acto de una
 persona, con su validación de capacidad y su entrada en el log de auditoría.
 
+## Cuando el cronograma cambia entero
+
+`--reemplazar` retira antes las asignaciones que esas personas ya tuvieran a ese
+proyecto. Sin eso las nuevas **se suman** a las viejas y la persona acaba con el
+doble de horas ese día, que es justo lo que la validación de capacidad rechazará
+al aprobar.
+
+Retirar no es borrar. Una asignación aprobada se **revoca** y una solicitada se
+**rechaza**, cada una por su servicio de siempre:
+
+- **Las horas registradas no se tocan.** `RegistroHoras` no apunta a
+  `Asignacion`: la asignación es el plan, las horas son el hecho. Revocar un
+  plan no cambia lo que alguien declaró que hizo.
+- **Queda a la vista, no oculto.** Un soft-delete las sacaría de
+  `Asignacion.objects` y desaparecerían del admin y de las consultas. Revocadas
+  siguen ahí, filtrables por estado, con su entrada en `LogAuditoria` y el
+  motivo escrito.
+- **Dejan de consumir capacidad**, porque `mapa_carga` solo cuenta APROBADAS.
+  El efecto práctico es el mismo que borrarlas, sin perder el rastro.
+- **Solo se tocan las personas del plan.** Si hay más gente en ese proyecto por
+  otra vía, se queda como está.
+
+> **Aprobar las nuevas en el mismo rato.** Entre revocar el plan viejo y aprobar
+> el nuevo, esas personas **no pueden imputar horas a ese proyecto**:
+> `proyectos_disponibles()` exige una asignación APROBADA que cubra el día. Si
+> alguien tiene un día devuelto pendiente de corregir, no podrá arreglarlo hasta
+> que el plan nuevo esté aprobado.
+
 ## Qué hay aquí
 
 | Archivo | Proyecto | Cargado |
