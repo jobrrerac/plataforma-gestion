@@ -203,7 +203,37 @@ div.breadcrumbs a:hover { color: #fff !important; }
 /* ─── CONTENT AREA ──────────────────────────────────────────── */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f4f4f8 !important;
+  color: #1a1033 !important;
 }
+#content, #content-related, .content-title { color: #1a1033 !important; }
+
+/* ─── SOLO LOS TITULOS Y LAS VISTAS DE SOLO LECTURA ──────────────
+   Django pinta el area de contenido y los fieldsets oscuros, y la regla de
+   arriba fuerza un azul casi negro encima: el titulo de la pagina y los valores
+   de los campos de solo lectura quedaban ilegibles.
+
+   Se cambia UNICAMENTE el color del texto en esos dos sitios. Ningun fondo se
+   toca, ninguna otra pantalla cambia: el resto del tema se queda como estaba.
+─────────────────────────────────────────────────────────────── */
+/* El titulo va sobre la franja CLARA, no sobre el panel oscuro. El tema ya lo
+   queria oscuro, pero Django define `#content h1` con su propio color y gana por
+   especificidad: en modo oscuro salia blanco sobre blanco. Se repite aqui con
+   la misma especificidad para que mande el tema. */
+#content h1, .content-title, #content > h1 { color: #1a1033 !important; }
+
+/* Lo que si esta sobre panel oscuro. */
+.paginator { color: #e9eaf0 !important; }
+
+fieldset .form-row,
+fieldset .form-row > div,
+fieldset .form-row .readonly,
+fieldset .form-row div.readonly {
+  color: #e9eaf0 !important;
+}
+fieldset .aligned label, fieldset .form-row label { color: #c3c6d4 !important; }
+fieldset .form-row .help, fieldset .form-row div.help,
+fieldset .form-row p.help { color: #9aa0b4 !important; }
 
 /* Module / section headers en contenido */
 .module h2, .module caption, .inline-group h2 {
@@ -634,93 +664,6 @@ a.button[style*="#97591a"] {
 /* Evitar que la tabla recorte el popup */
 #result_list { overflow: visible !important; }
 #result_list td { overflow: visible !important; }
-/* ─── CONTRASTE DEL CONTENIDO ────────────────────────────────────
-   Antes esto dependia de una preferencia del sistema operativo que nadie habia
-   elegido: el tema forzaba fondo claro y texto casi negro, pero los paneles del
-   admin toman su fondo de las variables de Django, oscuras en modo oscuro. Lo
-   que salia era una mezcla — titulos blancos sobre blanco en unas zonas y azul
-   oscuro sobre negro en otras.
-
-   Se resuelve pintando el oscuro a mano en vez de negociarlo con el navegador.
-   Nada aqui cuelga de `prefers-color-scheme`, asi que la pantalla se ve igual en
-   todos los equipos.
-─────────────────────────────────────────────────────────────── */
-:root { color-scheme: dark; }
-
-body,
-#container, #content, #content-main, #content-related,
-.module, fieldset.module, .inline-related, .submit-row,
-#changelist, #changelist-form, .results, .dashboard #content {
-  background: #14162a !important;
-  color: #e9eaf0 !important;
-}
-
-/* Los titulos: quedaban en blanco sobre blanco. */
-#content h1, #content h2, #content h3,
-.content-title, #content .content-title,
-.dashboard #content h1, .colM h1, h1 {
-  color: #ffffff !important;
-}
-
-/* Filas del formulario y valores de solo lectura, que es donde mas texto hay. */
-fieldset .form-row,
-.form-row, .form-row > div,
-.form-row .readonly, .form-row div.readonly, .readonly,
-.aligned p, form .aligned ul {
-  background: #14162a !important;
-  color: #e9eaf0 !important;
-}
-/* Alternancia sutil, para que las filas se distingan sin rayar la pantalla. */
-fieldset .form-row:nth-child(even) { background: #191b2e !important; }
-
-/* Etiquetas y ayuda: legibles, un escalon por debajo del dato. */
-.aligned label, form .aligned label, fieldset .form-row label {
-  color: #c3c6d4 !important;
-}
-.help, div.help, p.help, .form-row .help, form .aligned p.help, .helptext {
-  color: #9aa0b4 !important;
-}
-
-/* Enlaces dentro del contenido: el magenta de marca se lee bien sobre oscuro. */
-#content a:not(.button):not(.addlink):not(.changelink):not(.deletelink),
-#result_list tbody td a {
-  color: #f06fb0 !important;
-}
-#content a:hover, #result_list tbody td a:hover { color: #ff8fc4 !important; }
-
-/* Tablas del listado. */
-#result_list tbody td, #result_list tbody th { color: #e9eaf0 !important; }
-#result_list tbody tr { background: #14162a !important; }
-#result_list tbody tr:nth-child(even) { background: #191b2e !important; }
-
-/* La barra de filtros. Se quedo asumiendo fondo blanco cuando todo lo demas
-   paso a oscuro, y los subencabezados ("Por politica", "Por estado") acababan
-   en gris claro sobre blanco: invisibles. Va oscura como el resto. */
-#changelist-filter,
-#changelist-filter ul,
-#changelist-filter li,
-#changelist-filter details,
-#changelist-filter summary {
-  background: #191b2e !important;
-  color: #e9eaf0 !important;
-  border-left-color: #2d3151 !important;
-}
-#changelist-filter h3,
-#changelist-filter summary {
-  color: #ffffff !important;
-  border-bottom-color: var(--inet-pink) !important;
-}
-#changelist-filter a:link,
-#changelist-filter a:visited,
-#changelist-filter p a:link,
-#changelist-filter p a:visited {
-  color: #c9cee0 !important;
-}
-#changelist-filter a:hover,
-#changelist-filter li.selected a {
-  color: #f06fb0 !important;
-}
-
 </style>
 {% endblock %}
 

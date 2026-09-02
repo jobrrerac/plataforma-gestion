@@ -280,7 +280,7 @@
         <select name="proyecto" class="form-select" required>
           <option value="">— Seleccioná un proyecto —</option>
           {% for p in proyectos %}
-          <option value="{{ p.pk }}"
+          <option value="{{ p.pk }}" data-facturable="{% if p.facturable %}1{% else %}0{% endif %}"
             {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
             {{ p.codigo }}{% if p.codigo_pep %} · {{ p.codigo_pep }}{% endif %}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
           </option>
@@ -343,11 +343,14 @@
               <strong id="res-horas-h">—</strong> h · ~<strong id="res-dias-h">—</strong> días hábiles
             </span>
           </div>
-          <div class="fw-bold" style="color:#4a1f7a;font-size:.95rem">
+          <div class="fw-bold" id="bloque-costo" style="color:#4a1f7a;font-size:.95rem">
             Costo est.: <span id="res-costo">—</span> €
           </div>
+          <div class="fw-bold" id="bloque-sin-costo" style="display:none;color:#676d7a;font-size:.85rem">
+            <i class="bi bi-info-circle me-1"></i>Proyecto interno: no se estima costo
+          </div>
         </div>
-        <div class="text-muted mt-1" style="font-size:.75rem">
+        <div class="text-muted mt-1" id="pie-tarifa" style="font-size:.75rem">
           Tarifa vigente: <strong>{% if tarifa %}{{ tarifa.valor_hora }}{% else %}0.00{% endif %} €/h</strong>
           {% for s in segmentos %}{% if not forloop.first and s.valor != None %}
           · <strong style="color:#b45309">desde {{ s.desde|date:"d/m" }}: {{ s.valor }} €/h</strong>
@@ -446,6 +449,31 @@ var _DIAS_HABILES = {{ dias_habiles|default:0 }};
 // El costo es MIXTO: cada día usa la tarifa vigente de ese día.
 var _SEGMENTOS = {{ segmentos_json|default:"[]"|safe }};
 var _HAY_TARIFA = _SEGMENTOS.some(function (s) { return s.valor !== null; });
+
+  // Un proyecto interno no se cobra, asi que no tiene sentido estimarle un
+  // importe: la tarifa del recurso es lo que se le factura a un cliente.
+  // `costo_estimado_asignacion` ya devuelve None para estos, y esto evita que
+  // la pantalla ensene una cifra que nunca se va a guardar.
+  function proyectoSeFactura() {
+    var sel = document.querySelector('select[name="proyecto"]');
+    if (!sel || !sel.value) { return true; }
+    var op = sel.options[sel.selectedIndex];
+    return !op || op.dataset.facturable !== "0";
+  }
+  function sincronizarCosto() {
+    var factura = proyectoSeFactura();
+    var conCosto = document.getElementById("bloque-costo");
+    var sinCosto = document.getElementById("bloque-sin-costo");
+    var pieTarifa = document.getElementById("pie-tarifa");
+    if (conCosto) { conCosto.style.display = factura ? "" : "none"; }
+    if (sinCosto) { sinCosto.style.display = factura ? "none" : ""; }
+    if (pieTarifa) { pieTarifa.style.display = factura ? "" : "none"; }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    var sel = document.querySelector('select[name="proyecto"]');
+    if (sel) { sel.addEventListener("change", sincronizarCosto); }
+    sincronizarCosto();
+  });
 
 // Consume días/horas de cada tramo en orden y suma horas × tarifa del tramo.
 // Si las horas exceden los tramos conocidos, extiende con la última tarifa.
