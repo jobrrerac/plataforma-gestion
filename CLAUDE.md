@@ -45,8 +45,10 @@ contingencia (el secreto de Entra caduca al año): no eliminarlo.
 
 ## Trabajo pendiente que no se ha abandonado
 `docs/TRIAJE_HORAS.md` — asistencia a la aprobación de horas. Las **fases 0 y 1
-están en producción**; las **fases 2 a 5 siguen pendientes** (recuperación con
-pgvector, coherencia esfuerzo–horas con LLM, ayuda al escribir el detalle).
+están en producción** y la **mitad léxica de la fase 2** (precedentes con
+`pg_trgm`) está en dev. Siguen pendientes la mitad vectorial —espera a que se
+decida dónde corre el modelo de embeddings— y las **fases 3 a 5** (coherencia
+esfuerzo–horas con LLM, ayuda al escribir el detalle).
 Están diseñadas y decididas, no descartadas: esperan números del piloto de la
 fase 1.
 

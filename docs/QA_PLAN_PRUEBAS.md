@@ -360,6 +360,11 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-39 | No aparece con un detalle pobre | Día interno donde una actividad diga «muchas tareas» | **No** hay botón de día; sí el aviso naranja |
 | HAP-40 | **No aparece si una tarea se lleva medio día** | Día con 7,5 h de Estudio y 1 h interna | **No** hay botón de día: eso hay que mirarlo una por una |
 | HAP-41 | Con una sola actividad no aparece | Día interno de un solo renglón | **No** hay botón de día; el individual ya hace lo mismo |
+| HAP-42 | **Se ven los precedentes** | Registrar dos días con un detalle parecido y mirar el segundo en la cola | Bajo los avisos, un bloque **Antes** con la fecha, las horas y el proyecto de lo anterior |
+| HAP-43 | **Lo devuelto sale primero** | Que uno de los precedentes haya sido devuelto | Aparece el primero, en ámbar, con «· devuelto» y el motivo |
+| HAP-44 | Solo salen en lo marcado | Mirar una actividad del carril Rutina | **No** tiene bloque Antes |
+| HAP-45 | No se cuela gente ajena | Que otra persona tenga un texto parecido en **otro** proyecto | **No** aparece: solo la misma persona o el mismo proyecto |
+| HAP-46 | Como mucho tres | Que haya más de tres precedentes parecidos | Se muestran tres |
 
 ---
 
