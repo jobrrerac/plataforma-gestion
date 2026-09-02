@@ -15,6 +15,7 @@ from .services import (
     aprobar_asignacion, rechazar_asignacion, revocar_asignacion,
     calcular_horas_jornada_completa, analizar_conflictos, aprobar_recomputando,
     ceder_horas, aprobar_liberacion, rechazar_liberacion, anular_liberacion,
+    internos_que_cederian,
 )
 
 # Paleta del admin. Antes cada boton traia su hexadecimal a mano —y eran los
@@ -51,11 +52,20 @@ class AsignacionAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["horas_totales"].required = False
-        self.fields["dias_habiles"].required = False
-        self.fields["intensidad_diaria"].required = False  # validado en clean()
+        # Los campos pueden no estar. Cuando alguien tiene permiso de VER pero no
+        # de editar, el admin construye este formulario sin ningun campo
+        # editable, y dar por hecho que estan reventaba la pagina entera con un
+        # KeyError. Le pasaba a cualquiera con solo `view`: un Ingeniero, un
+        # Visor, o un PM mirando una asignacion ajena.
+        for nombre in ("horas_totales", "dias_habiles", "intensidad_diaria"):
+            if nombre in self.fields:
+                self.fields[nombre].required = False  # validado en clean()
         inst = getattr(self, "instance", None)
-        if inst and inst.pk and inst.modo_asignacion == "RANGO" and inst.fecha_fin:
+        if (
+            "fecha_fin_rango" in self.fields
+            and inst and inst.pk
+            and inst.modo_asignacion == "RANGO" and inst.fecha_fin
+        ):
             self.fields["fecha_fin_rango"].initial = inst.fecha_fin
 
     def clean(self):
@@ -298,6 +308,30 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "opts": self.model._meta,
         })
 
+    def _aviso_internos(self, asignacion):
+        """Que trabajo interno quedaria en 0 al aprobar esto.
+
+        Se dice ANTES de firmar y no despues: si la persona es critica para el
+        acelerador, la salida es rechazar esta asignacion, y eso solo se puede
+        decidir sabiendolo.
+        """
+        cediendo = internos_que_cederian(asignacion)
+        if not cediendo:
+            return ""
+        lineas = "".join(
+            f"<li><b>{interna.proyecto.codigo}</b> — {interna.proyecto.nombre}, "
+            f"del {ini:%d/%m/%Y} al {fin:%d/%m/%Y}</li>"
+            for interna, ini, fin in cediendo
+        )
+        return (
+            "<br><br><b>Hay trabajo interno que cederá.</b> El trabajo facturable "
+            "tiene prioridad, así que al aprobar esta asignación estas quedan en "
+            "0 esos días y sus horas no se recuperan:"
+            f"<ul style='margin:.5rem 0 0 1.1rem'>{lineas}</ul>"
+            "Si la persona es crítica para alguno de ellos, lo que toca es "
+            "rechazar esta asignación."
+        )
+
     def view_aprobar(self, request, pk):
         """Aprobar. En GET se confirma; el cambio real solo ocurre en POST.
 
@@ -327,7 +361,8 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             return self._confirmar(
                 request, asig, "Aprobar",
                 "Al aprobarla, sus horas empiezan a ocupar la capacidad del recurso "
-                "y se congela el snapshot de tarifa y costo.",
+                "y se congela el snapshot de tarifa y costo."
+                + self._aviso_internos(asig),
                 COLOR["ok"],
             )
         try:

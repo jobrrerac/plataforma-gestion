@@ -637,6 +637,58 @@ a.button[style*="#97591a"] {
 /* Evitar que la tabla recorte el popup */
 #result_list { overflow: visible !important; }
 #result_list td { overflow: visible !important; }
+/* ─── CONTRASTE DEL CONTENIDO ────────────────────────────────────
+   El tema forzaba `color: #1a1033` —azul casi negro— dando por hecho un fondo
+   claro. Pero los paneles del admin (fieldset, form-row, readonly) toman su
+   fondo de las variables de Django, que en modo oscuro son casi negras. El
+   resultado era azul oscuro sobre negro: ilegible en las vistas de solo
+   lectura, que es donde mas texto hay.
+
+   Se resuelve comprometiendo el admin a oscuro en vez de pelearse con el tema
+   del sistema: `color-scheme` fija la paleta pase lo que pase en el equipo de
+   quien mira, y a partir de ahi el texto va claro. Antes el aspecto dependia de
+   una preferencia del sistema operativo que nadie habia elegido a proposito.
+─────────────────────────────────────────────────────────────── */
+:root { color-scheme: dark; }
+
+body,
+#content, #content-related, .content-title,
+#content h1, #content h2, #content h3,
+fieldset, .form-row, .form-row > div,
+.aligned label, form .aligned p, form .aligned ul {
+  color: #e9eaf0 !important;
+}
+
+/* El valor de un campo de solo lectura: es lo que se estaba perdiendo. */
+.form-row .readonly,
+.form-row div.readonly,
+.readonly {
+  color: #e9eaf0 !important;
+}
+
+/* Etiquetas y textos de ayuda: legibles, pero un escalon por debajo del dato. */
+.aligned label,
+form .aligned label,
+fieldset .form-row label {
+  color: #c3c6d4 !important;
+}
+.help, div.help, p.help, .form-row .help,
+form .aligned p.help, .helptext {
+  color: #9aa0b4 !important;
+}
+
+/* Enlaces dentro del contenido: el magenta de marca se lee bien sobre oscuro. */
+#content a:not(.button):not(.addlink):not(.changelink):not(.deletelink) {
+  color: #f06fb0 !important;
+}
+
+/* Las tablas del listado heredan el mismo criterio. */
+#result_list tbody td, #result_list tbody th,
+#result_list tbody td a {
+  color: #e9eaf0 !important;
+}
+#result_list tbody td a:hover { color: #f06fb0 !important; }
+
 </style>
 {% endblock %}
 
