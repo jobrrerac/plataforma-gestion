@@ -330,6 +330,26 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-19 | Una asignación solicitada se marca | Repetir con una asignación aún en estado Solicitada | Aparece igual, con el sufijo **(solicitada)** |
 | HAP-20 | No se cuela la tarea de otro proyecto | Mirar un renglón de un proyecto **sin** asignación con actividad | **No** aparece la línea Planificado; no se muestra la tarea de otro proyecto ni de otra fecha |
 | HAP-21 | Sin actividad no molesta | Renglón de formación o estudio (sin proyecto) | No aparece la línea Planificado; el renglón se ve como siempre |
+| HAP-22 | **Los tres carriles** | Abrir `/horas/aprobar/` con la cola cargada | Arriba, tres recuadros: Atención, Revisar y Rutina, con su número |
+| HAP-23 | **Los números cuadran** | Sumar los tres recuadros | La suma es igual al total de actividades que **puedes firmar** (no cuenta las de otros PM) |
+| HAP-24 | Lo urgente va primero | Mirar el orden de los días | Los días con Atención salen antes que los de Revisar, y estos antes que los de Rutina |
+| HAP-25 | **La banda ordena, no decide** | Contar los botones Aprobar y Devolver en los tres carriles | Todas las actividades pendientes conservan sus dos botones. Nada queda oculto ni preseleccionado |
+| HAP-26 | **Media jornada no facturable** | Registrar 7,5 h de Estudio en una jornada de 8,5 y mirar la cola | Aviso naranja: «7.5 h de 8.5 (88% del día) … no es facturable» |
+| HAP-27 | **Detalle pobre** | Registrar horas con el detalle «muchas tareas» | Aviso: ««muchas tareas» no dice qué se hizo: 13 caracteres, 2 palabras» |
+| HAP-28 | Un día normal es Rutina | Día completo en un proyecto asignado, con detalle específico | **Sin** avisos y sin etiqueta de banda; cuenta en el carril Rutina |
+| HAP-29 | Pasarse del plan | Declarar 8,5 h en un proyecto cuya asignación decía 4,3 h/día | Aviso: «Declaró 8.5 h y el plan preveía 4.3 h/día en este proyecto» |
+| HAP-30 | **Proyecto sin asignación** | Que un Admin revoque la asignación y volver a la cola | Aviso rojo de Atención: «No tenía asignación aprobada a … el dd/mm/aaaa» |
+| HAP-31 | Texto copiado de otro día | Registrar dos días con exactamente el mismo detalle | Aviso: «El mismo texto, palabra por palabra, en dd/mm» |
+| HAP-32 | Devoluciones recientes | Mirar un día de alguien con 2+ devoluciones en 30 días | Bajo su nombre, la nota «Se le devolvieron N actividades…». **No** cambia la banda |
+| HAP-33 | **Aprobar el día entero** | Como `qa.admin`, mirar un día repartido en 3 actividades internas bien descritas | Franja verde con el botón **Aprobar el día (3)** |
+| HAP-34 | El botón no sustituye a los de siempre | En ese mismo día, contar los botones | Cada actividad conserva su Aprobar y su Devolver; el del día se suma, no reemplaza |
+| HAP-35 | **Firma las tres de una vez** | Pulsar el botón y confirmar | Mensaje «Aprobadas las 3 actividades internas de …»; el día desaparece de la cola |
+| HAP-36 | Cada actividad queda con su firma | Como Admin, mirar ese día en `/admin/` | Las tres en Aprobado, las tres con **tu** nombre como aprobador |
+| HAP-37 | **No aparece para el PM** | Repetir HAP-33 como `qa.pm` | **No** hay botón de día; solo los individuales |
+| HAP-38 | No aparece si algo es facturable | Día con 4 h de proyecto de cliente y 4 h internas | **No** hay botón de día |
+| HAP-39 | No aparece con un detalle pobre | Día interno donde una actividad diga «muchas tareas» | **No** hay botón de día; sí el aviso naranja |
+| HAP-40 | **No aparece si una tarea se lleva medio día** | Día con 7,5 h de Estudio y 1 h interna | **No** hay botón de día: eso hay que mirarlo una por una |
+| HAP-41 | Con una sola actividad no aparece | Día interno de un solo renglón | **No** hay botón de día; el individual ya hace lo mismo |
 
 ---
 

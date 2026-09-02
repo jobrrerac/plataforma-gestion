@@ -21,6 +21,34 @@
   .lineas { margin-top:12px; border-top:1px solid #f0eef5; padding-top:10px; }
   .linea { display:grid; grid-template-columns:1fr auto; gap:12px; padding:6px 0; font-size:.88rem; }
   .linea .det { color:#6b7280; font-size:.82rem; }
+  /* Triaje: el recuento por carril y el motivo de cada renglon.
+     Los colores de estado salen de la paleta del proyecto y son distintos del
+     magenta de marca a proposito: aqui codifican gravedad, no identidad. */
+  .carriles { display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr)); gap:10px; margin-bottom:18px; }
+  .carril { background:#fff; border:1px solid #e2e4ea; border-top:4px solid var(--franja);
+            border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
+  .carril-n { font-size:1.9rem; font-weight:800; line-height:1; color:var(--franja); font-variant-numeric:tabular-nums; }
+  .carril-t { font-weight:700; font-size:.9rem; color:#23262f; }
+  .carril-d { font-size:.76rem; color:#676d7a; }
+  .c-atencion { --franja:#a52a25; }
+  .c-revisar  { --franja:#97591a; }
+  .c-rutina   { --franja:#1f6b45; }
+
+  .banda { display:inline-block; font-size:.62rem; font-weight:800; letter-spacing:.07em;
+           text-transform:uppercase; padding:2px 7px; border-radius:3px; vertical-align:.15em; margin-left:8px; }
+  .b-atencion { background:#f8ebea; color:#a52a25; border:1px solid #a52a25; }
+  .b-revisar  { background:#fbf1e3; color:#97591a; border:1px solid #97591a; }
+
+  .senal { font-size:.79rem; line-height:1.45; padding:5px 9px; border-radius:6px; }
+  .s-atencion { background:#f8ebea; color:#8f231f; }
+  .s-revisar  { background:#fbf1e3; color:#7d4915; }
+  .contexto { font-size:.78rem; color:#97591a; }
+
+  .bloque-dia { display:flex; align-items:center; justify-content:space-between; gap:14px;
+                flex-wrap:wrap; margin-top:14px; padding:12px 14px; border-radius:8px;
+                background:#e8f2ec; border:1px solid #1f6b45; }
+  .bloque-txt { font-size:.83rem; color:#125033; line-height:1.45; }
+
   /* Lo que decia el cronograma, para poder contrastarlo con lo declarado. */
   .planificado { color:#4b5563; font-size:.78rem; }
   .planificado-et { font-size:.64rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
@@ -81,11 +109,47 @@
   </div>
   {% endif %}
 
+  {% if hay_triaje %}
+  {% comment %}
+    El recuento reordena la cola, no la filtra: los tres carriles llevan los
+    mismos botones y nada queda oculto. Que la banda ordene y no decida es lo
+    que impide que esto se convierta en una aprobacion automatica de hecho.
+  {% endcomment %}
+  <div class="carriles" role="status">
+    <div class="carril c-atencion">
+      <span class="carril-n">{{ recuento.ATENCION|default:"0" }}</span>
+      <span class="carril-t">Atención</span>
+      <span class="carril-d">Empieza por aquí</span>
+    </div>
+    <div class="carril c-revisar">
+      <span class="carril-n">{{ recuento.REVISAR|default:"0" }}</span>
+      <span class="carril-t">Revisar</span>
+      <span class="carril-d">Con un motivo concreto</span>
+    </div>
+    <div class="carril c-rutina">
+      <span class="carril-n">{{ recuento.RUTINA|default:"0" }}</span>
+      <span class="carril-t">Rutina</span>
+      <span class="carril-d">Dentro del plan</span>
+    </div>
+  </div>
+  {% endif %}
+
   {% for dia in dias %}
   <div class="dia-card">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
       <div>
-        <div class="persona">{{ dia.recurso.nombre }}</div>
+        <div class="persona">
+          {{ dia.recurso.nombre }}
+          {% if hay_triaje and dia.banda != "RUTINA" %}
+          <span class="banda b-{{ dia.banda|lower }}">{{ dia.banda_etiqueta }}</span>
+          {% endif %}
+        </div>
+        {% if dia.devoluciones_recientes %}
+        <div class="contexto mt-1">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>
+          Se le devolvieron {{ dia.devoluciones_recientes }} actividades en los últimos 30 días.
+        </div>
+        {% endif %}
         <div class="meta mt-1">
           {{ dia.fecha|date:"l j \d\e F \d\e Y"|capfirst }}
           · registrado el {{ dia.registrado_en|date:"d/m/Y H:i" }}
@@ -128,6 +192,11 @@
             {% for tarea in r.planificado %}{{ tarea }}{% if not forloop.last %} · {% endif %}{% endfor %}
           </div>
           {% endif %}
+          {% for s in r.evaluacion.senales %}
+          <div class="senal s-{{ s.banda|lower }} mt-1">
+            <i class="bi bi-{% if s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
+          </div>
+          {% endfor %}
 
           <div class="d-flex gap-2 mt-2 flex-wrap">
             <form method="post" onsubmit="return confirm('¿Aprobar estas {{ r.horas }} h?')">
@@ -185,10 +254,38 @@
             {% for tarea in r.planificado %}{{ tarea }}{% if not forloop.last %} · {% endif %}{% endfor %}
           </div>
           {% endif %}
+          {% for s in r.evaluacion.senales %}
+          <div class="senal s-{{ s.banda|lower }} mt-1">
+            <i class="bi bi-{% if s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
+          </div>
+          {% endfor %}
         </div>
         <div class="h">{{ r.horas }} h</div>
       </div>
       {% endfor %}
+      {% endif %}
+
+      {% if dia.aprobable_en_bloque %}
+      {% comment %}
+        Solo aparece cuando el dia entero es interno, esta partido en varias
+        actividades y ninguna trae aviso. Pulsarlo no salta ninguna regla: el
+        servicio revalida y firma renglon a renglon, cada uno con su firma.
+      {% endcomment %}
+      <div class="bloque-dia">
+        <div class="bloque-txt">
+          <strong>Todo el día es interno y ninguna actividad tiene avisos.</strong>
+          Puedes firmarlas de una vez en lugar de una por una.
+        </div>
+        <form method="post" class="m-0"
+              onsubmit="return confirm('¿Aprobar las {{ dia.pendientes_mios|length }} actividades internas de este día?')">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="aprobar_dia">
+          <input type="hidden" name="dia" value="{{ dia.pk }}">
+          <button type="submit" class="btn-aprobar">
+            <i class="bi bi-check2-all me-1"></i>Aprobar el día ({{ dia.pendientes_mios|length }})
+          </button>
+        </form>
+      </div>
       {% endif %}
     </div>
   </div>

@@ -47,6 +47,22 @@
       --inet-nav-size:    .7rem;
     }
 
+    /* ─── FORMULARIOS ───────────────────────────────────────────── */
+    /* Los ejemplos dentro de un campo tienen que leerse como ejemplos. Con el
+       gris por defecto de Bootstrap parecen un valor ya escrito —lo reporto QA
+       viendo "8.5" en Horas y creyendo que el campo venia relleno— y entonces
+       la gente pulsa Guardar sin rellenar nada.
+
+       Va con la clase y no con `::placeholder` a secas porque Bootstrap define
+       `.form-control::placeholder`, que tiene mas especificidad y ganaria.
+       `opacity: 1` es por Firefox, que aplica una opacidad propia. */
+    .form-control::placeholder,
+    .form-select::placeholder {
+      color: #9098a8;
+      font-style: italic;
+      opacity: 1;
+    }
+
     /* ─── HEADER ────────────────────────────────────────────────── */
     .inet-header {
       /* Plano. El degradado de tres paradas era lo que mas cantaba. */

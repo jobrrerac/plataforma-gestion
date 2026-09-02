@@ -30,6 +30,9 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.dashboard",
     "apps.legalizacion",
+    # Triaje de la cola de aprobacion. Se puede quitar de aqui: la pantalla
+    # vuelve a pintarse sin bandas y nada mas cambia.
+    "apps.revision",
 ]
 
 MIDDLEWARE = [

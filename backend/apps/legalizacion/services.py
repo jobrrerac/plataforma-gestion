@@ -393,6 +393,72 @@ def actividades_planificadas(dias) -> dict:
     return planificadas
 
 
+def aprobar_dia_completo(dia, usuario):
+    """Firma de una vez todos los renglones pendientes de un día interno.
+
+    Existe para el caso concreto que lo pidió: alguien en bench que reparte su
+    jornada en varias tareas internas, cada una descrita y acotada. Revisarlas
+    de a una no aporta nada, y obligar a hacerlo es lo que lleva a firmar sin
+    mirar.
+
+    **Vuelve a comprobar la elegibilidad aquí.** Que el botón se haya pintado no
+    autoriza nada: entre que se cargó la pantalla y llega este POST, alguien
+    pudo editar un renglón, aprobar otro o revocar una asignación. Es la misma
+    razón por la que `aprobar_registro` relee bajo bloqueo.
+
+    Cada renglón se firma con `aprobar_registro`, uno a uno: conserva el bloqueo,
+    la validación de estado y la firma individual en `aprobado_por`. Aprobar en
+    bloque es una sola interacción, no una excepción a las reglas.
+
+    Devuelve cuántos se firmaron.
+    """
+    from django.apps import apps as registro_de_apps
+
+    if not registro_de_apps.is_installed("apps.revision"):
+        raise ValidationError("La aprobación por día no está disponible.")
+    from apps.revision.api import Contexto, aprobable_en_bloque
+    from apps.revision.senales import evaluar
+
+    with transaction.atomic():
+        dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
+        pendientes = [
+            r for r in dia.registros.select_related("proyecto", "tipo_actividad")
+            if r.estado == RegistroHoras.PENDIENTE
+        ]
+        contexto = Contexto([dia])
+        for registro in pendientes:
+            registro.evaluacion = evaluar(registro, dia, contexto)
+
+        if not aprobable_en_bloque(dia, usuario, pendientes):
+            raise ValidationError(
+                "Este día ya no se puede aprobar completo: alguna actividad "
+                "cambió o necesita revisarse una por una."
+            )
+
+        for registro in pendientes:
+            aprobar_registro(registro, usuario)
+    return len(pendientes)
+
+
+def triar(dias, usuario=None) -> dict:
+    """Pide a `apps.revision` que ordene la cola, si está instalada.
+
+    El import va aquí dentro y no arriba a propósito. `revision` está por
+    encima de esta app en la pila de capas, así que una dependencia estructural
+    crearía un ciclo; y además esto tiene que poder faltar: si el módulo se
+    quita de INSTALLED_APPS, la cola se pinta como siempre y no se rompe nada.
+
+    Devuelve el recuento por banda, o un diccionario vacío si no hay triaje.
+    """
+    from django.apps import apps as registro_de_apps
+
+    if not registro_de_apps.is_installed("apps.revision"):
+        return {}
+    from apps.revision.api import clasificar
+
+    return clasificar(dias, usuario)
+
+
 def dias_por_aprobar(usuario):
     """La misma cola, agrupada por día para poder pintarla.
 

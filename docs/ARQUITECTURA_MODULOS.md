@@ -24,7 +24,8 @@ Cada app solo puede depender de las de arriba. Es lo que hace que un cambio en
 | 3 | `calendar_engine` | Qué días son hábiles para cada persona. Feriados, novedades. |
 | 4 | `assignments` | Quién está asignado a qué y cuándo. **El plan.** |
 | 5 | `legalizacion` | Qué hizo cada quien con su jornada. **Lo declarado.** |
-| 6 | `dashboard` | Pantallas que componen todo lo anterior. |
+| 6 | `revision` | Triaje de la cola de aprobación. Se puede quitar de `INSTALLED_APPS`. |
+| 7 | `dashboard` | Pantallas que componen todo lo anterior. |
 
 `legalizacion` puede mirar el plan de `assignments` —para enseñar la tarea
 planificada al lado de lo declarado— pero `assignments` **no** puede depender de
@@ -59,6 +60,7 @@ Los bloques **propios** son los que ejercitan directamente ese módulo. Los
 | `calendar_engine` | CAL, NOV | SOL, APR, LIB, HOR | ~75 |
 | `assignments` | SOL, APR, CES, LIB, AUD | HAP, APD, DASH (leen el plan) | ~70 |
 | `legalizacion` | HOR, HAP, APD | DASH | ~64 |
+| `revision` | HAP | — | 21 |
 | `dashboard` | DASH | — | 5 |
 | `templates/base.html` | AUT-09, AUT-10, RBAC-03 | — | 3 |
 | `config/settings/` | INF, AUT | — | 17 |

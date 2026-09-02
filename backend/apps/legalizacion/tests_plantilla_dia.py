@@ -64,3 +64,13 @@ class PlantillaDiaTests(TestCase):
         self.assertIn("0 / 300", html)
         self.assertIn("Son 300 caracteres", html)
         self.assertIn("alcance para aprobar esas horas", html)
+
+    def test_los_ejemplos_se_leen_como_ejemplos(self):
+        """Un placeholder que parece un valor hace que se pulse Guardar sin
+        rellenar. QA vio «8.5» en Horas y creyo que el campo venia relleno."""
+        html = self._html(date(2026, 8, 28))
+        self.assertIn('placeholder="Ej: 8.5"', html)
+        self.assertNotIn('placeholder="8.5"', html)
+        # Y el estilo que los distingue del texto escrito, que vive en base.html
+        # para que valga en todos los formularios.
+        self.assertIn(".form-control::placeholder", html)
