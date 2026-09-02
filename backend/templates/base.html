@@ -84,6 +84,26 @@
     .page-strip-sep { width: 1px; height: 20px; background: var(--inet-linea); }
     .page-strip-nota { margin: 0; font-size: .82rem; color: var(--inet-tenue); }
 
+    /* Variante contenedora. Tres pantallas usan la franja como banda y colocan
+       dentro su propia cabecera —un buscador entero, dos columnas—, no un
+       titulo suelto. Se distingue por su clase en vez de dejar que cada
+       plantilla redefina `.page-strip`, que es como llegamos a tener once
+       versiones distintas de lo mismo. */
+    .page-strip-bloque {
+      display: block;
+      padding: 18px 2rem 0;
+    }
+    .page-strip-bloque h1 { font-size: 1.25rem; }
+    /* Si el contenido ya trae su propio margen lateral, la banda no lo repite. */
+    .page-strip-bloque:has(> .page-strip-inner) { padding-left: 0; padding-right: 0; }
+    .page-strip-inner {
+      padding: 0 2rem 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
     /* ─── FORMULARIOS ───────────────────────────────────────────── */
     /* Los ejemplos dentro de un campo tienen que leerse como ejemplos. Con el
        gris por defecto de Bootstrap parecen un valor ya escrito —lo reporto QA

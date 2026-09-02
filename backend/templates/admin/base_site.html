@@ -693,6 +693,34 @@ fieldset .form-row:nth-child(even) { background: #191b2e !important; }
 #result_list tbody tr { background: #14162a !important; }
 #result_list tbody tr:nth-child(even) { background: #191b2e !important; }
 
+/* La barra de filtros. Se quedo asumiendo fondo blanco cuando todo lo demas
+   paso a oscuro, y los subencabezados ("Por politica", "Por estado") acababan
+   en gris claro sobre blanco: invisibles. Va oscura como el resto. */
+#changelist-filter,
+#changelist-filter ul,
+#changelist-filter li,
+#changelist-filter details,
+#changelist-filter summary {
+  background: #191b2e !important;
+  color: #e9eaf0 !important;
+  border-left-color: #2d3151 !important;
+}
+#changelist-filter h3,
+#changelist-filter summary {
+  color: #ffffff !important;
+  border-bottom-color: var(--inet-pink) !important;
+}
+#changelist-filter a:link,
+#changelist-filter a:visited,
+#changelist-filter p a:link,
+#changelist-filter p a:visited {
+  color: #c9cee0 !important;
+}
+#changelist-filter a:hover,
+#changelist-filter li.selected a {
+  color: #f06fb0 !important;
+}
+
 </style>
 {% endblock %}
 

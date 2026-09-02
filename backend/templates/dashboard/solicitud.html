@@ -84,9 +84,9 @@
 {% block content %}
 
 <!-- Page strip con filtros -->
-<div class="page-strip pb-4">
+<div class="page-strip page-strip-bloque pb-4">
   <h1>Solicitud de <span>Recursos</span></h1>
-  <p class="text-muted mb-4" style="font-size:.82rem">Buscá disponibilidad por período, nombre y skills</p>
+  <p class="text-muted mb-4" style="font-size:.82rem">Busca disponibilidad por período, nombre y skills</p>
 
   <form method="get" action="/solicitud/" id="form-busqueda">
     <input type="hidden" name="modo_busqueda" id="modo_busqueda" value="{{ modo_busqueda|default:'rango' }}">
