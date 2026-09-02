@@ -25,21 +25,29 @@
 
 {% block content %}
 <style>
+  /* Esta pantalla tenia sus cajas en claro con el texto por defecto. Cuando el
+     admin paso a oscuro, ese texto se volvio claro y quedo blanco sobre amarillo
+     palido y gris sobre gris: justo la pantalla donde se confirma una accion que
+     no se deshace. Las cajas van oscuras, como el resto. */
   .caja { border-radius:8px; padding:16px 20px; margin-bottom:20px; max-width:1120px; }
-  .caja.aviso { background:#fff3cd; border:1px solid #ffc107; }
-  .caja.datos { background:#f6f7f9; border:1px solid #dfe1e5; }
-  .caja h3 { margin:0 0 10px; font-size:1rem; }
+  .caja.aviso { background:#2b2114 !important; border:1px solid #97591a; color:#f3e3c8 !important; }
+  .caja.datos { background:#1b1c24 !important; border:1px solid #2b2d38; color:#e9eaf0 !important; }
+  .caja h3 { margin:0 0 10px; font-size:1rem; color:#ffffff !important; }
   .datos dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 18px; }
-  .datos dt { font-weight:600; color:#555; }
-  .datos dd { margin:0; }
+  .datos dt { font-weight:600; color:#c3c6d4 !important; }
+  .datos dd { margin:0; color:#e9eaf0 !important; }
+  .caja.aviso b, .caja.aviso strong { color:#ffffff !important; }
+  .caja.aviso ul { margin:.5rem 0 0 1.1rem; }
   .acciones { display:flex; gap:10px; align-items:center; margin-top:18px; }
   .btn-confirmar { background:{{ color }}; color:#fff; border:none; border-radius:5px;
                    padding:9px 18px; font-weight:600; cursor:pointer; font-size:.92rem; }
-  .btn-cancelar { color:#555; text-decoration:none; padding:9px 14px; }
+  .btn-cancelar { color:#c9cee0 !important; text-decoration:none; padding:9px 14px; }
+  .btn-cancelar:hover { color:#f06fb0 !important; }
   .campo-motivo { margin-top:14px; max-width:1120px; }
-  .campo-motivo label { display:block; font-weight:600; margin-bottom:5px; }
-  .campo-motivo input { width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:5px; }
-  .campo-motivo .ayuda { color:#666; font-size:.85rem; margin-top:5px; }
+  .campo-motivo label { display:block; font-weight:600; margin-bottom:5px; color:#e9eaf0 !important; }
+  .campo-motivo input { width:100%; padding:8px 10px; border:1px solid #2b2d38; border-radius:5px;
+                        background:#16171d; color:#e9eaf0; }
+  .campo-motivo .ayuda { color:#9aa0b4 !important; font-size:.85rem; margin-top:5px; }
 </style>
 
 <div class="caja aviso">

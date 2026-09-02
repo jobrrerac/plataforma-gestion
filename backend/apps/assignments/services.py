@@ -389,7 +389,12 @@ def aprobar_asignacion(asignacion, actor):
         # Snapshot al aprobar: tarifa de referencia (la del día de inicio) y
         # costo mixto por día. Si la tarifa cambia después, un recomputo
         # automático actualiza el costo y lo deja trazado en el log.
-        tarifa_inicio = TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+        # Sin tarifa congelada en lo interno: no hay nada que cobrar, y guardar
+        # una haria que apareciera en cualquier informe que la lea.
+        tarifa_inicio = (
+            TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+            if asignacion.proyecto.facturable else None
+        )
         asignacion.tarifa_aplicada = tarifa_inicio.valor_hora if tarifa_inicio else None
         asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
         asignacion.save(update_fields=["estado", "tarifa_aplicada", "costo_estimado", "updated_at"])
@@ -665,7 +670,12 @@ def aprobar_recomputando(asignacion, actor, nueva_fecha_fin, nuevas_horas):
                 f"Sigue habiendo conflicto el {fecha_conflicto.strftime('%d/%m/%Y')} tras recomputar."
             )
         asignacion.estado = "APROBADA"
-        tarifa_inicio = TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+        # Sin tarifa congelada en lo interno: no hay nada que cobrar, y guardar
+        # una haria que apareciera en cualquier informe que la lea.
+        tarifa_inicio = (
+            TarifaVigente.vigente_para(recurso, asignacion.fecha_inicio)
+            if asignacion.proyecto.facturable else None
+        )
         asignacion.tarifa_aplicada = tarifa_inicio.valor_hora if tarifa_inicio else None
         asignacion.costo_estimado = costo_estimado_asignacion(asignacion)
         asignacion.save(update_fields=[
@@ -780,7 +790,16 @@ def costo_estimado_asignacion(asignacion):
     Costo mixto de una asignación: por cada día hábil del rango, horas del día
     × tarifa vigente ESE día. Retorna Decimal o None si el recurso no tiene
     ninguna tarifa aplicable en el período.
+
+    **Un proyecto interno no estima costo.** La tarifa del recurso es lo que se
+    le cobra a un cliente; aplicarla a un acelerador o a gestión departamental
+    inventa un importe que nadie va a facturar y que se cuela en los informes
+    como si fuera ingreso. Es el mismo criterio que ya rige `RegistroHoras.
+    facturable`, aplicado al otro lado del módulo.
     """
+    if not asignacion.proyecto.facturable:
+        return None
+
     tarifas = list(
         TarifaVigente.objects.filter(
             recurso_id=asignacion.recurso_id, fecha_desde__lte=asignacion.fecha_fin,

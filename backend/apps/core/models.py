@@ -158,16 +158,21 @@ def recursos_asignables():
     """
     Recursos que pueden recibir asignaciones (los que se muestran en el
     dashboard y en el buscador de solicitudes): activos y cuyo usuario de
-    login NO es Admin, PM, staff ni superusuario. Los recursos sin usuario
-    vinculado se consideran asignables.
+    login NO es Admin, PM, Visor, staff ni superusuario. Los recursos sin
+    usuario vinculado se consideran asignables.
+
+    El Visor entro en la lista al dejar de ser staff: hasta entonces lo filtraba
+    `is_staff`, no el rol. Un rol de supervision no recibe asignaciones, asi que
+    aparecer en el heatmap como bench solo ensuciaba el tablero — y ademas
+    falseaba la disponibilidad del equipo.
     """
-    from apps.accounts.roles import ADMIN, PM
+    from apps.accounts.roles import ADMIN, PM, VISOR
 
     return (
         Recurso.objects.filter(activo=True)
         .exclude(usuario__is_staff=True)
         .exclude(usuario__is_superuser=True)
-        .exclude(usuario__groups__name__in=[ADMIN, PM])
+        .exclude(usuario__groups__name__in=[ADMIN, PM, VISOR])
     )
 
 

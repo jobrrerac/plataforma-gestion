@@ -270,3 +270,51 @@ class SoloLosAsignadosImputanHorasTests(BaseInternos):
     def test_los_administrativos_siguen_saliendo_para_todos(self):
         """Sin ellos, alguien en bench no tendria con que cuadrar su jornada."""
         self.assertIn("INT-DEPART", self._disponibles())
+
+
+class LosInternosNoEstimanCostoTests(BaseInternos):
+    """La tarifa del recurso es lo que se le cobra a un cliente.
+
+    Aplicarla a un acelerador o a gestion departamental inventa un importe que
+    nadie va a facturar y que se cuela en los informes como si fuera ingreso.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.core.models import TarifaVigente
+        TarifaVigente.objects.create(
+            recurso=self.recurso, valor_hora=Decimal("4.42"),
+            fecha_desde=date(2026, 1, 1),
+        )
+
+    def test_un_proyecto_de_cliente_si_estima(self):
+        """El caso normal, que es lo que no puede romperse."""
+        from apps.assignments.services import costo_estimado_asignacion
+        costo = costo_estimado_asignacion(self._asignacion(self.cliente))
+        self.assertIsNotNone(costo)
+        self.assertGreater(costo, 0)
+
+    def test_un_acelerador_no_estima(self):
+        from apps.assignments.services import costo_estimado_asignacion
+        self.assertIsNone(costo_estimado_asignacion(self._asignacion(self.acelerador)))
+
+    def test_un_interno_administrativo_tampoco(self):
+        from apps.assignments.services import costo_estimado_asignacion
+        self.assertIsNone(costo_estimado_asignacion(self._asignacion(self.administrativo)))
+
+    def test_al_aprobar_un_interno_no_se_congela_tarifa_ni_costo(self):
+        """Guardarlas haria que aparecieran en cualquier informe que las lea."""
+        interna = self._asignacion(self.acelerador, estado="SOLICITADA")
+        aprobar_asignacion(interna, self.pm)
+
+        interna.refresh_from_db()
+        self.assertIsNone(interna.tarifa_aplicada)
+        self.assertIsNone(interna.costo_estimado)
+
+    def test_al_aprobar_uno_de_cliente_si(self):
+        cliente = self._asignacion(self.cliente, estado="SOLICITADA")
+        aprobar_asignacion(cliente, self.pm)
+
+        cliente.refresh_from_db()
+        self.assertEqual(cliente.tarifa_aplicada, Decimal("4.42"))
+        self.assertIsNotNone(cliente.costo_estimado)
