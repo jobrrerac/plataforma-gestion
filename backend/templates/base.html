@@ -47,6 +47,43 @@
       --inet-nav-size:    .7rem;
     }
 
+    /* ─── FRANJA DE PANTALLA ────────────────────────────────────── */
+    /* La cabecera de cada modulo. Vivia copiada en once plantillas y habia
+       derivado: el enlace "Volver" salia azul en Cesiones y magenta en
+       Liberaciones, y en alguna pantalla no salia. Una sola definicion aqui y
+       un include compartido en `componentes/franja_pagina.html`. */
+    .page-strip {
+      background: #fff;
+      border-bottom: 1px solid var(--inet-linea);
+      padding: 18px 2rem 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .page-strip h1 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--inet-dark);
+      margin: 0;
+      letter-spacing: -.02em;
+    }
+    .page-strip h1 span { color: var(--inet-pink); }
+    .page-strip h1 i { color: var(--inet-pink); }
+    .page-strip-volver {
+      color: var(--inet-pink);
+      text-decoration: none;
+      font-size: .85rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .page-strip-volver:hover { color: var(--inet-pink-oscuro); }
+    .page-strip-sep { width: 1px; height: 20px; background: var(--inet-linea); }
+    .page-strip-nota { margin: 0; font-size: .82rem; color: var(--inet-tenue); }
+
     /* ─── FORMULARIOS ───────────────────────────────────────────── */
     /* Los ejemplos dentro de un campo tienen que leerse como ejemplos. Con el
        gris por defecto de Bootstrap parecen un valor ya escrito —lo reporto QA

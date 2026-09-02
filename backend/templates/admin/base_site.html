@@ -203,10 +203,7 @@ div.breadcrumbs a:hover { color: #fff !important; }
 /* ─── CONTENT AREA ──────────────────────────────────────────── */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f4f4f8 !important;
-  color: #1a1033 !important;
 }
-#content, #content-related, .content-title { color: #1a1033 !important; }
 
 /* Module / section headers en contenido */
 .module h2, .module caption, .inline-group h2 {
@@ -638,56 +635,63 @@ a.button[style*="#97591a"] {
 #result_list { overflow: visible !important; }
 #result_list td { overflow: visible !important; }
 /* ─── CONTRASTE DEL CONTENIDO ────────────────────────────────────
-   El tema forzaba `color: #1a1033` —azul casi negro— dando por hecho un fondo
-   claro. Pero los paneles del admin (fieldset, form-row, readonly) toman su
-   fondo de las variables de Django, que en modo oscuro son casi negras. El
-   resultado era azul oscuro sobre negro: ilegible en las vistas de solo
-   lectura, que es donde mas texto hay.
+   Antes esto dependia de una preferencia del sistema operativo que nadie habia
+   elegido: el tema forzaba fondo claro y texto casi negro, pero los paneles del
+   admin toman su fondo de las variables de Django, oscuras en modo oscuro. Lo
+   que salia era una mezcla — titulos blancos sobre blanco en unas zonas y azul
+   oscuro sobre negro en otras.
 
-   Se resuelve comprometiendo el admin a oscuro en vez de pelearse con el tema
-   del sistema: `color-scheme` fija la paleta pase lo que pase en el equipo de
-   quien mira, y a partir de ahi el texto va claro. Antes el aspecto dependia de
-   una preferencia del sistema operativo que nadie habia elegido a proposito.
+   Se resuelve pintando el oscuro a mano en vez de negociarlo con el navegador.
+   Nada aqui cuelga de `prefers-color-scheme`, asi que la pantalla se ve igual en
+   todos los equipos.
 ─────────────────────────────────────────────────────────────── */
 :root { color-scheme: dark; }
 
 body,
-#content, #content-related, .content-title,
+#container, #content, #content-main, #content-related,
+.module, fieldset.module, .inline-related, .submit-row,
+#changelist, #changelist-form, .results, .dashboard #content {
+  background: #14162a !important;
+  color: #e9eaf0 !important;
+}
+
+/* Los titulos: quedaban en blanco sobre blanco. */
 #content h1, #content h2, #content h3,
-fieldset, .form-row, .form-row > div,
-.aligned label, form .aligned p, form .aligned ul {
-  color: #e9eaf0 !important;
+.content-title, #content .content-title,
+.dashboard #content h1, .colM h1, h1 {
+  color: #ffffff !important;
 }
 
-/* El valor de un campo de solo lectura: es lo que se estaba perdiendo. */
-.form-row .readonly,
-.form-row div.readonly,
-.readonly {
+/* Filas del formulario y valores de solo lectura, que es donde mas texto hay. */
+fieldset .form-row,
+.form-row, .form-row > div,
+.form-row .readonly, .form-row div.readonly, .readonly,
+.aligned p, form .aligned ul {
+  background: #14162a !important;
   color: #e9eaf0 !important;
 }
+/* Alternancia sutil, para que las filas se distingan sin rayar la pantalla. */
+fieldset .form-row:nth-child(even) { background: #191b2e !important; }
 
-/* Etiquetas y textos de ayuda: legibles, pero un escalon por debajo del dato. */
-.aligned label,
-form .aligned label,
-fieldset .form-row label {
+/* Etiquetas y ayuda: legibles, un escalon por debajo del dato. */
+.aligned label, form .aligned label, fieldset .form-row label {
   color: #c3c6d4 !important;
 }
-.help, div.help, p.help, .form-row .help,
-form .aligned p.help, .helptext {
+.help, div.help, p.help, .form-row .help, form .aligned p.help, .helptext {
   color: #9aa0b4 !important;
 }
 
 /* Enlaces dentro del contenido: el magenta de marca se lee bien sobre oscuro. */
-#content a:not(.button):not(.addlink):not(.changelink):not(.deletelink) {
+#content a:not(.button):not(.addlink):not(.changelink):not(.deletelink),
+#result_list tbody td a {
   color: #f06fb0 !important;
 }
+#content a:hover, #result_list tbody td a:hover { color: #ff8fc4 !important; }
 
-/* Las tablas del listado heredan el mismo criterio. */
-#result_list tbody td, #result_list tbody th,
-#result_list tbody td a {
-  color: #e9eaf0 !important;
-}
-#result_list tbody td a:hover { color: #f06fb0 !important; }
+/* Tablas del listado. */
+#result_list tbody td, #result_list tbody th { color: #e9eaf0 !important; }
+#result_list tbody tr { background: #14162a !important; }
+#result_list tbody tr:nth-child(even) { background: #191b2e !important; }
 
 </style>
 {% endblock %}

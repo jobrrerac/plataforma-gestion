@@ -12,9 +12,6 @@
   .flatpickr-day.dia-finde { color:#a52a25; opacity:.6; }
   .flatpickr-day.selected.dia-no-habil, .flatpickr-day.selected.dia-finde { background:#d6197f; border-color:#d6197f; color:#fff; opacity:1; }
   body { background: #f4f4f8; }
-  .page-strip { background:#fff; border-bottom:1px solid #e8e6f0; padding:20px 2rem; }
-  .page-strip h1 { font-family:'Montserrat',sans-serif; font-size:1.25rem; font-weight:800; color:#191b2e; margin:0 0 4px; letter-spacing:-.02em; }
-  .page-strip h1 span { color:#d6197f; }
   .card { border:none; border-radius:12px; box-shadow:0 1px 6px rgba(0,0,0,.07); }
   .card-header-inet { background:#191b2e; color:#fff; border-radius:12px 12px 0 0 !important; font-family:'Montserrat',sans-serif; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; padding:10px 16px; }
   .dia-input { width:80px; text-align:center; }
@@ -28,12 +25,7 @@
 
 {% block content %}
 
-<div class="page-strip">
-  <h1>Solicitud <span>Recurrente</span></h1>
-  <p class="text-muted mb-0" style="font-size:.82rem">
-    Patrón semanal — ej: “próximos 4 lunes, 4 h” o “2 semanas: lunes 2 h, miércoles 4 h, viernes 2 h”.
-  </p>
-</div>
+{% include "componentes/franja_pagina.html" with volver="/solicitud/" icono="bi-arrow-repeat" titulo="Solicitud" resaltado="recurrente" nota="Patrón semanal — ej: «próximos 4 lunes, 4 h» o «2 semanas: lunes 2 h, miércoles 4 h, viernes 2 h»." %}
 
 <div class="container-fluid px-4 py-4" style="max-width:900px;margin:0">
 
