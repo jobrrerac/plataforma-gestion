@@ -43,7 +43,22 @@ contingencia (el secreto de Entra caduca al año): no eliminarlo.
 - `LogAuditoria` es append-only (no editar ni borrar).
 - Integraciones (Skills, SAP): read-only, tras adaptador. Jobs idempotentes.
 
+## Modularidad y alcance de QA
+Las apps están por capas y cada una solo depende de las anteriores:
+`accounts` → `core` → `calendar_engine` → `assignments` → `legalizacion` → `dashboard`.
+
+Esto no es una aspiración: `apps/core/tests_arquitectura.py` falla si aparece un
+ciclo estructural o una dependencia hacia arriba. Si hace falta una dependencia
+puntual hacia una capa superior, va **dentro de la función**, no en el cuerpo del
+módulo.
+
+Sirve para que un cambio no obligue a repasar los 178 casos de QA a mano.
+`docs/ARQUITECTURA_MODULOS.md` mapea cada módulo a sus bloques de QA:
+**todo PR dice en su descripción qué bloques hay que reprobar.** Una app nueva
+se sitúa en `CAPAS` y en ese mapa, o el test no pasa.
+
 ## Convenciones
 - Tests con cada feature; cubrir fechas borde del calendario y la carrera de aprobación.
 - Sin credenciales en el repo; todo por variables de entorno.
 - Migraciones: `docker compose exec web python manage.py makemigrations` → revisar → `migrate`.
+- Texto visible en español colombiano, con tuteo: «describe la actividad», no «describí».

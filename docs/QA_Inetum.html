@@ -233,7 +233,7 @@
 <header>
   <div class="filete"></div>
   <div class="marca">Inetum &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
-  <h1>Ronda de QA — 170 casos de prueba</h1>
+  <h1>Ronda de QA — 178 casos de prueba</h1>
   <p class="bajada">
     Primero cómo funciona la plataforma y dónde ya han aparecido errores.
     Después los casos, marcables a medida que se ejecutan.
@@ -260,6 +260,19 @@
 <h3>1.4 Orden sugerido</h3>
 <p>El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.</p>
 <ol><li>1. <strong>AUT y SSO</strong> con tu cuenta — confirma que entras y con qué rol.</li><li>2. <strong>RBAC</strong> alternando las tres cuentas.</li><li>3. <strong>MAE y CAL</strong> con <code>qa.admin</code> — deja los datos listos.</li><li>4. <strong>SOL, CES, LIB</strong> con <code>qa.pm</code>; sus aprobaciones con <code>qa.admin</code>.</li><li>5. <strong>NOV</strong> con tu cuenta; las aprobaciones con <code>qa.admin</code>.</li><li>6. <strong>HOR</strong> con tu cuenta — es el bloque más largo.</li><li>7. <strong>HAP</strong> con <code>qa.pm</code> y <code>qa.admin</code>, sobre los días que registraste en el paso 6.</li><li>8. <strong>DASH, AUD, INF</strong> al final.</li></ol>
+<h3>1.5 No hace falta repasarlo todo en cada cambio</h3>
+<p>Este plan completo es para una ronda de fondo: una versión nueva, un despliegue</p>
+<p>grande, una revisión periódica. **Para un cambio concreto, solo se reprueban los</p>
+<p>bloques que ese cambio puede afectar.**</p>
+<p>Qué bloques son sale del mapa de módulos, en</p>
+<p><code>ARQUITECTURA_MODULOS.md</code>. Cada PR lo dice en su</p>
+<p>descripción, así que no hay que deducirlo: viene escrito.</p>
+<p>El mapa se sostiene porque los módulos no se pisan entre sí, y eso lo comprueba</p>
+<p>un test que falla en CI si alguien introduce un acoplamiento nuevo. No es una</p>
+<p>promesa de arquitectura, es una condición que se verifica sola.</p>
+<p>Pase lo que pase, estos ocho van siempre — son los que no pueden romperse nunca:</p>
+<p><strong>AUT-01 · AUT-05 · RBAC-01 · RBAC-06 · HOR-01 · HAP-01 · DASH-01 · INF-01</strong></p>
+<p>Si alguno de esos falla, se para y se reporta, sin seguir con el resto.</p>
 <hr>
 </div>
 
@@ -344,10 +357,10 @@
   puedes cerrar la página y volver.
 </p>
 
-<div class="indice"><a href="#b-AUT"><span>AUT</span><b>10</b></a><a href="#b-SSO"><span>SSO</span><b>12</b></a><a href="#b-RBAC"><span>RBAC</span><b>9</b></a><a href="#b-MAE"><span>MAE</span><b>12</b></a><a href="#b-CAL"><span>CAL</span><b>8</b></a><a href="#b-SOL"><span>SOL</span><b>10</b></a><a href="#b-APR"><span>APR</span><b>7</b></a><a href="#b-CES"><span>CES</span><b>5</b></a><a href="#b-LIB"><span>LIB</span><b>7</b></a><a href="#b-NOV"><span>NOV</span><b>16</b></a><a href="#b-HOR"><span>HOR</span><b>28</b></a><a href="#b-HAP"><span>HAP</span><b>17</b></a><a href="#b-APD"><span>APD</span><b>14</b></a><a href="#b-DASH"><span>DASH</span><b>5</b></a><a href="#b-AUD"><span>AUD</span><b>4</b></a><a href="#b-INF"><span>INF</span><b>6</b></a></div>
+<div class="indice"><a href="#b-AUT"><span>AUT</span><b>10</b></a><a href="#b-SSO"><span>SSO</span><b>12</b></a><a href="#b-RBAC"><span>RBAC</span><b>9</b></a><a href="#b-MAE"><span>MAE</span><b>12</b></a><a href="#b-CAL"><span>CAL</span><b>8</b></a><a href="#b-SOL"><span>SOL</span><b>10</b></a><a href="#b-APR"><span>APR</span><b>7</b></a><a href="#b-CES"><span>CES</span><b>5</b></a><a href="#b-LIB"><span>LIB</span><b>7</b></a><a href="#b-NOV"><span>NOV</span><b>16</b></a><a href="#b-HOR"><span>HOR</span><b>32</b></a><a href="#b-HAP"><span>HAP</span><b>21</b></a><a href="#b-APD"><span>APD</span><b>14</b></a><a href="#b-DASH"><span>DASH</span><b>5</b></a><a href="#b-AUD"><span>AUD</span><b>4</b></a><a href="#b-INF"><span>INF</span><b>6</b></a></div>
 
 <div class="progreso">
-  <span class="cifra"><span id="hechos">0</span> / 170</span>
+  <span class="cifra"><span id="hechos">0</span> / 178</span>
   <div class="barra"><span id="barra"></span></div>
   <button type="button" id="reiniciar">Reiniciar</button>
 </div>
@@ -489,7 +502,7 @@
 <label class="caso" for="c-NOV-16"><input type="checkbox" id="c-NOV-16" data-caso="NOV-16"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">NOV-16</span><span class="ctit">El PM no aprueba novedades</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, abrir <code>/novedades/revisar/</code></div><div class="campo"><span class="etq">Esperado</span>403</div></div></label>
 </section>
 <section class="bloque" id="b-HOR">
-<div class="bloque-cab"><span class="sigla">HOR</span><h3>Legalización de horas (Ingeniero)</h3><span class="cuenta">28 casos</span></div>
+<div class="bloque-cab"><span class="sigla">HOR</span><h3>Legalización de horas (Ingeniero)</h3><span class="cuenta">32 casos</span></div>
 
 <label class="caso" for="c-HOR-01"><input type="checkbox" id="c-HOR-01" data-caso="HOR-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-01</span><span class="ctit">Abrir la pantalla</span></div><div class="campo"><span class="etq">Pasos</span>Como Ingeniero, <code>/horas/</code></div><div class="campo"><span class="etq">Esperado</span>Muestra el día de hoy, el selector con flechas y la lista de días sin registrar</div></div></label>
 <label class="caso" for="c-HOR-02"><input type="checkbox" id="c-HOR-02" data-caso="HOR-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-02</span><span class="ctit">Navegar entre días</span></div><div class="campo"><span class="etq">Pasos</span>Usar las flechas ← →</div><div class="campo"><span class="etq">Esperado</span>Cambia de día; la flecha &quot;siguiente&quot; está inactiva en el día de hoy</div></div></label>
@@ -519,9 +532,13 @@
 <label class="caso" for="c-HOR-25"><input type="checkbox" id="c-HOR-25" data-caso="HOR-25"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-25</span><span class="ctit">Facturable vs interno</span></div><div class="campo"><span class="etq">Pasos</span>En el resumen, mirar el desglose</div><div class="campo"><span class="etq">Esperado</span>Separa horas facturables de no facturables; las internas y las de estudio <strong>no</strong> son facturables</div></div></label>
 <label class="caso" for="c-HOR-26"><input type="checkbox" id="c-HOR-26" data-caso="HOR-26"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-26</span><span class="ctit">Días pendientes</span></div><div class="campo"><span class="etq">Pasos</span>Mirar la lista inferior</div><div class="campo"><span class="etq">Esperado</span>Solo días <strong>hábiles</strong> sin registrar; los que ya se aceptaron desaparecen</div></div></label>
 <label class="caso" for="c-HOR-27"><input type="checkbox" id="c-HOR-27" data-caso="HOR-27"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-27</span><span class="ctit">Un PM también legaliza</span></div><div class="campo"><span class="etq">Pasos</span>Como PM, abrir <code>/horas/</code></div><div class="campo"><span class="etq">Esperado</span>Puede registrar sus propias horas</div></div></label>
+<label class="caso" for="c-HOR-29"><input type="checkbox" id="c-HOR-29" data-caso="HOR-29"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-29</span><span class="ctit"><strong>El límite se ve</strong></span></div><div class="campo"><span class="etq">Pasos</span>En un día abierto, mirar el campo «¿Qué hiciste?»</div><div class="campo"><span class="etq">Esperado</span>A la derecha de la etiqueta hay un contador <code>0 / 300</code> que sube al escribir</div></div></label>
+<label class="caso" for="c-HOR-30"><input type="checkbox" id="c-HOR-30" data-caso="HOR-30"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-30</span><span class="ctit">Avisa al acercarse al tope</span></div><div class="campo"><span class="etq">Pasos</span>Escribir más de 270 caracteres</div><div class="campo"><span class="etq">Esperado</span>El contador cambia de gris a ámbar antes de llegar al límite</div></div></label>
+<label class="caso" for="c-HOR-31"><input type="checkbox" id="c-HOR-31" data-caso="HOR-31"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-31</span><span class="ctit"><strong>Dice que se revisa</strong></span></div><div class="campo"><span class="etq">Pasos</span>Leer el texto bajo el campo</div><div class="campo"><span class="etq">Esperado</span>Explica que son 300 caracteres y que se revisa que el detalle alcance para aprobar esas horas</div></div></label>
+<label class="caso" for="c-HOR-32"><input type="checkbox" id="c-HOR-32" data-caso="HOR-32"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-32</span><span class="ctit">El contador se reinicia</span></div><div class="campo"><span class="etq">Pasos</span>Añadir el renglón a la lista</div><div class="campo"><span class="etq">Esperado</span>El campo se vacía y el contador vuelve a <code>0 / 300</code></div></div></label>
 </section>
 <section class="bloque" id="b-HAP">
-<div class="bloque-cab"><span class="sigla">HAP</span><h3>Aprobación de horas (PM y Admin)</h3><span class="cuenta">17 casos</span></div>
+<div class="bloque-cab"><span class="sigla">HAP</span><h3>Aprobación de horas (PM y Admin)</h3><span class="cuenta">21 casos</span></div>
 <div class="nota"><strong>Quién aprueba qué.</strong> El PM aprueba los días que tocan <strong>sus</strong> proyectos. El Admin ve <strong>todos</strong> — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la <strong>única</strong> vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita <code>qa.pm</code>, <code>qa.admin</code> y <code>carmen.leon</code> (como PM ajeno).</div>
 <label class="caso" for="c-HAP-01"><input type="checkbox" id="c-HAP-01" data-caso="HAP-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-01</span><span class="ctit">El PM ve lo suyo</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>qa.pm</code>, abrir <code>/horas/aprobar/</code> tras registrar días con horas de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>Ve esos días: es el PM del proyecto</div></div></label>
 <label class="caso" for="c-HAP-02"><input type="checkbox" id="c-HAP-02" data-caso="HAP-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-02</span><span class="ctit">Un PM ajeno no lo ve</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>carmen.leon</code>, que es PM de <code>QA-002</code> pero <strong>no</strong> de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>La cola <strong>no</strong> incluye esos días</div></div></label>
@@ -540,6 +557,10 @@
 <label class="caso" for="c-HAP-15"><input type="checkbox" id="c-HAP-15" data-caso="HAP-15"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-15</span><span class="ctit"><strong>El motivo se ve</strong></span></div><div class="campo"><span class="etq">Pasos</span>Como el ingeniero, volver a ese día</div><div class="campo"><span class="etq">Esperado</span>Franja naranja &quot;Te devolvieron este día para corregir&quot; con el motivo</div></div></label>
 <label class="caso" for="c-HAP-16"><input type="checkbox" id="c-HAP-16" data-caso="HAP-16"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-16</span><span class="ctit">El aviso también en el resumen</span></div><div class="campo"><span class="etq">Pasos</span>Corregir, guardar y mirar el resumen</div><div class="campo"><span class="etq">Esperado</span>La franja <strong>sigue visible</strong>: no puede re-aceptarse a ciegas</div></div></label>
 <label class="caso" for="c-HAP-17"><input type="checkbox" id="c-HAP-17" data-caso="HAP-17"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-17</span><span class="ctit">Aprobar limpia el motivo</span></div><div class="campo"><span class="etq">Pasos</span>Corregir, aceptar y aprobar</div><div class="campo"><span class="etq">Esperado</span>El día queda aprobado <strong>sin</strong> el reproche pegado</div></div></label>
+<label class="caso" for="c-HAP-18"><input type="checkbox" id="c-HAP-18" data-caso="HAP-18"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-18</span><span class="ctit"><strong>Se ve la tarea planificada</strong></span></div><div class="campo"><span class="etq">Pasos</span>Aprobar horas de alguien con una asignación al mismo proyecto y fecha que tenga actividad</div><div class="campo"><span class="etq">Esperado</span>Bajo lo que declaró aparece <strong>Planificado</strong> con la tarea del cronograma</div></div></label>
+<label class="caso" for="c-HAP-19"><input type="checkbox" id="c-HAP-19" data-caso="HAP-19"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-19</span><span class="ctit">Una asignación solicitada se marca</span></div><div class="campo"><span class="etq">Pasos</span>Repetir con una asignación aún en estado Solicitada</div><div class="campo"><span class="etq">Esperado</span>Aparece igual, con el sufijo <strong>(solicitada)</strong></div></div></label>
+<label class="caso" for="c-HAP-20"><input type="checkbox" id="c-HAP-20" data-caso="HAP-20"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-20</span><span class="ctit">No se cuela la tarea de otro proyecto</span></div><div class="campo"><span class="etq">Pasos</span>Mirar un renglón de un proyecto <strong>sin</strong> asignación con actividad</div><div class="campo"><span class="etq">Esperado</span><strong>No</strong> aparece la línea Planificado; no se muestra la tarea de otro proyecto ni de otra fecha</div></div></label>
+<label class="caso" for="c-HAP-21"><input type="checkbox" id="c-HAP-21" data-caso="HAP-21"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-21</span><span class="ctit">Sin actividad no molesta</span></div><div class="campo"><span class="etq">Pasos</span>Renglón de formación o estudio (sin proyecto)</div><div class="campo"><span class="etq">Esperado</span>No aparece la línea Planificado; el renglón se ve como siempre</div></div></label>
 </section>
 <section class="bloque" id="b-APD">
 <div class="bloque-cab"><span class="sigla">APD</span><h3>Aprobador delegado</h3><span class="cuenta">14 casos</span></div>
