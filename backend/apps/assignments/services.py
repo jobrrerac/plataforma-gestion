@@ -122,7 +122,8 @@ def _dias_habiles_liberables(asignacion, win_inicio: date, win_fin: date) -> tup
     return dias, horas
 
 
-def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None) -> dict:
+def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None,
+               solo_capacidad: bool = True) -> dict:
     """
     Precalcula la carga diaria (asignaciones APROBADAS) de varios recursos en
     un rango. Retorna dict[recurso_id][fecha] -> horas.
@@ -144,6 +145,16 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
         fecha_inicio__lte=fecha_fin,
         fecha_fin__gte=fecha_inicio,
     )
+    if solo_capacidad:
+        # Un acelerador o un producto propio ocupa el tiempo de la persona, pero
+        # no su capacidad: cede en cuanto aparece trabajo de cliente. Contarlo
+        # aqui haria que aprobar esa asignacion de cliente fallara por
+        # sobreasignacion, que es justo lo contrario de lo que debe pasar.
+        #
+        # El valor por defecto excluye a proposito: quien pregunta por la carga
+        # casi siempre esta decidiendo si cabe algo mas, y equivocarse hacia ese
+        # lado bloquea trabajo facturable.
+        qs = qs.exclude(proyecto__interno_con_equipo=True)
     if excluir_id:
         qs = qs.exclude(pk=excluir_id)
     asignaciones = list(qs)
@@ -177,6 +188,122 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
                 por_dia = carga[recurso_de[c.asignacion_origen_id]]
                 por_dia[c.fecha] = max(0.0, por_dia.get(c.fecha, 0.0) - float(c.horas))
     return carga
+
+
+def mapa_carga_interna(recurso_ids, fecha_inicio: date, fecha_fin: date) -> dict:
+    """Carga de proyectos internos con equipo: aceleradores y productos propios.
+
+    Va aparte de `mapa_carga` porque responde a otra pregunta. Aquella dice
+    cuanta capacidad queda; esta dice en que anda la persona mientras tanto. El
+    dashboard necesita las dos: el porcentaje sale de la primera y el gris de
+    esta.
+    """
+    ids = list(recurso_ids)
+    asignaciones = Asignacion.objects.filter(
+        recurso_id__in=ids,
+        estado="APROBADA",
+        proyecto__interno_con_equipo=True,
+        fecha_inicio__lte=fecha_fin,
+        fecha_fin__gte=fecha_inicio,
+    )
+    ventanas_liberadas = _ventanas_liberadas(
+        [a.pk for a in asignaciones], fecha_inicio, fecha_fin
+    )
+
+    carga: dict = {rid: {} for rid in ids}
+    for a in asignaciones:
+        por_dia = carga.setdefault(a.recurso_id, {})
+        ventanas = ventanas_liberadas.get(a.pk, ())
+        fecha = max(a.fecha_inicio, fecha_inicio)
+        fin = min(a.fecha_fin, fecha_fin)
+        while fecha <= fin:
+            if not any(ini <= fecha <= f for ini, f in ventanas):
+                por_dia[fecha] = por_dia.get(fecha, 0.0) + carga_propia(a, fecha)
+            fecha += timedelta(days=1)
+    return carga
+
+
+def internos_que_cederian(asignacion) -> list:
+    """Asignaciones a proyectos internos que quedarian en 0 al aprobar esta.
+
+    Solo lectura. Existe para que quien aprueba lo vea ANTES de firmar: si esa
+    persona es critica para el acelerador, la respuesta es rechazar la
+    asignacion de cliente, no descubrirlo despues.
+
+    Devuelve tuplas (asignacion_interna, inicio_solape, fin_solape).
+    """
+    if not asignacion.proyecto.facturable:
+        return []
+    internas = Asignacion.objects.filter(
+        recurso_id=asignacion.recurso_id,
+        estado="APROBADA",
+        proyecto__interno_con_equipo=True,
+        fecha_inicio__lte=asignacion.fecha_fin,
+        fecha_fin__gte=asignacion.fecha_inicio,
+    ).select_related("proyecto")
+
+    resultado = []
+    for interna in internas:
+        ini = max(interna.fecha_inicio, asignacion.fecha_inicio)
+        fin = min(interna.fecha_fin, asignacion.fecha_fin)
+        dias, horas = _dias_habiles_liberables(interna, ini, fin)
+        if dias:
+            resultado.append((interna, ini, fin))
+    return resultado
+
+
+def ceder_ante_cliente(asignacion, actor):
+    """Pone en 0 el trabajo interno que se solapa con esta asignacion de cliente.
+
+    La prioridad del trabajo facturable no es una recomendacion: en cuanto se
+    aprueba una asignacion de cliente, el acelerador cede esos dias. Las horas
+    NO se recuperan despues —el proyecto interno termina en su misma fecha con
+    menos horas— porque eran tiempo de bench y el bench se acabo.
+
+    Se apoya en `LiberacionRecurso`, que ya sabe congelar una ventana sin borrar
+    la asignacion, con politica REDUCIR. Queda como una liberacion APROBADA mas,
+    visible y reversible, y con su entrada en el log.
+
+    Devuelve las liberaciones creadas.
+    """
+    creadas = []
+    for interna, ini, fin in internos_que_cederian(asignacion):
+        dias, horas = _dias_habiles_liberables(interna, ini, fin)
+        liberacion = LiberacionRecurso.objects.create(
+            asignacion=interna,
+            fecha_inicio=ini,
+            fecha_fin=fin,
+            politica="REDUCIR",
+            motivo=f"Cede ante {asignacion.proyecto.codigo} (trabajo facturable)",
+            estado="APROBADA",
+            dias_liberados=dias,
+            horas_liberadas=Decimal(str(round(horas, 1))),
+            solicitada_por=actor,
+            revisada_por=actor,
+            revisada_en=timezone.now(),
+        )
+        interna.horas_totales = max(0, (interna.horas_totales or 0) - ceil(horas))
+        interna.dias_habiles = max(0, (interna.dias_habiles or 0) - dias)
+        interna.costo_estimado = costo_estimado_asignacion(interna)
+        interna.save(update_fields=[
+            "horas_totales", "dias_habiles", "costo_estimado", "updated_at",
+        ])
+        LogAuditoria.objects.create(
+            asignacion=interna, accion="LIBERAR", actor=actor,
+            detalle={
+                "liberacion": liberacion.pk,
+                "automatica": True,
+                "motivo": "prioridad del trabajo facturable",
+                "cede_ante": asignacion.pk,
+                "proyecto_cliente": asignacion.proyecto.codigo,
+                "ventana": [ini.isoformat(), fin.isoformat()],
+                "dias_liberados": dias,
+                "horas_liberadas": round(horas, 1),
+                "politica": "REDUCIR",
+            },
+        )
+        creadas.append(liberacion)
+    return creadas
 
 
 def puede_asignar(asignacion) -> tuple[bool, object]:
@@ -277,6 +404,8 @@ def aprobar_asignacion(asignacion, actor):
                 "costo_estimado": float(asignacion.costo_estimado) if asignacion.costo_estimado is not None else None,
             },
         )
+        # El trabajo facturable manda: lo interno que se solape queda en 0.
+        ceder_ante_cliente(asignacion, actor)
 
 
 def detalle_dias_recurso(recurso, fecha_inicio: date, fecha_fin: date) -> list:
@@ -550,6 +679,7 @@ def aprobar_recomputando(asignacion, actor, nueva_fecha_fin, nuevas_horas):
                 "recomputo": True,
             },
         )
+        ceder_ante_cliente(asignacion, actor)
 
 
 def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diaria, jornada_completa, solicitante, actividad=""):

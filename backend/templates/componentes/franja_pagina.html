@@ -1,0 +1,27 @@
+{% comment %}
+  Cabecera de pantalla de módulo. Una sola, para todas.
+
+  Cada plantilla tenía la suya copiada, y once copias derivan solas: el enlace
+  «Volver» salía azul en Cesiones y magenta en Liberaciones, en Solicitud
+  recurrente no salía, y el separador aparecía o no según la pantalla.
+
+  Uso:
+    {% include "componentes/franja_pagina.html" with
+       volver="/dashboard/" icono="bi-clock-history"
+       titulo="Registrar" resaltado="horas" %}
+
+  `volver` y `nota` son opcionales; el resto conviene ponerlo siempre.
+{% endcomment %}
+<div class="page-strip">
+  {% if volver %}
+  <a href="{{ volver }}" class="page-strip-volver">
+    <i class="bi bi-arrow-left"></i> {{ volver_texto|default:"Volver" }}
+  </a>
+  <div class="page-strip-sep"></div>
+  {% endif %}
+  <h1>
+    {% if icono %}<i class="bi {{ icono }}"></i> {% endif %}{{ titulo }}
+    {% if resaltado %}<span>{{ resaltado }}</span>{% endif %}
+  </h1>
+  {% if nota %}<p class="page-strip-nota">{{ nota }}</p>{% endif %}
+</div>

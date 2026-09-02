@@ -20,7 +20,7 @@ import json
 
 from apps.assignments.services import (
     disponibilidad_recursos, crear_solicitud, analizar_conflictos,
-    capacidad_maxima_dia, mapa_carga,
+    capacidad_maxima_dia, mapa_carga, mapa_carga_interna,
     analizar_recurrencia, crear_solicitudes_recurrentes, SEMANAS_MAX_RECURRENCIA,
     segmentos_tarifa, costo_estimado_asignacion,
 )
@@ -128,8 +128,16 @@ class OcupacionAPIView(APIView):
         # Calendario precargado (días no laborables + indisponibilidades) en 2 queries
         cal = CalendarioRango(fecha_inicio, fecha_fin, recursos)
 
-        # Carga diaria neta por recurso (incluye el efecto de cesiones de horas)
+        # Carga diaria neta por recurso (incluye el efecto de cesiones de horas).
+        # No cuenta los internos con equipo: esos no ocupan capacidad, y por eso
+        # el porcentaje de ocupacion los ignora.
         cargas = mapa_carga([r.pk for r in recursos], fecha_inicio, fecha_fin)
+        # Aparte, lo que la persona esta haciendo en aceleradores y productos
+        # propios. Ocupa su tiempo pero cede ante el cliente, asi que el
+        # dashboard lo pinta en gris en vez de contarlo como ocupacion.
+        cargas_internas = mapa_carga_interna(
+            [r.pk for r in recursos], fecha_inicio, fecha_fin,
+        )
 
         ve_datos_personales = puede_ver_datos_personales(request.user)
 
@@ -151,6 +159,7 @@ class OcupacionAPIView(APIView):
         for recurso in recursos:
             asig_recurso = [a for a in asignaciones if a.recurso_id == recurso.pk]
             carga_dias = cargas.get(recurso.pk, {})
+            interna_dias = cargas_internas.get(recurso.pk, {})
 
             detalle_por_dia = []
             cur = fecha_inicio
@@ -170,6 +179,9 @@ class OcupacionAPIView(APIView):
                         "tipo_ausencia": None,
                         "horas_asignadas": round(horas, 2),
                         "porcentaje": min(100, round((horas / capacidad_maxima_dia(cur)) * 100, 1)),
+                        # Trabajo interno con equipo: ocupa el dia pero no la
+                        # capacidad. Se manda aparte para poder pintarlo en gris.
+                        "horas_internas": round(interna_dias.get(cur, 0.0), 2),
                         "proyectos": list({a.proyecto.codigo for a in asig_hoy}),
                         # None | "REGISTRADO" | "APROBADO". Se distinguen porque
                         # no significan lo mismo: registrado es "ya lo declaro",

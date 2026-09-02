@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .validators import validar_codigo_pep, validar_codigo_proyecto, validar_grafo
@@ -300,6 +301,36 @@ class Proyecto(SoftDeleteModel):
             "pero no entran en el informe de horas facturables."
         ),
     )
+    interno_con_equipo = models.BooleanField(
+        default=False,
+        verbose_name="Interno con equipo",
+        help_text=(
+            "Proyecto interno al que se asigna gente: aceleradores y productos "
+            "propios, no gestión departamental. Marca tres diferencias — sus "
+            "asignaciones NO ocupan capacidad, así que la persona sigue "
+            "apareciendo disponible para cliente; CEDEN cuando se aprueba una "
+            "asignación de cliente que se solape, quedando en 0 esos días; y "
+            "solo quien esté asignado puede imputarle horas. Solo tiene sentido "
+            "en proyectos no facturables."
+        ),
+    )
+
+    def clean(self):
+        """Un proyecto de cliente no puede ser «interno con equipo».
+
+        La marca solo describe proyectos internos. Dejarla puesta en uno
+        facturable haría que sus asignaciones no ocuparan capacidad y que
+        cedieran ante otro cliente: exactamente lo contrario de lo que se
+        espera de trabajo que se cobra.
+        """
+        super().clean()
+        if self.interno_con_equipo and self.facturable:
+            raise ValidationError({
+                "interno_con_equipo": (
+                    "Solo tiene sentido en proyectos no facturables. Desmarca "
+                    "«facturable» o quita esta casilla."
+                ),
+            })
 
     class Meta:
         verbose_name = "Proyecto"
