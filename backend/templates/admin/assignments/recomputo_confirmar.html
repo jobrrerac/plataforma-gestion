@@ -13,10 +13,7 @@
 
 {% block content %}
 <style>
-  /* Cajas en oscuro, como el resto del admin. Antes eran claras con el texto
-     por defecto: al pasar el admin a oscuro ese texto se volvio claro y quedo
-     ilegible sobre el fondo palido. */
-  .conflict-card { background:#2b2114; color:#f3e3c8; border:1px solid #97591a; border-radius:8px; padding:16px 20px; margin-bottom:20px; }
+  .conflict-card { background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:16px 20px; margin-bottom:20px; }
   .conflict-card h3 { color:#856404; margin:0 0 8px; font-size:1rem; }
   .day-chip { display:inline-block; background:#dc3545; color:#fff; border-radius:5px; padding:3px 10px; font-size:.85rem; margin:2px; font-weight:600; }
   .new-date { font-size:1.1rem; font-weight:700; color:#0a5c36; }
@@ -26,14 +23,14 @@
   .btn-cancel { background:#6c757d; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:.95rem; cursor:pointer; }
   .btn-cancel:hover { background:#565e64; }
   .info-row { display:flex; gap:40px; margin-bottom:8px; flex-wrap:wrap; }
-  .info-item label { display:block; font-size:.78rem; color:#9aa0b4; margin-bottom:2px; }
+  .info-item label { display:block; font-size:.78rem; color:#6c757d; margin-bottom:2px; }
   .info-item span { font-weight:600; }
 </style>
 
 <h1>Confirmar aprobación con recomputo</h1>
 
 <!-- Datos de la asignación -->
-<div style="background:#1b1c24;color:#e9eaf0;border:1px solid #2b2d38;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+<div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
   <div class="info-row">
     <div class="info-item"><label>Recurso</label><span>{{ asignacion.recurso.nombre }}</span></div>
     <div class="info-item"><label>Proyecto</label><span>{{ asignacion.proyecto }}</span></div>
