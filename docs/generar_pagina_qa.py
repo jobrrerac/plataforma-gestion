@@ -1,24 +1,34 @@
 """Genera el material de QA a partir de los dos documentos del repositorio.
 
 Se genera en vez de escribirse a mano para que no existan dos versiones del
-mismo contenido que se desincronicen: la fuente son los .md del repo.
+mismo contenido que se desincronicen: la fuente son `QA_MANUAL.md` y
+`QA_PLAN_PRUEBAS.md`.
 
     python docs/generar_pagina_qa.py docs/plantilla_qa.html docs/QA_Inetum.html
 
-Produce un HTML autocontenido: se abre con doble clic, funciona sin conexion
-(las tipografias caen a las del sistema) y se imprime a PDF con Ctrl+P.
+Produce el entregable que se le manda a QA: un HTML autocontenido que se abre
+con doble clic, funciona sin conexion (las tipografias caen a las del sistema),
+lleva las casillas para ir marcando y se imprime a PDF con Ctrl+P.
+
+**Habia un `QA_Inetum.md` con este mismo contenido, mantenido a mano.** Se
+borro: decia «156 casos» cuando el plan ya iba por 171, porque un tercer
+ejemplar del mismo texto siempre acaba siendo el que esta desactualizado. Los
+cambios van en las fuentes y se vuelve a generar.
 """
 
 import html
 import io
 import re
 import sys
+from pathlib import Path
 
-RUTA = "c:/Users/user/proyectos_vscode/inetum/plataforma_gestion/docs"
+# Junto a este script, no una ruta absoluta de una maquina concreta: asi
+# funciona igual dentro del contenedor y en CI.
+RUTA = Path(__file__).resolve().parent
 
 
 def leer(nombre):
-    return io.open(f"{RUTA}/{nombre}", encoding="utf-8").read()
+    return io.open(RUTA / nombre, encoding="utf-8").read()
 
 
 # --- markdown mínimo (el que usan estos documentos) ------------------------

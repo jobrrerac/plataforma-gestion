@@ -32,8 +32,29 @@
   .total small { font-weight:600; color:#6b7280; font-size:.76rem; }
 
   .lineas { margin-top:12px; border-top:1px solid #f0eef5; padding-top:10px; }
-  .linea { display:grid; grid-template-columns:1fr auto; gap:12px; padding:6px 0; font-size:.88rem; }
+  .linea { display:grid; grid-template-columns:auto 1fr auto; gap:12px; padding:6px 0; font-size:.88rem; }
+  .linea.sin-marca { grid-template-columns:1fr auto; }
   .linea .det { color:#6b7280; font-size:.82rem; }
+
+  /* Marcar varias y firmarlas de una vez. La casilla vive fuera de cualquier
+     formulario y se engancha al de la barra con el atributo `form`: envolver
+     toda la cola en un <form> anidaria los que ya tiene cada renglon, que es
+     HTML invalido y rompe los botones de Aprobar y Devolver. */
+  .marca { width:17px; height:17px; margin-top:3px; accent-color:#1f6b45; cursor:pointer; }
+  .marca-dia { font-size:.76rem; color:#4b5563; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .linea:has(.marca:checked) { background:#f0f7f3; border-radius:6px; }
+
+  .barra-sel { position:sticky; bottom:0; z-index:20; margin:0 -12px; padding:12px 18px;
+               background:#191b2e; color:#fff; border-radius:12px 12px 0 0;
+               box-shadow:0 -3px 14px rgba(25,27,46,.28);
+               display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .barra-sel[hidden] { display:none; }
+  .barra-sel .cuenta { font-family:'Montserrat',sans-serif; font-weight:800; font-size:.95rem;
+                       font-variant-numeric:tabular-nums; }
+  .barra-sel .aclara { font-size:.76rem; color:#b9bdd0; }
+  .barra-sel .quitar { background:none; border:none; color:#b9bdd0; font-size:.78rem;
+                       text-decoration:underline; padding:0; }
+  .barra-sel .quitar:hover { color:#fff; }
   /* Triaje: el recuento por carril y el motivo de cada renglon.
      Los colores de estado salen de la paleta del proyecto y son distintos del
      magenta de marca a proposito: aqui codifican gravedad, no identidad. */
@@ -71,6 +92,14 @@
                 background:#e8f2ec; border:1px solid #1f6b45; }
   .bloque-txt { font-size:.83rem; color:#125033; line-height:1.45; }
 
+  /* El mismo sitio, el otro caso: el dia cumple todo salvo que trae avisos.
+     Se firma igual, pero diciendo por que — y por eso es ambar y no verde. */
+  .bloque-dia.forzado { background:#fbf1e3; border-color:#97591a; align-items:flex-start; }
+  .bloque-dia.forzado .bloque-txt { color:#7d4915; }
+  .btn-forzar { background:#97591a; color:#fff; border:none; font-weight:700; border-radius:8px;
+                padding:.45rem 1.2rem; font-size:.85rem; white-space:nowrap; }
+  .btn-forzar:hover { background:#7d4915; color:#fff; }
+
   /* Lo que decia el cronograma, para poder contrastarlo con lo declarado. */
   .planificado { color:#4b5563; font-size:.78rem; }
   .planificado-et { font-size:.64rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
@@ -100,8 +129,14 @@
 
   {% if messages %}
     {% for m in messages %}
-    <div class="alert alert-success py-2 px-3" style="font-size:.87rem;border-radius:10px">
-      <i class="bi bi-check-circle me-1"></i>{{ m }}
+    {% comment %}
+      Una firma en bloque puede salir a medias, y entonces el aviso de lo que
+      no se pudo tiene que verse distinto del acuse de lo que si. Pintarlo todo
+      verde dejaba a quien firma creyendo que quedo aprobado lo que sigue ahi.
+    {% endcomment %}
+    <div class="alert alert-{% if m.level_tag == 'warning' %}warning{% else %}success{% endif %} py-2 px-3"
+         style="font-size:.87rem;border-radius:10px">
+      <i class="bi bi-{% if m.level_tag == 'warning' %}exclamation-triangle{% else %}check-circle{% endif %} me-1"></i>{{ m }}
     </div>
     {% endfor %}
   {% endif %}
@@ -170,6 +205,12 @@
           {{ dia.fecha|date:"l j \d\e F \d\e Y"|capfirst }}
           · registrado el {{ dia.registrado_en|date:"d/m/Y H:i" }}
         </div>
+        {% if dia.pendientes_mios|length > 1 %}
+        <label class="marca-dia mt-2">
+          <input type="checkbox" class="marca marca-todas" style="margin-top:0">
+          Marcar las {{ dia.pendientes_mios|length }} de este día
+        </label>
+        {% endif %}
       </div>
       <div class="total">
         {{ dia.total_horas }} <small>/ {{ dia.jornada_esperada }} h</small>
@@ -188,6 +229,14 @@
       {% endcomment %}
       {% for r in dia.pendientes_mios %}
       <div class="linea">
+        {% comment %}
+          `form="form-seleccion"` engancha la casilla al formulario de la barra
+          de abajo sin meterla dentro de el. Es lo que permite marcar renglones
+          de dias distintos y firmarlos en un solo envio.
+        {% endcomment %}
+        <input type="checkbox" class="marca" name="registro" value="{{ r.pk }}"
+               form="form-seleccion" data-horas="{{ r.horas }}"
+               aria-label="Marcar {{ r.horas }} h de {% if r.proyecto %}{{ r.proyecto.codigo }}{% else %}{{ r.tipo_actividad.nombre }}{% endif %} — {{ dia.recurso.nombre }}, {{ dia.fecha|date:'d/m/Y' }}">
         <div>
           {% if r.proyecto %}
             <strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
@@ -270,7 +319,7 @@
         Resto del día (no te corresponde firmarlo)
       </div>
       {% for r in dia.otros %}
-      <div class="linea" style="opacity:.62">
+      <div class="linea sin-marca" style="opacity:.62">
         <div>
           {% if r.proyecto %}
             <strong>{{ r.proyecto.codigo }}</strong> — {{ r.proyecto.nombre }}
@@ -332,6 +381,33 @@
           </button>
         </form>
       </div>
+      {% elif dia.forzable_en_bloque %}
+      {% comment %}
+        El mismo sitio y el mismo dia interno, pero con avisos encima. Se firma
+        igual —un aviso nunca fue un veto— diciendo por que: el motivo y los
+        codigos anulados quedan en cada renglon, y son lo unico que despues
+        permite saber que regla sobra. Las horas de cliente no entran aqui ni
+        con motivo: para esas estan las casillas, que se marcan una a una.
+      {% endcomment %}
+      <div class="bloque-dia forzado">
+        <div class="bloque-txt" style="flex:1;min-width:260px">
+          <strong>Avisos en {{ dia.n_avisos }} de las {{ dia.pendientes_mios|length }} actividades internas de este día.</strong>
+          Si al mirarlas son trabajo normal que la regla marcó de más, puedes firmarlas
+          igual. Escribe por qué: es lo que después permite corregir la regla.
+          <form method="post" class="d-flex gap-2 flex-wrap mt-2"
+                onsubmit="return confirm('¿Aprobar las {{ dia.pendientes_mios|length }} actividades de este día pese a sus avisos?')">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="forzar_dia">
+            <input type="hidden" name="dia" value="{{ dia.pk }}">
+            <input type="text" name="motivo" class="form-control form-control-sm"
+                   style="flex:1;min-width:230px" maxlength="300" required
+                   placeholder="Ej: son tareas de bench, el detalle corto es correcto">
+            <button type="submit" class="btn-forzar">
+              <i class="bi bi-check2-all me-1"></i>Aprobar de todos modos ({{ dia.pendientes_mios|length }})
+            </button>
+          </form>
+        </div>
+      </div>
       {% endif %}
     </div>
   </div>
@@ -342,5 +418,85 @@
   </div>
   {% endfor %}
 
+  {% if dias %}
+  {% comment %}
+    Firmar lo marcado, de los dias que sean. Marcar una casilla es un acto por
+    renglon igual que pulsar su boton, asi que aqui no se pide motivo aunque
+    haya avisos: el que se lleva motivo es el dia entero, que es el que firma
+    sin mirar renglon a renglon.
+
+    La barra queda pegada abajo porque en una cola de cien renglones el boton
+    tiene que estar donde esta la vista, no al final del scroll.
+  {% endcomment %}
+  <form method="post" id="form-seleccion" class="barra-sel" hidden
+        onsubmit="return confirm('¿Aprobar las actividades marcadas?')">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="aprobar_seleccion">
+    <div>
+      <div class="cuenta"><span id="sel-n">0</span> actividades · <span id="sel-h">0</span> h</div>
+      <div class="aclara">
+        Se firman una a una: si alguna ya no se puede, las demás se aprueban igual.
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <button type="button" class="quitar" id="sel-quitar">Quitar la selección</button>
+      <button type="submit" class="btn-aprobar">
+        <i class="bi bi-check2-square me-1"></i>Aprobar las marcadas
+      </button>
+    </div>
+  </form>
+  {% endif %}
+
 </div>
+
+<script>
+(function () {
+  const barra = document.getElementById('form-seleccion');
+  if (!barra) return;
+  const casillas = Array.from(document.querySelectorAll('.marca[name="registro"]'));
+  const nSel = document.getElementById('sel-n');
+  const hSel = document.getElementById('sel-h');
+
+  function pintar() {
+    const marcadas = casillas.filter(c => c.checked);
+    const horas = marcadas.reduce((t, c) => t + parseFloat(c.dataset.horas || 0), 0);
+    nSel.textContent = marcadas.length;
+    // Las horas van en medias: `toFixed(1)` sin el cero sobrante de "4.0".
+    hSel.textContent = horas.toFixed(1).replace(/\.0$/, '').replace('.', ',');
+    barra.hidden = marcadas.length === 0;
+
+    // Cada "marcar todo el dia" refleja lo que hay debajo suyo: si se
+    // desmarca una a mano, la de arriba no puede seguir diciendo que estan
+    // todas. El estado intermedio lo dice sin mentir en ninguno de los dos
+    // sentidos.
+    document.querySelectorAll('.dia-card').forEach(tarjeta => {
+      const todas = tarjeta.querySelector('.marca-todas');
+      if (!todas) return;
+      const suyas = Array.from(tarjeta.querySelectorAll('.marca[name="registro"]'));
+      const puestas = suyas.filter(c => c.checked).length;
+      todas.checked = puestas === suyas.length && suyas.length > 0;
+      todas.indeterminate = puestas > 0 && puestas < suyas.length;
+    });
+  }
+
+  casillas.forEach(c => c.addEventListener('change', pintar));
+
+  document.querySelectorAll('.marca-todas').forEach(todas => {
+    todas.addEventListener('change', () => {
+      const tarjeta = todas.closest('.dia-card');
+      tarjeta.querySelectorAll('.marca[name="registro"]').forEach(c => {
+        c.checked = todas.checked;
+      });
+      pintar();
+    });
+  });
+
+  document.getElementById('sel-quitar').addEventListener('click', () => {
+    casillas.forEach(c => { c.checked = false; });
+    pintar();
+  });
+
+  pintar();
+})();
+</script>
 {% endblock %}

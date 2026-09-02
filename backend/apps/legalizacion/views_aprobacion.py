@@ -59,8 +59,10 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, self.template, self._ctx(request))
 
     def post(self, request):
-        if request.POST.get("accion") == "aprobar_dia":
+        if request.POST.get("accion") in ("aprobar_dia", "forzar_dia"):
             return self._aprobar_dia(request)
+        if request.POST.get("accion") == "aprobar_seleccion":
+            return self._aprobar_seleccion(request)
 
         registro = (
             RegistroHoras.objects
@@ -101,9 +103,11 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
     def _aprobar_dia(self, request):
         """Firma de una vez un día interno completo. Solo Admin.
 
-        El servicio revalida la elegibilidad por su cuenta: aquí no se decide
-        nada, solo se traduce el resultado a un mensaje.
+        `forzar_dia` es lo mismo sobre un día que sí trae avisos, y por eso pide
+        motivo. El servicio revalida la elegibilidad por su cuenta: aquí no se
+        decide nada, solo se traduce el resultado a un mensaje.
         """
+        forzado = request.POST.get("accion") == "forzar_dia"
         dia = (
             DiaLegalizado.objects
             .filter(pk=request.POST.get("dia"))
@@ -113,14 +117,58 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         if dia is None:
             return render(request, self.template, self._ctx(request, error="Ese día no existe."))
         try:
-            cuantos = svc.aprobar_dia_completo(dia, request.user)
+            cuantos = svc.aprobar_dia_completo(
+                dia, request.user, forzado=forzado, motivo=request.POST.get("motivo", ""),
+            )
         except (ValidationError, PermissionDenied) as exc:
             mensaje = "; ".join(getattr(exc, "messages", [str(exc)]))
             return render(request, self.template, self._ctx(request, error=mensaje))
 
-        messages.success(
-            request,
-            f"Aprobadas las {cuantos} actividades internas de {dia.recurso.nombre}, "
-            f"{dia.fecha:%d/%m/%Y}.",
-        )
+        if forzado:
+            messages.success(
+                request,
+                f"Aprobadas las {cuantos} actividades internas de {dia.recurso.nombre}, "
+                f"{dia.fecha:%d/%m/%Y}, pese a sus avisos. Queda anotado por qué.",
+            )
+        else:
+            messages.success(
+                request,
+                f"Aprobadas las {cuantos} actividades internas de {dia.recurso.nombre}, "
+                f"{dia.fecha:%d/%m/%Y}.",
+            )
+        return redirect("horas-aprobar")
+
+    def _aprobar_seleccion(self, request):
+        """Firma las actividades marcadas a mano, de los días que sean.
+
+        Lo que falle no tumba lo que no: se firma lo que se puede y se dice
+        cuáles no y por qué. Callarlo dejaría a quien firma creyendo que quedó
+        aprobado algo que sigue pendiente.
+        """
+        ids = request.POST.getlist("registro")
+        if not ids:
+            return render(
+                request, self.template,
+                self._ctx(request, error="No marcaste ninguna actividad."),
+            )
+
+        aprobados, fallos = svc.aprobar_seleccion(ids, request.user)
+
+        if aprobados:
+            horas = sum(r.horas for r in aprobados)
+            messages.success(
+                request,
+                f"Aprobadas {len(aprobados)} actividades ({horas:g} h) de "
+                f"{len({r.dia_id for r in aprobados})} días.",
+            )
+        if fallos:
+            detalle = " · ".join(f"{etiqueta}: {motivo}" for etiqueta, motivo in fallos)
+            if not aprobados:
+                return render(
+                    request, self.template,
+                    self._ctx(request, error=f"No se aprobó ninguna. {detalle}"),
+                )
+            messages.warning(
+                request, f"{len(fallos)} no se pudieron aprobar. {detalle}",
+            )
         return redirect("horas-aprobar")

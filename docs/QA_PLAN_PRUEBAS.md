@@ -366,6 +366,21 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-45 | No se cuela gente ajena | Que otra persona tenga un texto parecido en **otro** proyecto | **No** aparece: solo la misma persona o el mismo proyecto |
 | HAP-46 | Como mucho tres | Que haya más de tres precedentes parecidos | Se muestran tres |
 | HAP-47 | **Cada persona se distingue** | Mirar una cola con varios días | Cada tarjeta lleva una franja de color a la izquierda según su banda: rojo Atención, ámbar Revisar, verde Rutina |
+| HAP-48 | **Aprobar de todos modos aparece donde el limpio no** | Día interno de 3 actividades donde una diga «varias cosas» | Recuadro **ámbar** con «Avisos en 1 de las 3…», una caja de texto y el botón **Aprobar de todos modos (3)** |
+| HAP-49 | Los dos botones nunca salen juntos | Comparar ese día con uno interno sin ningún aviso | El limpio es verde, el forzado ámbar, y en cada día aparece **solo uno** |
+| HAP-50 | **Sin motivo no firma** | Pulsar «Aprobar de todos modos» con la caja vacía | El navegador no deja enviar; si se salta, sale en rojo «Di por qué se firman pese a los avisos» y **nada queda aprobado** |
+| HAP-51 | **Queda escrito qué aviso se anuló** | Forzar con motivo «son tareas de bench» y mirar `/admin/legalizacion/registrohoras/?aprobacion_forzada__exact=1` | Sale el renglón de «varias cosas» con `DETALLE_POBRE` en *Avisos anulados* y el motivo. Los otros dos **no** salen |
+| HAP-52 | Esa pantalla no deja escribir | Abrir un registro desde ese listado | Se ve, pero **no** hay Guardar ni Eliminar: aprobar es la cola, no el admin |
+| HAP-53 | **Las horas de cliente no se fuerzan** | Día con 4 h de proyecto de cliente y 4 h internas, con un aviso | **No** hay botón de día, ni verde ni ámbar |
+| HAP-54 | No aparece para el PM | Repetir HAP-48 como `qa.pm` | **No** hay botón ámbar; sí las casillas y los botones individuales |
+| HAP-55 | **Marcar varias y aprobarlas** | Marcar 2 actividades de **dos días distintos** | Aparece abajo una barra oscura: «2 actividades · N h». Al pulsar **Aprobar las marcadas**, ambas quedan aprobadas |
+| HAP-56 | La barra solo sale con algo marcado | Entrar en la cola sin marcar nada | **No** hay barra abajo. Al marcar la primera casilla aparece; al quitarla, desaparece |
+| HAP-57 | **Marcar el día entero** | Pulsar «Marcar las N de este día» | Se marcan todas las de esa tarjeta. Al desmarcar una a mano, la de arriba queda en estado intermedio (guion), no desmarcada |
+| HAP-58 | Lo no marcado no se toca | Marcar una de tres y aprobar | Las otras dos siguen **Pendientes** |
+| HAP-59 | **Un fallo no tumba a las demás** | Marcar 2, aprobar una desde otra pestaña, y luego pulsar Aprobar las marcadas | La otra **sí** se aprueba. Sale un aviso ámbar diciendo cuál no se pudo y por qué («ya está aprobada») |
+| HAP-60 | El PM no firma lo que no es suyo | Como `qa.pm`, marcar una actividad de Estudio (sin proyecto) | **No** se aprueba; sale el motivo. Queda Pendiente |
+| HAP-61 | **La selección también deja rastro** | Marcar una actividad con aviso y aprobarla; mirar el admin filtrado | Sale con su `DETALLE_POBRE` anulado, y con el **motivo vacío**: se miró una a una, no hace falta explicarlo |
+| HAP-62 | Aprobar una limpia no la marca como forzada | Marcar una actividad sin avisos y aprobarla | En el admin filtrado por «aprobación forzada» **no** aparece |
 
 ---
 
