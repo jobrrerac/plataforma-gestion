@@ -71,6 +71,26 @@ El plan tiene dependencias: no se puede aprobar lo que no se ha registrado.
 7. **HAP** con `qa.pm` y `qa.admin`, sobre los días que registraste en el paso 6.
 8. **DASH, AUD, INF** al final.
 
+### 1.5 No hace falta repasarlo todo en cada cambio
+
+Este plan completo es para una ronda de fondo: una versión nueva, un despliegue
+grande, una revisión periódica. **Para un cambio concreto, solo se reprueban los
+bloques que ese cambio puede afectar.**
+
+Qué bloques son sale del mapa de módulos, en
+[`ARQUITECTURA_MODULOS.md`](ARQUITECTURA_MODULOS.md). Cada PR lo dice en su
+descripción, así que no hay que deducirlo: viene escrito.
+
+El mapa se sostiene porque los módulos no se pisan entre sí, y eso lo comprueba
+un test que falla en CI si alguien introduce un acoplamiento nuevo. No es una
+promesa de arquitectura, es una condición que se verifica sola.
+
+Pase lo que pase, estos ocho van siempre — son los que no pueden romperse nunca:
+
+**AUT-01 · AUT-05 · RBAC-01 · RBAC-06 · HOR-01 · HAP-01 · DASH-01 · INF-01**
+
+Si alguno de esos falla, se para y se reporta, sin seguir con el resto.
+
 ---
 
 ## 2. AUT — Autenticación
@@ -276,6 +296,12 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 
 ---
 
+| HOR-29 | **El límite se ve** | En un día abierto, mirar el campo «¿Qué hiciste?» | A la derecha de la etiqueta hay un contador `0 / 300` que sube al escribir |
+| HOR-30 | Avisa al acercarse al tope | Escribir más de 270 caracteres | El contador cambia de gris a ámbar antes de llegar al límite |
+| HOR-31 | **Dice que se revisa** | Leer el texto bajo el campo | Explica que son 300 caracteres y que se revisa que el detalle alcance para aprobar esas horas |
+| HOR-32 | El contador se reinicia | Añadir el renglón a la lista | El campo se vacía y el contador vuelve a `0 / 300` |
+
+---
 ## 13. HAP — Aprobación de horas (PM y Admin)
 
 > **Quién aprueba qué.** El PM aprueba los días que tocan **sus** proyectos. El Admin ve **todos** — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la **única** vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita `qa.pm`, `qa.admin` y `carmen.leon` (como PM ajeno).
@@ -300,6 +326,10 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-15 | **El motivo se ve** | Como el ingeniero, volver a ese día | Franja naranja "Te devolvieron este día para corregir" con el motivo |
 | HAP-16 | El aviso también en el resumen | Corregir, guardar y mirar el resumen | La franja **sigue visible**: no puede re-aceptarse a ciegas |
 | HAP-17 | Aprobar limpia el motivo | Corregir, aceptar y aprobar | El día queda aprobado **sin** el reproche pegado |
+| HAP-18 | **Se ve la tarea planificada** | Aprobar horas de alguien con una asignación al mismo proyecto y fecha que tenga actividad | Bajo lo que declaró aparece **Planificado** con la tarea del cronograma |
+| HAP-19 | Una asignación solicitada se marca | Repetir con una asignación aún en estado Solicitada | Aparece igual, con el sufijo **(solicitada)** |
+| HAP-20 | No se cuela la tarea de otro proyecto | Mirar un renglón de un proyecto **sin** asignación con actividad | **No** aparece la línea Planificado; no se muestra la tarea de otro proyecto ni de otra fecha |
+| HAP-21 | Sin actividad no molesta | Renglón de formación o estudio (sin proyecto) | No aparece la línea Planificado; el renglón se ve como siempre |
 
 ---
 

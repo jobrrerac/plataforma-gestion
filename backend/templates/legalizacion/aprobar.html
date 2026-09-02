@@ -21,6 +21,10 @@
   .lineas { margin-top:12px; border-top:1px solid #f0eef5; padding-top:10px; }
   .linea { display:grid; grid-template-columns:1fr auto; gap:12px; padding:6px 0; font-size:.88rem; }
   .linea .det { color:#6b7280; font-size:.82rem; }
+  /* Lo que decia el cronograma, para poder contrastarlo con lo declarado. */
+  .planificado { color:#4b5563; font-size:.78rem; }
+  .planificado-et { font-size:.64rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                    color:#6b7280; border:1px solid #d1d5db; border-radius:3px; padding:1px 5px; margin-right:6px; }
   .linea .h { font-weight:700; white-space:nowrap; }
 
   .chip { display:inline-block; font-size:.66rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:20px; }
@@ -118,6 +122,12 @@
             <span class="chip c-mio">Sin proyecto · solo Admin</span>
           {% endif %}
           <div class="det mt-1">{{ r.detalle }}</div>
+          {% if r.planificado %}
+          <div class="planificado mt-1">
+            <span class="planificado-et">Planificado</span>
+            {% for tarea in r.planificado %}{{ tarea }}{% if not forloop.last %} · {% endif %}{% endfor %}
+          </div>
+          {% endif %}
 
           <div class="d-flex gap-2 mt-2 flex-wrap">
             <form method="post" onsubmit="return confirm('¿Aprobar estas {{ r.horas }} h?')">
@@ -169,6 +179,12 @@
           {% endif %}
           <span class="chip">{{ r.get_estado_display }}</span>
           <div class="det mt-1">{{ r.detalle }}</div>
+          {% if r.planificado %}
+          <div class="planificado mt-1">
+            <span class="planificado-et">Planificado</span>
+            {% for tarea in r.planificado %}{{ tarea }}{% if not forloop.last %} · {% endif %}{% endfor %}
+          </div>
+          {% endif %}
         </div>
         <div class="h">{{ r.horas }} h</div>
       </div>

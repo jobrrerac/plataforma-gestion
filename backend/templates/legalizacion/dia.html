@@ -182,11 +182,17 @@
         <div style="font-size:.87rem">
           {{ dia.total_horas }} h el {{ dia.registrado_en|date:"d/m/Y H:i" }}.
           {% if dia.estado == "APROBADO" %}
-            {# Un dia puede quedar aprobado sin firmante si sus renglones se
-               aprobaron antes de que el dia empezara a heredar la firma. El
-               argumento de `default` se evalua aunque no se use, asi que
-               `dia.aprobado_por.username` con el campo a nulo reventaba la
-               pagina entera. #}
+            {% comment %}
+              Un dia puede quedar aprobado sin firmante si sus renglones se
+              aprobaron antes de que el dia empezara a heredar la firma. El
+              argumento de `default` se evalua aunque no se use, asi que
+              `dia.aprobado_por.username` con el campo a nulo reventaba la
+              pagina entera.
+
+              Va con {% templatetag openblock %} comment {% templatetag closeblock %}
+              y no con la forma corta: esa solo admite una linea y, partida en
+              dos, Django la imprime como texto. Estaba pasando justo aqui.
+            {% endcomment %}
             {% if dia.aprobado_por %}Aprobado por {{ dia.aprobado_por.get_full_name|default:dia.aprobado_por.username }}.
             {% else %}Aprobado.{% endif %}
           {% else %}Pendiente de aprobación del PM.{% endif %}
@@ -307,9 +313,19 @@
       </div>
 
       <div class="col-12">
-        <label class="form-label" style="font-size:.82rem;font-weight:600">¿Qué hiciste?</label>
+        <label class="form-label d-flex justify-content-between align-items-baseline"
+               for="f-detalle" style="font-size:.82rem;font-weight:600">
+          <span>¿Qué hiciste?</span>
+          <span id="f-detalle-cuenta" style="font-weight:500;color:#6b7280;font-variant-numeric:tabular-nums">0 / 300</span>
+        </label>
         <input type="text" id="f-detalle" class="form-control" maxlength="300"
+               aria-describedby="f-detalle-ayuda"
                placeholder="Ej: desarrollo del módulo de facturación, revisión de incidencias...">
+        <div id="f-detalle-ayuda" class="mt-1" style="font-size:.76rem;color:#6b7280">
+          Son 300 caracteres: describe la actividad, no hace falta justificarla.
+          Se revisa que lo que escribas alcance para aprobar esas horas, así que
+          «desarrollo» o «reunión» a secas te lo van a devolver.
+        </div>
       </div>
 
       <div class="col-12 d-flex gap-2 flex-wrap">
@@ -456,6 +472,7 @@
     var elProyecto  = document.getElementById('f-proyecto');
     var elHoras     = document.getElementById('f-horas');
     var elDetalle   = document.getElementById('f-detalle');
+    var elCuenta    = document.getElementById('f-detalle-cuenta');
     var campoProy   = document.getElementById('campo-proyecto');
     var lista       = document.getElementById('lista');
     var vacio       = document.getElementById('vacio');
@@ -525,6 +542,16 @@
       }).join('');
     }
 
+    function pintarCuenta() {
+      var n = elDetalle.value.length;
+      elCuenta.textContent = n + ' / 300';
+      // Ambar cerca del tope: el campo se corta en seco, y enterarse al llegar
+      // es lo que hace que la gente reescriba peor en vez de mas corto.
+      elCuenta.style.color = n >= 270 ? '#b45309' : '#6b7280';
+    }
+    elDetalle.addEventListener('input', pintarCuenta);
+    pintarCuenta();
+
     document.getElementById('btn-anadir').addEventListener('click', function () {
       var horas = parseFloat(elHoras.value);
       var detalle = elDetalle.value.trim();
@@ -553,6 +580,7 @@
 
       elHoras.value = '';
       elDetalle.value = '';
+      pintarCuenta();
       pintar();
     });
 

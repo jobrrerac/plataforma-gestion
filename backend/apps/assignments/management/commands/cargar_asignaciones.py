@@ -107,7 +107,7 @@ def buscar_recurso(referencia: str):
         nombres = ", ".join(f"{r.nombre} <{r.email}>" for r in candidatos)
         raise CommandError(
             f"'{referencia}' coincide con {len(candidatos)} recursos: {nombres}. "
-            "Usá el correo en esa fila para que no haya duda."
+            "Usa el correo en esa fila para que no haya duda."
         )
     return candidatos[0]
 
@@ -159,7 +159,7 @@ class Command(BaseCommand):
         simular = opciones["simular"]
         if not simular and not opciones["confirmar"]:
             raise CommandError(
-                "Esto crea asignaciones. Usá --simular para ver el plan, "
+                "Esto crea asignaciones. Usa --simular para ver el plan, "
                 "o --confirmar para crearlas."
             )
 
@@ -388,6 +388,7 @@ class Command(BaseCommand):
         asignacion = Asignacion.objects.create(
             recurso=p["recurso"],
             proyecto=proyecto,
+            actividad=p["actividad"][:200],
             modo_asignacion="RANGO",
             fecha_inicio=p["fecha_inicio"],
             fecha_fin=p["fecha_fin"],
@@ -398,9 +399,9 @@ class Command(BaseCommand):
             estado="SOLICITADA",
             solicitada_por=solicitante,
         )
-        # La actividad no es un campo de Asignacion: el modelo asigna personas a
-        # proyectos, no a tareas. Va al log —que es append-only— para no perder
-        # de qué tarea del cronograma salió cada asignación.
+        # La actividad va también al log. Duplicarla no es un descuido: el campo
+        # de la asignación dice cuál es la tarea *ahora* y se puede corregir; la
+        # entrada del log dice con cuál se dio de alta, y esa no cambia nunca.
         LogAuditoria.objects.create(
             asignacion=asignacion, accion="CREAR", actor=solicitante,
             detalle={

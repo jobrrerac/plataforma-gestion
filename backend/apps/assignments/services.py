@@ -552,8 +552,14 @@ def aprobar_recomputando(asignacion, actor, nueva_fecha_fin, nuevas_horas):
         )
 
 
-def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diaria, jornada_completa, solicitante):
-    """Crea una Asignacion SOLICITADA en modo RANGO desde el flujo de solicitud de recursos."""
+def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diaria, jornada_completa, solicitante, actividad=""):
+    """Crea una Asignacion SOLICITADA en modo RANGO desde el flujo de solicitud de recursos.
+
+    `actividad` es opcional a propósito: pedirla obligatoria frenaría el alta de
+    una asignación que hoy se crea sin ella. Cuando está, la pantalla de
+    aprobación de horas puede enseñar qué se había planificado al lado de lo que
+    la persona declara.
+    """
     dias = contar_dias_habiles(fecha_inicio, fecha_fin, recurso)
     if jornada_completa:
         intensidad = Decimal("8.0")
@@ -561,9 +567,11 @@ def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diari
     else:
         intensidad = Decimal(str(intensidad_diaria))
         horas = ceil(dias * float(intensidad))
+    actividad = (actividad or "").strip()[:200]
     asignacion = Asignacion.objects.create(
         recurso=recurso,
         proyecto=proyecto,
+        actividad=actividad,
         modo_asignacion="RANGO",
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
@@ -576,7 +584,10 @@ def crear_solicitud(recurso, proyecto, fecha_inicio, fecha_fin, intensidad_diari
     )
     LogAuditoria.objects.create(
         asignacion=asignacion, accion="CREAR", actor=solicitante,
-        detalle={"modo": "RANGO", "dias_habiles": dias, "horas_totales": horas},
+        detalle={
+            "modo": "RANGO", "dias_habiles": dias, "horas_totales": horas,
+            "actividad": actividad,
+        },
     )
     return asignacion
 

@@ -582,6 +582,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             intensidad_diaria=intensidad,
             jornada_completa=jornada_completa,
             solicitante=request.user,
+            actividad=request.POST.get("actividad", ""),
         )
 
         return render(request, "dashboard/solicitud_crear.html", {

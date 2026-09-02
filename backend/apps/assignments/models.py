@@ -28,6 +28,14 @@ class Asignacion(SoftDeleteModel):
         related_name="asignaciones", verbose_name="Cluster",
         help_text="Cluster del recurso bajo el que opera esta asignación.",
     )
+    actividad = models.CharField(
+        max_length=200, blank=True, verbose_name="Actividad",
+        help_text=(
+            "Tarea del cronograma que cubre esta asignación (ej: «Integración Oracle»). "
+            "Opcional. Sirve para contrastar lo planificado con lo que la persona "
+            "declara después al legalizar sus horas."
+        ),
+    )
     modo_asignacion = models.CharField(max_length=10, choices=MODO_CHOICES, default="HORAS", verbose_name="Modo")
     horas_totales = models.PositiveIntegerField(null=True, blank=True, help_text="Total de horas (ej: 40, 80, 160)")
     dias_habiles = models.PositiveIntegerField(null=True, blank=True, help_text="Días hábiles de trabajo")
