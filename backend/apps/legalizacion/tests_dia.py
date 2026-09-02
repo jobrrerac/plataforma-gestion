@@ -671,7 +671,18 @@ class FechasNoLegalizablesTests(BaseLegalizacion):
     """
 
     def _futuro(self):
-        return date.today() + timedelta(days=3)
+        """Un dia futuro que ademas sea habil.
+
+        Con `hoy + 3` fijo, la prueba fallaba los miercoles y los jueves: el dia
+        caia en sabado o domingo, la vista tomaba la rama de "no es laborable" y
+        `modo_edicion` ni siquiera llegaba al contexto. El fallo no tenia nada
+        que ver con lo que se queria probar —que un dia futuro no ofrece
+        formulario— y aparecia dos dias por semana.
+        """
+        fecha = date.today() + timedelta(days=3)
+        while not svc.estado_del_dia(self.recurso, fecha)["habil"]:
+            fecha += timedelta(days=1)
+        return fecha
 
     def _demasiado_atras(self):
         return date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 10)
