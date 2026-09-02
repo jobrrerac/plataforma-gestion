@@ -1,6 +1,9 @@
 # Triaje de horas — asistir la aprobación sin que nada la firme solo
 
-Estado: **Fases 0 y 1 implementadas.** El resto está diseñado y decidido, sin escribir.
+Estado: **Fases 0 y 1 implementadas y en producción. Las fases 2 a 5 siguen
+pendientes** — están diseñadas y decididas, sin escribir. No se han descartado:
+esperan a que el piloto de la fase 1 dé números sobre cuánto acierta la
+clasificación.
 
 Aprobar cien registros de horas al día no es un problema de lectura, es de
 triaje: quien aprueba no necesita leer más rápido, necesita que le lleguen

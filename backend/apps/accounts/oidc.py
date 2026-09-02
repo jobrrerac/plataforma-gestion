@@ -7,7 +7,7 @@ haya caducado.
 
 Lo que hace este backend, más allá de identificar a la persona:
 
-1. Mapea los *app roles* de Entra (`Admin` / `PM` / `Ingeniero`) a los grupos
+1. Mapea los *app roles* de Entra (`Admin` / `PM` / `Ingeniero` / `Visor`) a los grupos
    homónimos de Django. Ese mapeo es la razón de ser del archivo: todo el RBAC
    del proyecto se apoya en `user.groups` (ver `apps/accounts/roles.py`), así
    que sin esta sincronización un usuario SSO entraría sin permisos.
@@ -27,14 +27,14 @@ from django.db import transaction
 from mozilla_django_oidc.auth import OIDCAuthenticationBackend
 
 from apps.accounts.models import CambioPasswordPendiente
-from apps.accounts.roles import ADMIN, INGENIERO, PM
+from apps.accounts.roles import ADMIN, INGENIERO, PM, VISOR
 
 logger = logging.getLogger(__name__)
 
 # Grupos que este backend administra. Un rol quitado en Entra se quita también
 # en Django, pero cualquier otro grupo que alguien haya asignado a mano se
 # respeta: solo se tocan estos tres.
-GRUPOS_GESTIONADOS = {ADMIN, PM, INGENIERO}
+GRUPOS_GESTIONADOS = {ADMIN, PM, INGENIERO, VISOR}
 
 
 class EntraOIDCBackend(OIDCAuthenticationBackend):

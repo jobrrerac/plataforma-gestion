@@ -8,7 +8,9 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
-from apps.accounts.roles import es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales
+from apps.accounts.roles import (
+    es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales, puede_ver_todo,
+)
 from apps.core.models import Recurso, Proyecto, Skill, recursos_asignables
 from apps.assignments.models import Asignacion
 from apps.calendar_engine.services import CalendarioRango
@@ -25,12 +27,26 @@ from apps.assignments.services import (
 
 
 class PMOAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    """Solo PM y Admin pueden acceder. Ingeniero → 403."""
+    """Puerta de lo que ESCRIBE: solo PM y Admin. Ingeniero y Visor → 403."""
     login_url = "/login/"
     raise_exception = True  # devuelve 403 en vez de redirigir al login si ya está autenticado
 
     def test_func(self):
         return es_admin_o_pm(self.request.user)
+
+
+class VerTodoRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Puerta de lo que solo LEE: PM, Admin y Visor. Ingeniero → 403.
+
+    Separada de la anterior a propósito. Un Visor tiene que poder abrir el
+    buscador de disponibilidad —es media razón de su existencia— sin que eso le
+    dé permiso para crear la solicitud que sale de él.
+    """
+    login_url = "/login/"
+    raise_exception = True
+
+    def test_func(self):
+        return puede_ver_todo(self.request.user)
 
 
 class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
@@ -80,7 +96,7 @@ class OcupacionAPIView(APIView):
         # dice quién está en bench y con qué carga anda cada quien: eso es
         # información de gestión, y aunque el RBAC ya impide ver costos, la
         # disponibilidad del equipo tampoco es asunto suyo.
-        if not es_admin_o_pm(request.user):
+        if not puede_ver_todo(request.user):
             propio = Recurso.objects.filter(usuario=request.user).first()
             recursos = recursos.filter(pk=propio.pk) if propio else recursos.none()
 
@@ -253,7 +269,7 @@ def marcar_elegibilidad(resultados, dias_flexibles, modo_busqueda, horas_requeri
     return resultados
 
 
-class SolicitudView(PMOAdminRequiredMixin, View):
+class SolicitudView(VerTodoRequiredMixin, View):
     """Buscador de disponibilidad de recursos para crear solicitudes de asignación."""
 
     def get(self, request):

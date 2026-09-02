@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 
 
 class Command(BaseCommand):
-    help = "Crea los grupos Admin, PM e Ingeniero con sus permisos base."
+    help = "Crea los grupos Admin, PM, Ingeniero y Visor con sus permisos base."
 
     def handle(self, *args, **options):
         # Permisos por app/modelo
@@ -47,10 +47,28 @@ class Command(BaseCommand):
             ("legalizacion", "tipoactividad", ["view"]),
         ])
 
+        # Solo `view`, en todo. El Visor supervisa: ve la operacion completa
+        # —incluidas tarifas y costos— y no escribe en ninguna parte. Tampoco es
+        # staff, asi que ni siquiera llega al /admin/; estos permisos existen
+        # para que la API en modo lectura le responda.
+        perms_visor = self._perms([
+            ("assignments", "asignacion",    ["view"]),
+            ("assignments", "logauditoria",  ["view"]),
+            ("core",        "recurso",       ["view"]),
+            ("core",        "proyecto",      ["view"]),
+            ("core",        "skill",         ["view"]),
+            ("core",        "cluster",       ["view"]),
+            ("core",        "tarifavigente", ["view"]),
+            ("calendar_engine", "dianolaborable",   ["view"]),
+            ("calendar_engine", "indisponibilidad", ["view"]),
+            ("legalizacion", "tipoactividad", ["view"]),
+        ])
+
         grupos = {
             "Admin":     perms_admin,
             "PM":        perms_pm,
             "Ingeniero": perms_ingeniero,
+            "Visor":     perms_visor,
         }
 
         for nombre, perms in grupos.items():

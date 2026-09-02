@@ -19,7 +19,7 @@ Cada app solo puede depender de las de arriba. Es lo que hace que un cambio en
 
 | # | App | De qué responde |
 |---|---|---|
-| 1 | `accounts` | Quién es cada quien y qué puede hacer. Login local, SSO, roles. |
+| 1 | `accounts` | Quién es cada quien y qué puede hacer. Login local, SSO, roles (Admin / PM / Ingeniero / Visor). |
 | 2 | `core` | El maestro: recursos, proyectos, tarifas, clusters, skills. |
 | 3 | `calendar_engine` | Qué días son hábiles para cada persona. Feriados, novedades. |
 | 4 | `assignments` | Quién está asignado a qué y cuándo. **El plan.** |

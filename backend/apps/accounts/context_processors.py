@@ -19,6 +19,8 @@ def roles_usuario(request):
     return {
         "es_admin": roles.es_admin(usuario),
         "es_admin_o_pm": roles.es_admin_o_pm(usuario),
+        "es_visor": roles.es_visor(usuario),
+        "puede_ver_todo": roles.puede_ver_todo(usuario),
         "puede_ver_costos": roles.puede_ver_costos(usuario),
         # Aprobar horas ya no depende del rol: un proyecto puede designar a
         # cualquiera como aprobador delegado. Sin esto el enlace no le

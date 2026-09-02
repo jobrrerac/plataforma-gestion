@@ -340,7 +340,12 @@ variable "roles_entra" {
     # Superusuario de la plataforma (entra como `inetum_admin`, ver usuario_alias).
     "jose.barrera-cocunubo" = "Admin"
 
-    "carmen.leon" = "PM"
+    # Carmen deja la gestion de proyectos y pasa a supervision. Sigue aprobando
+    # las horas de V-25188808/Q, pero como **aprobadora delegada** del proyecto,
+    # no por su rol: la designacion en el proyecto ES la autorizacion.
+    "carmen.leon" = "Visor"
+
+    "angel.jimenez-plaza" = "Visor"
 
     # Cuenta de pruebas del flujo de novedades. Su Recurso esta inactivo para no
     # aparecer en la planificacion.
@@ -385,8 +390,8 @@ variable "roles_entra" {
   }
 
   validation {
-    condition     = alltrue([for r in values(var.roles_entra) : contains(["Admin", "PM", "Ingeniero"], r)])
-    error_message = "Los roles validos son exactamente: Admin, PM, Ingeniero (deben coincidir con apps/accounts/roles.py)."
+    condition     = alltrue([for r in values(var.roles_entra) : contains(["Admin", "PM", "Ingeniero", "Visor"], r)])
+    error_message = "Los roles validos son exactamente: Admin, PM, Ingeniero, Visor (deben coincidir con apps/accounts/roles.py)."
   }
 }
 

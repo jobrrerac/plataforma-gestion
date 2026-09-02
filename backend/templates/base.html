@@ -339,11 +339,13 @@
         Solicitudes, cesiones y liberaciones exigen rol PM o Admin en la vista.
         Mostrarlas a un ingeniero solo le ofrece cuatro enlaces que devuelven 403.
       {% endcomment %}
-      {% if es_admin_o_pm %}
+      {% if puede_ver_todo %}
       <a href="/solicitud/"
          class="inet-nav-link {% block active_solicitud %}{% endblock %}">
         <i class="bi bi-people"></i> Solicitudes
       </a>
+      {% endif %}
+      {% if es_admin_o_pm %}
       <a href="/cesion/"
          class="inet-nav-link {% block active_cesion %}{% endblock %}">
         <i class="bi bi-arrow-left-right"></i> Cesiones
@@ -404,7 +406,7 @@
         <div class="inet-usuario-datos">
           <span class="inet-usuario-nombre">{{ user.get_full_name|default:user.username }}</span>
           <span class="inet-usuario-rol">
-            {% if es_admin %}Admin{% elif es_admin_o_pm %}PM{% else %}Ingeniero{% endif %}
+            {% if es_admin %}Admin{% elif es_admin_o_pm %}PM{% elif es_visor %}Visor{% else %}Ingeniero{% endif %}
           </span>
         </div>
         {% comment %}

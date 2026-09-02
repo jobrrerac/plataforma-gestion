@@ -11,7 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 
-from apps.accounts.roles import es_admin_o_pm
+from apps.accounts.roles import es_admin_o_pm, puede_ver_todo
 from apps.core.permissions import SoloLecturaOAdmin, EsAdmin
 from . import novedades as novedades_svc
 from .models import DiaNoLaborable, Indisponibilidad
@@ -99,7 +99,11 @@ class IndisponibilidadViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Indisponibilidad.objects.select_related("recurso")
 
-        if not es_admin_o_pm(self.request.user):
+        # Solo el alcance de lectura cambia para el Visor. Crear y cancelar
+        # siguen preguntando por `es_admin_o_pm` mas abajo, asi que un Visor que
+        # ademas sea empleado pide sus propias vacaciones como cualquiera —y le
+        # quedan PENDIENTES, sin la via de autoridad.
+        if not puede_ver_todo(self.request.user):
             recurso = novedades_svc.recurso_de(self.request.user)
             if recurso is None:
                 return qs.none()

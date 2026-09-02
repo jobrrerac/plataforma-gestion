@@ -144,6 +144,16 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | RBAC-07 | El PM ve a todo el equipo | Mismo dashboard como PM | Aparecen todos los recursos asignables |
 | RBAC-08 | El PM no aprueba asignaciones | Como PM, intentar aprobar una asignación desde `/admin/` | Error "Se requiere rol Admin"; el estado no cambia |
 | RBAC-09 | Solo Admin escribe catálogos | Como PM, POST `/api/recursos/` | 403. Como Admin → 201 |
+| RBAC-10 | **El Visor ve el equipo entero** | Como Visor, abrir `/dashboard/` | Aparecen **todos** los recursos, no solo el suyo |
+| RBAC-11 | El Visor sí ve costos | Como Visor, mirar el buscador y el detalle de recurso | Ve tarifa y costo estimado, igual que un PM |
+| RBAC-12 | El Visor entra al buscador | Como Visor, abrir `/solicitud/` | Entra y puede buscar disponibilidad |
+| RBAC-13 | **Pero no crea la solicitud** | Desde el buscador, intentar crear una asignación | 403; el botón de crear no está |
+| RBAC-14 | **El Visor no escribe en ninguna parte** | Como Visor, abrir `/cesion/`, `/liberacion/`, `/solicitud/crear/` y `/solicitud/recurrente/` | 403 en las cuatro |
+| RBAC-15 | El Visor no entra al admin | Como Visor, abrir `/admin/` | No entra: no es staff |
+| RBAC-16 | El Visor no escribe por la API | Como Visor, POST `/api/recursos/` | 403; el recurso no se crea |
+| RBAC-17 | El menú lo llama Visor | Como Visor, mirar la esquina superior derecha | Dice **Visor**, no Ingeniero |
+| RBAC-18 | **Carmen aprueba como delegada** | Como Carmen (Visor y aprobadora delegada de `V-25188808/Q`), abrir `/horas/aprobar/` | Entra y puede firmar las horas de ese proyecto, y solo de ese |
+| RBAC-19 | Un Visor sin delegación no aprueba | Como Ángel (Visor sin proyectos), abrir `/horas/aprobar/` | 403 |
 
 ---
 

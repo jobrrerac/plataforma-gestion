@@ -43,6 +43,17 @@ contingencia (el secreto de Entra caduca al año): no eliminarlo.
 - `LogAuditoria` es append-only (no editar ni borrar).
 - Integraciones (Skills, SAP): read-only, tras adaptador. Jobs idempotentes.
 
+## Trabajo pendiente que no se ha abandonado
+`docs/TRIAJE_HORAS.md` — asistencia a la aprobación de horas. Las **fases 0 y 1
+están en producción**; las **fases 2 a 5 siguen pendientes** (recuperación con
+pgvector, coherencia esfuerzo–horas con LLM, ayuda al escribir el detalle).
+Están diseñadas y decididas, no descartadas: esperan números del piloto de la
+fase 1.
+
+Aparte: `Indisponibilidad` no sabe representar medio día, y hay dos permisos de
+medio día sin cargar por eso (ver `backend/datos/README.md`). Falta decidir si se
+añade al modelo o se resuelven a mano.
+
 ## Modularidad y alcance de QA
 Las apps están por capas y cada una solo depende de las anteriores:
 `accounts` → `core` → `calendar_engine` → `assignments` → `legalizacion` → `dashboard`.

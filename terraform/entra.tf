@@ -12,6 +12,7 @@
 resource "random_uuid" "rol_admin" {}
 resource "random_uuid" "rol_pm" {}
 resource "random_uuid" "rol_ingeniero" {}
+resource "random_uuid" "rol_visor" {}
 
 resource "azuread_application" "sso" {
   display_name = "Plataforma Gestion de Recursos (${var.entorno})"
@@ -34,10 +35,10 @@ resource "azuread_application" "sso" {
     }
   }
 
-  # Los tres roles del proyecto, emitidos en el claim `roles` del id_token.
+  # Los cuatro roles del proyecto, emitidos en el claim `roles` del id_token.
   # Django los mapea a sus grupos homonimos en cada login
   # (ver apps/accounts/oidc.py). Los nombres DEBEN coincidir con
-  # apps/accounts/roles.py: Admin / PM / Ingeniero.
+  # apps/accounts/roles.py: Admin / PM / Ingeniero / Visor.
   app_role {
     id                   = random_uuid.rol_admin.result
     value                = "Admin"
@@ -61,6 +62,17 @@ resource "azuread_application" "sso" {
     value                = "Ingeniero"
     display_name         = "Ingeniero"
     description          = "Consulta de sus propias asignaciones. NUNCA ve costos."
+    allowed_member_types = ["User"]
+    enabled              = true
+  }
+
+  # Supervision: ve la operacion completa, incluidos costos, y no escribe en
+  # ninguna parte. No es staff, asi que tampoco entra al /admin/ de Django.
+  app_role {
+    id                   = random_uuid.rol_visor.result
+    value                = "Visor"
+    display_name         = "Visor"
+    description          = "Solo lectura de toda la operacion, costos incluidos. No modifica nada."
     allowed_member_types = ["User"]
     enabled              = true
   }
@@ -163,6 +175,7 @@ locals {
     "Admin"     = random_uuid.rol_admin.result
     "PM"        = random_uuid.rol_pm.result
     "Ingeniero" = random_uuid.rol_ingeniero.result
+    "Visor"     = random_uuid.rol_visor.result
   }
 }
 
