@@ -50,9 +50,9 @@ pgvector, coherencia esfuerzo–horas con LLM, ayuda al escribir el detalle).
 Están diseñadas y decididas, no descartadas: esperan números del piloto de la
 fase 1.
 
-Aparte: `Indisponibilidad` no sabe representar medio día, y hay dos permisos de
-medio día sin cargar por eso (ver `backend/datos/README.md`). Falta decidir si se
-añade al modelo o se resuelven a mano.
+Las novedades van por días completos: **medio día se registra como día entero**.
+Decidido, no pendiente. Ese día no se legaliza, y se acepta a cambio de no meter
+medias jornadas en el modelo, el calendario y la capacidad.
 
 ## Modularidad y alcance de QA
 Las apps están por capas y cada una solo depende de las anteriores:
