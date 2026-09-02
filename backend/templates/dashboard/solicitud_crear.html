@@ -306,6 +306,20 @@
         </select>
       </div>
 
+      <!-- Actividad del cronograma -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold" for="id_actividad">
+          Actividad <span class="text-muted small">(opcional)</span>
+        </label>
+        <input type="text" name="actividad" id="id_actividad" class="form-control"
+               maxlength="200" placeholder="Ej: Integración Oracle"
+               value="{{ post.actividad|default:'' }}">
+        <div class="form-text">
+          La tarea del cronograma que cubre esta asignación. Se muestra a quien
+          aprueba las horas, junto a lo que la persona declare haber hecho.
+        </div>
+      </div>
+
       <!-- Dedicación diaria -->
       <div class="mb-3">
         <label class="form-label fw-semibold">Dedicación diaria <span class="text-muted small" id="label-dedicacion-hint">(máxima, por día hábil libre)</span></label>
@@ -418,6 +432,7 @@
           <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
           <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
           <input type="hidden" name="proyecto" value="{{ post.proyecto }}">
+          <input type="hidden" name="actividad" value="{{ post.actividad|default:'' }}">
           <input type="hidden" name="intensidad_diaria" value="{{ post.intensidad_diaria }}">
           {% if post.jornada_completa %}<input type="hidden" name="jornada_completa" value="on">{% endif %}
           {% if dias_flexibles %}<input type="hidden" name="dias_flexibles" value="on">{% endif %}

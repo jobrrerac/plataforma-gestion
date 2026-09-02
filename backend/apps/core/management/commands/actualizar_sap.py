@@ -75,7 +75,7 @@ class Command(BaseCommand):
         simular = opciones["simular"]
         if not simular and not opciones["confirmar"]:
             raise CommandError(
-                "Esto modifica recursos. Usá --simular para ver los cambios, "
+                "Esto modifica recursos. Usa --simular para ver los cambios, "
                 "o --confirmar para aplicarlos."
             )
 
@@ -94,7 +94,7 @@ class Command(BaseCommand):
         if conflictos and not opciones["sobrescribir"]:
             raise CommandError(
                 f"{len(conflictos)} recurso(s) ya tienen un número SAP distinto del que trae el "
-                "archivo. No se escribió nada. Si el archivo es el bueno, repetí con "
+                "archivo. No se escribió nada. Si el archivo es el bueno, repite con "
                 "--sobrescribir; si no, corregí el archivo."
             )
 
@@ -165,7 +165,7 @@ class Command(BaseCommand):
                 f"Línea {fila['linea']}: el correo '{fila['correo']}' es de "
                 f"'{recurso.nombre}', pero el archivo dice '{fila['nombre']}'. "
                 "Si las columnas se descuadraron, cada persona acabaría con el "
-                "número de otra. Corregí el archivo."
+                "número de otra. Corrige el archivo."
             )
 
         actual = (recurso.nro_persona_sap or "").strip()

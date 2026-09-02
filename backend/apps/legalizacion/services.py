@@ -20,6 +20,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.assignments.models import Asignacion
 from apps.assignments.services import capacidad_maxima_dia
 from apps.calendar_engine.services import CalendarioRango
 from apps.core.models import Recurso
@@ -347,6 +348,51 @@ def registros_por_aprobar(usuario):
     )
 
 
+def actividades_planificadas(dias) -> dict:
+    """Qué tarea del cronograma cubría a cada persona en cada día y proyecto.
+
+    Devuelve `dict[(recurso_id, proyecto_id, fecha)] -> [texto, ...]`. Quien
+    aprueba ve entonces qué se había planificado al lado de lo que la persona
+    declara, que es el contexto que hoy le falta para juzgar las horas.
+
+    Puede haber más de una: una misma persona puede tener dos tareas abiertas
+    del mismo proyecto el mismo día, y de hecho pasa en los cronogramas reales.
+
+    Se incluyen las asignaciones SOLICITADAS además de las APROBADAS, marcadas
+    como tales. Un cronograma recién cargado está entero en SOLICITADA, y
+    esconderlo justo cuando más se necesita lo dejaría sin uso durante semanas.
+
+    Una sola consulta para toda la pantalla: hacerlo por renglón sería una
+    consulta por fila y esta cola llega a tener cien.
+    """
+    if not dias:
+        return {}
+
+    fechas = [d.fecha for d in dias]
+    recursos = {d.recurso_id for d in dias}
+    asignaciones = (
+        Asignacion.objects
+        .filter(
+            recurso_id__in=recursos,
+            estado__in=("APROBADA", "SOLICITADA"),
+            fecha_inicio__lte=max(fechas),
+            fecha_fin__gte=min(fechas),
+        )
+        .exclude(actividad="")
+        .values_list("recurso_id", "proyecto_id", "fecha_inicio", "fecha_fin", "actividad", "estado")
+    )
+
+    planificadas: dict = {}
+    for recurso_id, proyecto_id, inicio, fin, actividad, estado in asignaciones:
+        for fecha in fechas:
+            if inicio <= fecha <= fin:
+                texto = actividad if estado == "APROBADA" else f"{actividad} (solicitada)"
+                textos = planificadas.setdefault((recurso_id, proyecto_id, fecha), [])
+                if texto not in textos:
+                    textos.append(texto)
+    return planificadas
+
+
 def dias_por_aprobar(usuario):
     """La misma cola, agrupada por día para poder pintarla.
 
@@ -369,10 +415,17 @@ def dias_por_aprobar(usuario):
         .order_by("fecha", "recurso__nombre")
     )
 
+    completos = list(completos)
+    planificadas = actividades_planificadas(completos)
+
     aprobables = {r.pk for r in mios}
     resultado = []
     for dia in completos:
         registros = list(dia.registros.all())
+        for registro in registros:
+            registro.planificado = planificadas.get(
+                (dia.recurso_id, registro.proyecto_id, dia.fecha), []
+            )
         dia.pendientes_mios = [r for r in registros if r.pk in aprobables]
         dia.otros = [r for r in registros if r.pk not in aprobables]
         dia.detalle = resumen(dia)
