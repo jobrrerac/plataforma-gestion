@@ -50,6 +50,8 @@
       cursor: not-allowed;
     }
     .cell-bench   { background: #fff; }
+    /* Interno con equipo: ocupa el tiempo, no la capacidad. */
+    .cell-interno { background: #ebecf0; color: #6b7280; }
     .cell-low     { background: #d1fae5; }
     .cell-mid     { background: #fef08a; }
     .cell-high    { background: #fdba74; }
@@ -169,6 +171,7 @@
       <span><span class="legend-box" style="background:#fef08a;"></span>25–50%</span>
       <span><span class="legend-box" style="background:#fdba74;"></span>50–75%</span>
       <span><span class="legend-box" style="background:#f87171;"></span>75–100%</span>
+      <span><span class="legend-box" style="background:#ebecf0;"></span>Interno (cede)</span>
       <span><span class="legend-box" style="background:#f0f0f0;"></span>No hábil</span>
       <span style="margin-left:18px;padding-left:18px;border-left:1px solid var(--inet-linea)">
         <span class="legend-tri legend-tri-ok"></span>Horas aprobadas</span>
@@ -211,9 +214,12 @@
     NO_LABORABLE: "Día no laborable",
   };
 
-  function cellClass(pct, noHabil, esAusencia) {
+  function cellClass(pct, noHabil, esAusencia, horasInternas) {
     if (esAusencia) return "cell-ausencia";
     if (noHabil) return "cell-nohabil";
+    // Sin carga facturable pero con trabajo interno: no es bench, pero tampoco
+    // ocupacion. Gris claro, porque cede en cuanto aparezca un cliente.
+    if (pct === 0 && horasInternas > 0) return "cell-interno";
     if (pct === 0)  return "cell-bench";
     if (pct <= 25)  return "cell-low";
     if (pct <= 50)  return "cell-mid";
@@ -280,7 +286,7 @@
           </small>
         </td>`;
       r.detalle_por_dia.forEach(d => {
-        const cls   = cellClass(d.porcentaje, d.no_habil, d.ausencia);
+        const cls   = cellClass(d.porcentaje, d.no_habil, d.ausencia, d.horas_internas);
         // La ausencia sí lleva etiqueta: es 100% de no disponibilidad, no un
         // hueco. Los fines de semana y feriados siguen en blanco.
         const label = d.ausencia ? "100%" : (d.no_habil ? "" : fmtPct(d.porcentaje));
@@ -290,9 +296,13 @@
         } else if (d.no_habil) {
           tooltip = MOTIVOS[d.motivo_no_habil] || "No hábil";
         } else {
-          tooltip = d.porcentaje > 0
-            ? `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}`
-            : "Bench";
+          if (d.porcentaje > 0) {
+            tooltip = `${d.horas_asignadas}h (${d.porcentaje}%) · ${d.proyectos.join(", ")}`;
+          } else if (d.horas_internas > 0) {
+            tooltip = `${d.horas_internas}h en proyecto interno · disponible para cliente`;
+          } else {
+            tooltip = "Bench";
+          }
         }
         // Marca de horas legalizadas, independiente del color de carga: una
         // cosa es cuanto tiene asignado y otra si ya declaro lo que hizo.

@@ -598,9 +598,27 @@ def proyectos_disponibles(recurso, fecha: date):
         asignaciones__fecha_inicio__lte=fecha,
         asignaciones__fecha_fin__gte=fecha,
     )
-    internos = Proyecto.objects.filter(facturable=False, estado="ACTIVO")
+    # Los internos administrativos salen para todos. Los internos CON EQUIPO no:
+    # un acelerador tiene gente asignada igual que un proyecto de cliente, y
+    # dejar que cualquiera le impute horas convertiria su coste en humo.
+    internos = Proyecto.objects.filter(
+        facturable=False, estado="ACTIVO", interno_con_equipo=False,
+    )
+    internos_con_equipo = Proyecto.objects.filter(
+        facturable=False,
+        estado="ACTIVO",
+        interno_con_equipo=True,
+        asignaciones__recurso=recurso,
+        asignaciones__estado="APROBADA",
+        asignaciones__deleted_at__isnull=True,
+        asignaciones__fecha_inicio__lte=fecha,
+        asignaciones__fecha_fin__gte=fecha,
+    )
 
-    return (asignados | internos).distinct().order_by("-facturable", "codigo")
+    return (
+        (asignados | internos | internos_con_equipo)
+        .distinct().order_by("-facturable", "codigo")
+    )
 
 
 @transaction.atomic
