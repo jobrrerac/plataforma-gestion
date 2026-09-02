@@ -9,7 +9,23 @@
   .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
   .form-control:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
 
-  .dia-card { border:1px solid #eee; border-radius:12px; padding:18px; margin-bottom:14px; background:#fff; }
+  /* Cada tarjeta es la jornada de UNA persona, y en una cola larga hay que
+     poder ver donde acaba una y empieza la siguiente. El borde de 1px en #eee
+     no separaba nada. La franja de la izquierda ademas repite la banda, asi que
+     el color del triaje se lee sin buscar la etiqueta. */
+  .dia-card {
+    --franja: #c9cdd8;                 /* gris, si el triaje esta apagado */
+    border: 1px solid #d5d8e0;
+    border-left: 5px solid var(--franja);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(25,27,46,.07);
+  }
+  .dia-card.d-atencion { --franja: #a52a25; }
+  .dia-card.d-revisar  { --franja: #97591a; }
+  .dia-card.d-rutina   { --franja: #1f6b45; }
   .dia-card .meta { color:#6b7280; font-size:.84rem; }
   .persona { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; color:#191b2e; }
   .total { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:#191b2e; white-space:nowrap; }
@@ -43,7 +59,8 @@
 
   /* Precedentes: lo que ya paso, para poder comparar. Deliberadamente discreto
      —no es un aviso, es contexto— salvo lo devuelto, que si pesa. */
-  .precedentes { font-size:.77rem; color:#4b5563; padding-left:9px; border-left:2px solid #e2e4ea; }
+  .precedentes { font-size:.77rem; color:#4b5563; padding:6px 0 6px 9px;
+                 border-left:2px solid #e2e4ea; margin-bottom:10px; }
   .precedentes-et { font-size:.63rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
                     color:#676d7a; display:block; margin-bottom:2px; }
   .prec { line-height:1.5; }
@@ -134,7 +151,7 @@
   {% endif %}
 
   {% for dia in dias %}
-  <div class="dia-card">
+  <div class="dia-card{% if hay_triaje %} d-{{ dia.banda|lower }}{% endif %}">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
       <div>
         <div class="persona">
@@ -203,12 +220,11 @@
             porque es la unica senal de que se rechaza de verdad aqui.
           {% endcomment %}
           <div class="precedentes mt-1">
-            <span class="precedentes-et">Antes</span>
+            <span class="precedentes-et">
+              <i class="bi bi-clock-history me-1"></i>Lo que ya pasó — no es una acción, es historial
+            </span>
             {% for p in r.precedentes %}
-            <div class="prec {% if p.devuelto %}prec-devuelto{% endif %}">
-              {{ p.resumen }}
-              {% if p.devuelto %}<b>· devuelto</b>{% if p.motivo %}: {{ p.motivo }}{% endif %}{% endif %}
-            </div>
+            <div class="prec {% if p.devuelto %}prec-devuelto{% endif %}">{{ p.frase }}</div>
             {% endfor %}
           </div>
           {% endif %}
@@ -281,12 +297,11 @@
             porque es la unica senal de que se rechaza de verdad aqui.
           {% endcomment %}
           <div class="precedentes mt-1">
-            <span class="precedentes-et">Antes</span>
+            <span class="precedentes-et">
+              <i class="bi bi-clock-history me-1"></i>Lo que ya pasó — no es una acción, es historial
+            </span>
             {% for p in r.precedentes %}
-            <div class="prec {% if p.devuelto %}prec-devuelto{% endif %}">
-              {{ p.resumen }}
-              {% if p.devuelto %}<b>· devuelto</b>{% if p.motivo %}: {{ p.motivo }}{% endif %}{% endif %}
-            </div>
+            <div class="prec {% if p.devuelto %}prec-devuelto{% endif %}">{{ p.frase }}</div>
             {% endfor %}
           </div>
           {% endif %}

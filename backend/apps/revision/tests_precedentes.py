@@ -77,7 +77,7 @@ class BuscarPrecedentesTests(BasePrecedentes):
         encontrados = prec.buscar(actual, hoy)
         self.assertEqual(len(encontrados), 1)
         self.assertEqual(encontrados[0].horas, 4.0)
-        self.assertIn("07/09/2026", encontrados[0].resumen)
+        self.assertIn("El 07/09/2026 declaró 4 h", encontrados[0].frase)
 
     def test_no_se_encuentra_a_si_mismo(self):
         hoy = self._dia()
@@ -171,6 +171,33 @@ class BuscarPrecedentesTests(BasePrecedentes):
         hoy = self._dia()
         actual = self._renglon(hoy, TEXTO)
         self.assertEqual(len(prec.buscar(actual, hoy)), 3)
+
+    def test_la_frase_dice_que_es_historial_y_no_una_accion(self):
+        """Con el formato de etiqueta, «devuelto» quedaba encima de los botones
+        Aprobar y Devolver y se leia como el estado del renglon actual."""
+        devuelto = self._dia(fecha=HOY - timedelta(days=5))
+        self._renglon(
+            devuelto, TEXTO, horas="4.0", estado=RegistroHoras.DEVUELTO,
+            motivo="Di que pruebas",
+        )
+        hoy = self._dia()
+        actual = self._renglon(hoy, TEXTO)
+
+        frase = prec.buscar(actual, hoy)[0].frase
+        self.assertIn("El 09/09/2026 declaró 4 h", frase)
+        self.assertIn("se lo devolvieron", frase)
+        self.assertIn("Di que pruebas", frase)
+
+    def test_la_frase_nombra_a_quien_no_es_uno_mismo(self):
+        anterior = self._dia(recurso=self.otro, fecha=HOY - timedelta(days=5))
+        self._renglon(anterior, TEXTO, horas="2.0", estado=RegistroHoras.APROBADO)
+
+        hoy = self._dia()
+        actual = self._renglon(hoy, TEXTO)
+
+        frase = prec.buscar(actual, hoy)[0].frase
+        self.assertIn("Medina-Novoa Martin declaró", frase)
+        self.assertIn("se aprobó", frase)
 
     def test_sin_detalle_no_busca(self):
         hoy = self._dia()

@@ -54,11 +54,28 @@ class Precedente:
     devuelto: bool
     motivo: str
     similitud: float
+    misma_persona: bool = True
 
     @property
-    def resumen(self):
-        cuando = f"{self.fecha:%d/%m/%Y}"
-        return f"{cuando} · {self.horas:g} h · {self.destino}"
+    def frase(self):
+        """Una frase en pasado, no una etiqueta.
+
+        Con el formato de antes —«25/08/2026 · 4,5 h · INT-DEPART · devuelto»—
+        la palabra «devuelto» quedaba justo encima de los botones Aprobar y
+        Devolver, y se leia como el estado del renglon que se esta mirando o
+        como algo que la pantalla acababa de hacer. Es ninguna de las dos: es lo
+        que paso con otro renglon, otro dia. Dicho como frase no se confunde.
+        """
+        quien = "declaró" if self.misma_persona else f"{self.persona} declaró"
+        desenlace = (
+            f" y se lo devolvieron: «{self.motivo}»" if self.devuelto and self.motivo
+            else " y se lo devolvieron" if self.devuelto
+            else " y se aprobó"
+        )
+        return (
+            f"El {self.fecha:%d/%m/%Y} {quien} {self.horas:g} h en {self.destino} "
+            f"con un texto parecido{desenlace}."
+        )
 
 
 def buscar(registro, dia, limite=MAXIMO):
@@ -112,6 +129,7 @@ def buscar(registro, dia, limite=MAXIMO):
             devuelto=r.estado == RegistroHoras.DEVUELTO,
             motivo=r.motivo_devolucion or "",
             similitud=round(r.parecido, 2),
+            misma_persona=r.dia.recurso_id == dia.recurso_id,
         )
         for r in encontrados
     ]
