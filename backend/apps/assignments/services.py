@@ -123,7 +123,7 @@ def _dias_habiles_liberables(asignacion, win_inicio: date, win_fin: date) -> tup
 
 
 def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None,
-               solo_capacidad: bool = True) -> dict:
+               solo_capacidad: bool = True, proyecto_id=None) -> dict:
     """
     Precalcula la carga diaria (asignaciones APROBADAS) de varios recursos en
     un rango. Retorna dict[recurso_id][fecha] -> horas.
@@ -145,6 +145,13 @@ def mapa_carga(recurso_ids, fecha_inicio: date, fecha_fin: date, excluir_id=None
         fecha_inicio__lte=fecha_fin,
         fecha_fin__gte=fecha_inicio,
     )
+    if proyecto_id:
+        # Solo la carga de un proyecto concreto. El dashboard lo usa cuando hay
+        # filtro puesto: la celda sigue pintando la ocupacion TOTAL —decir que
+        # alguien esta al 12% cuando esta al 100% en otro sitio seria mentir
+        # sobre su disponibilidad— pero el detalle puede decir cuanto de eso es
+        # del proyecto que se esta mirando.
+        qs = qs.filter(proyecto_id=proyecto_id)
     if solo_capacidad:
         # Un acelerador o un producto propio ocupa el tiempo de la persona, pero
         # no su capacidad: cede en cuanto aparece trabajo de cliente. Contarlo
