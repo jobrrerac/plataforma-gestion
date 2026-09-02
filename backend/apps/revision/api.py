@@ -33,9 +33,14 @@ class Contexto:
     # ── carga ───────────────────────────────────────────────────────────────
 
     def _cargar(self):
-        fechas = [d.fecha for d in self.dias]
+        # Un conjunto, no una lista: la cola trae un día por persona, así que la
+        # misma fecha aparece tantas veces como gente registró ese día. Con la
+        # lista, el plan de cada uno se sumaba una vez por repetición y salían
+        # cifras imposibles —25,5 h planificadas en una jornada de 8,5—, lo que
+        # además apagaba `SOBRE_PLAN` justo cuando debía saltar.
+        fechas = sorted({d.fecha for d in self.dias})
         recursos = {d.recurso_id for d in self.dias}
-        desde, hasta = min(fechas), max(fechas)
+        desde, hasta = fechas[0], fechas[-1]
 
         # 1. El plan: asignaciones aprobadas que cubren alguna de esas fechas.
         #    Solo APROBADAS — una solicitud pendiente no autoriza a imputar.

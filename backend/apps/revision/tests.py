@@ -464,3 +464,121 @@ class AprobarElDiaEnteroTests(BaseTriaje):
         self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
 
         self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+
+
+class RevisarHistoricoTests(BaseTriaje):
+    """El informe retroactivo sobre horas ya registradas.
+
+    Lo que hay que garantizar por encima de todo es que **no toca nada**: se
+    ejecuta sobre datos de produccion ya firmados, y un comando de informe que
+    escribiera seria un desastre silencioso.
+    """
+
+    def _ejecutar(self, **extra):
+        from io import StringIO
+        from django.core.management import call_command
+        salida = StringIO()
+        call_command("revisar_historico", stdout=salida, stderr=salida, **extra)
+        return salida.getvalue()
+
+    def _dia_aprobado_con_estudio(self):
+        dia = self._dia()
+        r = self._renglon(
+            dia, "7.5",
+            "Escoger certificacion y ver que ruta de estudio tomar por parte de learn microsoft",
+            tipo=self.estudio,
+        )
+        self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
+        dia.registros.update(estado=RegistroHoras.APROBADO, aprobado_por=self.pm)
+        dia.estado = DiaLegalizado.APROBADO
+        dia.save(update_fields=["estado"])
+        return dia, r
+
+    def test_no_cambia_ningun_estado(self):
+        """La garantia principal: corre sobre lo ya firmado."""
+        dia, _ = self._dia_aprobado_con_estudio()
+        antes = list(dia.registros.values_list("id", "estado", "aprobado_por_id"))
+
+        self._ejecutar(desde="2026-09-01", hasta="2026-09-30")
+
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
+        self.assertEqual(list(dia.registros.values_list("id", "estado", "aprobado_por_id")), antes)
+
+    def test_encuentra_lo_que_se_aprobo_sin_aviso(self):
+        self._dia_aprobado_con_estudio()
+        salida = self._ejecutar(desde="2026-09-01", hasta="2026-09-30", detalle=True)
+
+        self.assertIn("SE HABRÍAN MARCADO", salida)
+        self.assertIn("NO_FACTURABLE_MEDIA_JORNADA", salida)
+        self.assertIn("88% del día", salida)
+
+    def test_dice_cuanta_cola_se_ahorra(self):
+        self._dia_aprobado_con_estudio()
+        salida = self._ejecutar(desde="2026-09-01", hasta="2026-09-30")
+        self.assertIn("habrían salido en Rutina", salida)
+        self.assertIn("POR BANDA", salida)
+
+    def test_solo_aprobados_deja_fuera_lo_pendiente(self):
+        self._dia_aprobado_con_estudio()
+        pendiente = self._dia(fecha=LUNES + timedelta(days=1))
+        self._renglon(pendiente, "8.5", "muchas tareas", proyecto=self.interno)
+
+        con_todo = self._ejecutar(desde="2026-09-01", hasta="2026-09-30")
+        solo = self._ejecutar(desde="2026-09-01", hasta="2026-09-30", solo_aprobados=True)
+        self.assertIn("Días     2", con_todo)
+        self.assertIn("Días     1", solo)
+
+    def test_un_rango_vacio_no_revienta(self):
+        salida = self._ejecutar(desde="2020-01-01", hasta="2020-01-31")
+        self.assertIn("No hay días registrados", salida)
+
+
+class ContextoConVariasPersonasTests(BaseTriaje):
+    """El mismo día aparece una vez por persona en la cola.
+
+    Lo encontro el informe retroactivo sobre datos reales, no una prueba: decia
+    "el plan ya ocupaba 25,5 h" en una jornada de 8,5, porque la fecha se
+    repetia tres veces y el plan se sumaba una vez por repeticion. Las pruebas
+    no lo veian porque todas usaban una sola persona.
+    """
+
+    def test_el_plan_no_se_multiplica_por_cuanta_gente_registro_ese_dia(self):
+        otros = [
+            Recurso.objects.create(nombre=f"Otra Persona {i}", email=f"o{i}@test.com", banda="JR")
+            for i in range(2)
+        ]
+        for recurso in [self.recurso, *otros]:
+            DiaLegalizado.objects.create(
+                recurso=recurso, fecha=LUNES, estado=DiaLegalizado.REGISTRADO,
+                total_horas=Decimal("8.5"), jornada_esperada=Decimal("8.5"),
+            )
+        self._plan(self.cliente, "8.5")
+
+        dias = list(DiaLegalizado.objects.filter(fecha=LUNES))
+        ctx = Contexto(dias)
+
+        self.assertEqual(ctx.plan_del_dia(self.recurso.pk, LUNES), 8.5)
+        self.assertEqual(
+            ctx.horas_planificadas(self.recurso.pk, self.cliente.pk, LUNES), 8.5,
+        )
+
+    def test_sobre_plan_sigue_saltando_con_varias_personas_en_la_cola(self):
+        """El plan inflado apagaba la regla justo cuando debia saltar."""
+        for i in range(2):
+            recurso = Recurso.objects.create(
+                nombre=f"Otra Persona {i}", email=f"o{i}@test.com", banda="JR",
+            )
+            DiaLegalizado.objects.create(
+                recurso=recurso, fecha=LUNES, estado=DiaLegalizado.REGISTRADO,
+                total_horas=Decimal("8.5"), jornada_esperada=Decimal("8.5"),
+            )
+        dia = self._dia()
+        self._plan(self.cliente, "4.3")
+        r = self._renglon(
+            dia, "8.5", "Ajustes al conector de Oracle y pruebas", proyecto=self.cliente,
+        )
+
+        ctx = Contexto(list(DiaLegalizado.objects.filter(fecha=LUNES)))
+        codigos = {s.codigo for s in sn.evaluar(r, dia, ctx).senales}
+        self.assertIn("SOBRE_PLAN", codigos)

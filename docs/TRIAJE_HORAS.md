@@ -191,6 +191,22 @@ con horas de cliente incluidas. Esa espera a tener números sobre cuánto aciert
 la clasificación: si falla, firmar en bloque multiplica el error en vez de
 contenerlo.
 
+#### Revisar hacia atrás lo que ya se firmó
+
+`manage.py revisar_historico` pasa las mismas reglas sobre horas **ya
+registradas o aprobadas** y dice qué se habría marcado. Es de solo lectura: no
+aprueba, no devuelve, no cambia ningún estado.
+
+Existe porque el triaje se calcula al vuelo, así que en cuanto está desplegado
+ya ordena todo lo pendiente — pero lo ya aprobado no se vuelve a mirar, y ahí
+está justo el renglón de estudio de 7,5 h que motivó el módulo.
+
+La cifra que importa es **qué proporción de lo ya aprobado habría salido en
+Rutina**. Si son casi todos, las reglas separan bien y el carril se puede
+empezar a confiar; si son pocos, sobran reglas o el umbral está mal, y conviene
+saberlo antes de construir nada encima. Lo que marca no son errores: los firmó
+una persona que pudo tener sus motivos.
+
 Reglas de interfaz que sostienen el invariante 1: la banda **ordena, no
 decide** —los tres carriles llevan los mismos botones— y nunca se escribe «el
 modelo dice», se muestra el precedente concreto con enlace.
