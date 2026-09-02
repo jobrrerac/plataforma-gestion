@@ -252,6 +252,25 @@ class RegistroHoras(SoftDeleteModel):
         ),
     )
 
+    # ── rastro de las firmas que pasaron por encima de un aviso ─────────────
+    #
+    # Un aviso del triaje no es un veto: muchos son actividades normales que la
+    # regla marcó de más. Se pueden firmar igual, pero entonces queda escrito
+    # cuál se anuló. Sin esto no habría forma de saber qué regla se salta todo
+    # el mundo, que es exactamente lo que hay que corregir antes de añadir más.
+    aprobacion_forzada = models.BooleanField(
+        default=False,
+        help_text="Se firmó teniendo avisos del triaje.",
+    )
+    senales_anuladas = models.JSONField(
+        default=list, blank=True,
+        help_text="Códigos de los avisos que llevaba el renglón al firmarlo.",
+    )
+    motivo_aprobacion = models.CharField(
+        max_length=300, blank=True,
+        help_text="Por qué se firmó pese a los avisos. Solo se pide al firmar un día entero de una vez.",
+    )
+
     class Meta:
         verbose_name = "Registro de horas"
         verbose_name_plural = "Registros de horas"

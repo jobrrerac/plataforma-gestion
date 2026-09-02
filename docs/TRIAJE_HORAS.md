@@ -194,6 +194,56 @@ con horas de cliente incluidas. Esa espera a tener números sobre cuánto aciert
 la clasificación: si falla, firmar en bloque multiplica el error en vez de
 contenerlo.
 
+#### Aprobar de todos modos, y aprobar lo marcado
+
+Un aviso **nunca fue un veto**, pero hasta ahora la pantalla se comportaba como
+si lo fuera: un día con un solo renglón marcado perdía el botón de firma en
+bloque y había que ir de a uno. Muchos de esos avisos son trabajo normal que la
+regla marcó de más, y una herramienta que castiga sus propios falsos positivos
+acaba ignorada. Hay dos salidas, deliberadamente distintas.
+
+**Aprobar de todos modos** ocupa el mismo sitio que el botón limpio y aparece
+exactamente donde aquel no llega: se cumplen las condiciones 1, 2 y 4 —Admin,
+todo interno, más de un renglón— y falla solo la 3. Los dos botones **nunca
+salen a la vez**; serían dos botones que hacen lo mismo y uno pediría un motivo
+de más.
+
+Lo único que relaja es la condición 3. **Las horas de cliente no se fuerzan ni
+con motivo**: para esas están las casillas. Es la misma decisión de siempre —el
+desgaste que se ahorra es el de revisar lo no facturable, para que la atención
+quede donde se factura.
+
+**Y pide un motivo escrito.** No es burocracia: es lo único que después permite
+distinguir una regla que sobra de una que nadie mira. Cada renglón guarda
+`aprobacion_forzada`, `senales_anuladas` con los códigos que llevaba encima, y
+`motivo_aprobacion`. Se leen en el admin de *Registros de horas* filtrando por
+«aprobación forzada» —pantalla de **solo lectura**: aprobar sigue siendo
+`aprobar_registro`, que relee bajo bloqueo y comprueba quién firma qué.
+
+**Aprobar las marcadas** es lo otro: una casilla por renglón, en toda la cola y
+de los días que sean, y un botón pegado abajo que los firma en un envío. No
+pide motivo aunque haya avisos, y la razón es que marcar la casilla **es** el
+mismo acto que pulsar el botón de ese renglón — solo que treinta veces. Lo que
+se firma sin mirar es el día entero; eso es lo que se paga con un motivo.
+
+Aquí sí entran las horas de cliente, con el permiso comprobado renglón a
+renglón: la casilla se pinta en la pantalla, pero quien no puede firmar algo
+sigue sin poder. Y **un fallo no tumba el resto**: se marcan treinta, una la
+firmó otro hace un minuto, se firman las veintinueve y se dice en voz alta cuál
+no y por qué. Tirarlas todas obliga a repetir el trabajo entero, que es la mejor
+forma de que nadie vuelva a usar el botón.
+
+Aunque no pidan motivo, **estas firmas también dejan el rastro**: cualquier
+renglón que se apruebe teniendo avisos guarda sus `senales_anuladas`, venga del
+botón individual, de la selección o del día forzado. Ese es el corpus de falsos
+positivos, y es la entrada natural de la fase 3: si `DETALLE_POBRE` se anula
+cuarenta veces con el mismo motivo, el problema es el umbral de 25 caracteres,
+no la gente.
+
+Sigue sin existir la firma en bloque del carril de Rutina completo con horas de
+cliente incluidas, por lo dicho arriba.
+
+
 #### Revisar hacia atrás lo que ya se firmó
 
 `manage.py revisar_historico` pasa las mismas reglas sobre horas **ya

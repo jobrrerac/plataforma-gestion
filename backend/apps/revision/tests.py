@@ -582,3 +582,261 @@ class ContextoConVariasPersonasTests(BaseTriaje):
         ctx = Contexto(list(DiaLegalizado.objects.filter(fecha=LUNES)))
         codigos = {s.codigo for s in sn.evaluar(r, dia, ctx).senales}
         self.assertIn("SOBRE_PLAN", codigos)
+
+
+class ForzarElDiaEnteroTests(BaseTriaje):
+    """El mismo botón sobre un día que sí trae avisos.
+
+    Un aviso nunca fue un veto: muchos son trabajo normal que la regla marcó de
+    más, y no poder firmarlos convierte el triaje en un estorbo. Lo que se cuida
+    aquí es que forzar **no** relaje nada más —sigue siendo Admin, sigue siendo
+    todo interno, sigue sin tocar horas de cliente— y que deje escrito qué aviso
+    se anuló, que es lo único que después permite corregir la regla.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth.models import Group
+        self.admin = User.objects.create_user("admin_forzar", "adf@test.com", "x")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+
+    def _dia_interno_con_aviso(self):
+        """Interno, repartido y descrito salvo uno: el caso que pide el botón."""
+        dia = self._dia()
+        self._renglon(dia, "4", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        self._renglon(dia, "4.5", "muchas tareas", proyecto=self.interno)
+        return dia
+
+    def _cola(self, usuario):
+        dias = svc.dias_por_aprobar(usuario)
+        clasificar(dias, usuario)
+        return dias
+
+    # ── cuándo se ofrece ────────────────────────────────────────────────────
+
+    def test_se_ofrece_donde_el_limpio_no_llega(self):
+        self._dia_interno_con_aviso()
+        dia = self._cola(self.admin)[0]
+        self.assertFalse(dia.aprobable_en_bloque)
+        self.assertTrue(dia.forzable_en_bloque)
+
+    def test_los_dos_botones_nunca_salen_a_la_vez(self):
+        """Serian dos botones que hacen lo mismo, y uno pediria motivo de mas."""
+        # Tres tareas por debajo de media jornada: si alguna llegara a 4,5 de
+        # 8,5 saltaria NO_FACTURABLE_MEDIA_JORNADA y esto seria el otro caso.
+        dia = self._dia()
+        self._renglon(dia, "3", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        self._renglon(dia, "3", "Documentacion del procedimiento de altas", proyecto=self.interno)
+        self._renglon(dia, "2.5", "Revision de tickets de soporte interno", proyecto=self.interno)
+
+        dia = self._cola(self.admin)[0]
+        self.assertTrue(dia.aprobable_en_bloque)
+        self.assertFalse(dia.forzable_en_bloque)
+
+    def test_cuenta_cuantas_traen_aviso(self):
+        self._dia_interno_con_aviso()
+        dia = self._cola(self.admin)[0]
+        self.assertEqual(dia.n_avisos, 1)
+        self.assertEqual(len(dia.pendientes_mios), 2)
+
+    # ── lo que forzar NO relaja ─────────────────────────────────────────────
+
+    def test_no_se_ofrece_a_un_pm(self):
+        self._dia_interno_con_aviso()
+        self.assertFalse(self._cola(self.pm)[0].forzable_en_bloque)
+
+    def test_un_pm_no_puede_forzar_aunque_lo_intente(self):
+        dia = self._dia_interno_con_aviso()
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.pm, forzado=True, motivo="es normal")
+        self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
+
+    def test_las_horas_de_cliente_no_se_fuerzan_ni_con_motivo(self):
+        """Para esas estan las casillas, que se marcan una a una."""
+        dia = self._dia()
+        self._plan(self.cliente, "4.0")
+        self._renglon(dia, "4", "trabajo", proyecto=self.cliente)
+        self._renglon(dia, "4.5", "muchas tareas", proyecto=self.interno)
+
+        self.assertFalse(self._cola(self.admin)[0].forzable_en_bloque)
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.admin, forzado=True, motivo="es normal")
+        self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
+
+    def test_con_un_solo_renglon_no_se_ofrece(self):
+        dia = self._dia()
+        self._renglon(dia, "8.5", "muchas tareas", proyecto=self.interno)
+        self.assertFalse(self._cola(self.admin)[0].forzable_en_bloque)
+
+    def test_sin_motivo_no_se_firma(self):
+        """El motivo es el precio de saltarse el aviso, no un adorno."""
+        dia = self._dia_interno_con_aviso()
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.admin, forzado=True, motivo="   ")
+        self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
+
+    def test_el_boton_limpio_no_firma_un_dia_con_avisos(self):
+        """Sin `forzado`, un dia con avisos se rechaza igual que antes."""
+        dia = self._dia_interno_con_aviso()
+        with self.assertRaises(ValidationError):
+            svc.aprobar_dia_completo(dia, self.admin)
+        self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
+
+    # ── el rastro ───────────────────────────────────────────────────────────
+
+    def test_deja_escrito_que_aviso_se_anulo(self):
+        """Es lo unico que despues permite saber que regla sobra."""
+        dia = self._dia_interno_con_aviso()
+        cuantos = svc.aprobar_dia_completo(
+            dia, self.admin, forzado=True,
+            motivo="Son tareas de bench, el detalle corto es correcto",
+        )
+        self.assertEqual(cuantos, 2)
+
+        marcado = dia.registros.get(detalle="muchas tareas")
+        self.assertTrue(marcado.aprobacion_forzada)
+        self.assertIn("DETALLE_POBRE", marcado.senales_anuladas)
+        self.assertIn("bench", marcado.motivo_aprobacion)
+
+    def test_el_renglon_sin_avisos_no_queda_marcado_como_forzado(self):
+        """Iba en el mismo envio, pero no se salto ninguna regla."""
+        dia = self._dia_interno_con_aviso()
+        svc.aprobar_dia_completo(dia, self.admin, forzado=True, motivo="es normal")
+
+        limpio = dia.registros.get(detalle="Reunion de seguimiento del area y actas")
+        self.assertFalse(limpio.aprobacion_forzada)
+        self.assertEqual(limpio.senales_anuladas, [])
+        self.assertEqual(limpio.motivo_aprobacion, "")
+
+    def test_firma_igual_con_nombre_y_fecha(self):
+        dia = self._dia_interno_con_aviso()
+        svc.aprobar_dia_completo(dia, self.admin, forzado=True, motivo="es normal")
+
+        dia.refresh_from_db()
+        self.assertEqual(dia.estado, DiaLegalizado.APROBADO)
+        for registro in dia.registros.all():
+            self.assertEqual(registro.estado, RegistroHoras.APROBADO)
+            self.assertEqual(registro.aprobado_por, self.admin)
+
+
+class AprobarLoMarcadoTests(BaseTriaje):
+    """Marcar varias actividades de la cola y firmarlas de una vez.
+
+    A diferencia del día entero, aquí se mira cada renglón: marcar la casilla es
+    el mismo acto que pulsar su botón, solo que treinta veces en un envío. Por
+    eso no pide motivo aunque haya avisos.
+
+    Lo que se cuida es que **un fallo no tumbe el resto**. Se marcan treinta y
+    una ya la firmó otro: tirar las veintinueve buenas obliga a repetir el
+    trabajo entero, y es la mejor forma de que nadie vuelva a usar el botón.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth.models import Group
+        self.admin = User.objects.create_user("admin_sel", "ads@test.com", "x")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+
+    def test_firma_lo_marcado_de_varios_dias(self):
+        uno = self._dia()
+        a = self._renglon(uno, "8.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+
+        otro = self._dia(fecha=LUNES - timedelta(days=3))
+        b = self._renglon(otro, "8.5", "Revision de tickets de soporte interno", proyecto=self.interno)
+
+        aprobados, fallos = svc.aprobar_seleccion([a.pk, b.pk], self.admin)
+
+        self.assertEqual(len(aprobados), 2)
+        self.assertEqual(fallos, [])
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.estado, RegistroHoras.APROBADO)
+        self.assertEqual(b.estado, RegistroHoras.APROBADO)
+
+    def test_deja_en_paz_lo_que_no_se_marco(self):
+        dia = self._dia()
+        marcado = self._renglon(dia, "4", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        suelto = self._renglon(dia, "4.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+
+        svc.aprobar_seleccion([marcado.pk], self.admin)
+
+        suelto.refresh_from_db()
+        self.assertEqual(suelto.estado, RegistroHoras.PENDIENTE)
+
+    def test_un_fallo_no_tumba_a_los_demas(self):
+        """Lo que decide si el boton se usa dos veces o ninguna."""
+        dia = self._dia()
+        bueno = self._renglon(dia, "4", "Reunion de seguimiento del area y actas", proyecto=self.interno)
+        ya_firmado = self._renglon(dia, "4.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+        svc.aprobar_registro(ya_firmado, self.admin)
+
+        aprobados, fallos = svc.aprobar_seleccion([bueno.pk, ya_firmado.pk], self.admin)
+
+        self.assertEqual([r.pk for r in aprobados], [bueno.pk])
+        self.assertEqual(len(fallos), 1)
+        self.assertIn("ya está aprobada", fallos[0][1])
+        bueno.refresh_from_db()
+        self.assertEqual(bueno.estado, RegistroHoras.APROBADO)
+
+    def test_lo_que_desaparecio_se_cuenta_no_se_calla(self):
+        dia = self._dia()
+        vivo = self._renglon(dia, "8.5", "Documentacion del procedimiento de altas", proyecto=self.interno)
+
+        aprobados, fallos = svc.aprobar_seleccion([vivo.pk, 999999], self.admin)
+
+        self.assertEqual(len(aprobados), 1)
+        self.assertEqual(len(fallos), 1)
+        self.assertIn("ya no existe", fallos[0][1])
+
+    def test_un_pm_no_firma_lo_que_no_es_suyo(self):
+        """La casilla se pinta, pero el permiso se comprueba renglon a renglon."""
+        dia = self._dia()
+        ajeno = self._renglon(dia, "8.5", "Escoger certificacion y ruta de estudio", tipo=self.estudio)
+
+        aprobados, fallos = svc.aprobar_seleccion([ajeno.pk], self.pm)
+
+        self.assertEqual(aprobados, [])
+        self.assertEqual(len(fallos), 1)
+        ajeno.refresh_from_db()
+        self.assertEqual(ajeno.estado, RegistroHoras.PENDIENTE)
+
+    def test_marcar_un_renglon_con_aviso_lo_firma_y_lo_deja_anotado(self):
+        """No pide motivo —se miro uno a uno— pero el aviso anulado se guarda."""
+        dia = self._dia()
+        pobre = self._renglon(dia, "8.5", "muchas tareas", proyecto=self.interno)
+
+        aprobados, _ = svc.aprobar_seleccion([pobre.pk], self.admin)
+
+        self.assertEqual(len(aprobados), 1)
+        pobre.refresh_from_db()
+        self.assertEqual(pobre.estado, RegistroHoras.APROBADO)
+        self.assertTrue(pobre.aprobacion_forzada)
+        self.assertIn("DETALLE_POBRE", pobre.senales_anuladas)
+        self.assertEqual(pobre.motivo_aprobacion, "")
+
+    def test_una_actividad_limpia_no_queda_marcada_como_forzada(self):
+        # 3 h y no 8,5: una sola tarea interna que se lleve media jornada ya
+        # trae aviso, y entonces esto probaria justo lo contrario.
+        dia = self._dia()
+        limpio = self._renglon(dia, "3", "Documentacion del procedimiento de altas", proyecto=self.interno)
+        self._renglon(dia, "5.5", "Revision de tickets de soporte interno", proyecto=self.interno)
+
+        svc.aprobar_seleccion([limpio.pk], self.admin)
+
+        limpio.refresh_from_db()
+        self.assertFalse(limpio.aprobacion_forzada)
+        self.assertEqual(limpio.senales_anuladas, [])
+
+    def test_sin_el_modulo_de_triaje_se_firma_igual(self):
+        """Marcar y firmar es la pantalla de siempre; el rastro es lo que falta."""
+        dia = self._dia()
+        renglon = self._renglon(dia, "8.5", "muchas tareas", proyecto=self.interno)
+
+        with self.modify_settings(INSTALLED_APPS={"remove": ["apps.revision"]}):
+            aprobados, fallos = svc.aprobar_seleccion([renglon.pk], self.admin)
+
+        self.assertEqual(len(aprobados), 1)
+        self.assertEqual(fallos, [])
+        renglon.refresh_from_db()
+        self.assertEqual(renglon.estado, RegistroHoras.APROBADO)
+        self.assertFalse(renglon.aprobacion_forzada)

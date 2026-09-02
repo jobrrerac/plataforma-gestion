@@ -393,7 +393,7 @@ def actividades_planificadas(dias) -> dict:
     return planificadas
 
 
-def aprobar_dia_completo(dia, usuario):
+def aprobar_dia_completo(dia, usuario, forzado=False, motivo=""):
     """Firma de una vez todos los renglones pendientes de un día interno.
 
     Existe para el caso concreto que lo pidió: alguien en bench que reparte su
@@ -410,14 +410,28 @@ def aprobar_dia_completo(dia, usuario):
     la validación de estado y la firma individual en `aprobado_por`. Aprobar en
     bloque es una sola interacción, no una excepción a las reglas.
 
+    **Con `forzado`** se admite además el día que sí trae avisos. Un aviso nunca
+    fue un veto —muchos son actividades normales que la regla marcó de más— pero
+    firmar sin leer renglón a renglón es justo lo que el triaje vino a evitar,
+    así que aquí sí se pide el motivo y queda escrito en cada renglón junto con
+    los códigos que se anularon. Lo demás no se relaja: sigue siendo Admin, todo
+    interno y más de un renglón.
+
     Devuelve cuántos se firmaron.
     """
     from django.apps import apps as registro_de_apps
 
     if not registro_de_apps.is_installed("apps.revision"):
         raise ValidationError("La aprobación por día no está disponible.")
-    from apps.revision.api import Contexto, aprobable_en_bloque
+    from apps.revision.api import Contexto, bloque_del_dia
     from apps.revision.senales import evaluar
+
+    motivo = (motivo or "").strip()
+    if forzado and not motivo:
+        raise ValidationError(
+            "Di por qué se firman pese a los avisos. Es lo que permite luego "
+            "distinguir una regla que sobra de una que nadie mira."
+        )
 
     with transaction.atomic():
         dia = DiaLegalizado.objects.select_for_update().get(pk=dia.pk)
@@ -429,14 +443,19 @@ def aprobar_dia_completo(dia, usuario):
         for registro in pendientes:
             registro.evaluacion = evaluar(registro, dia, contexto)
 
-        if not aprobable_en_bloque(dia, usuario, pendientes):
+        # Se revalida contra lo que hay ahora, no contra lo que se pintó. Si el
+        # día perdió sus avisos entre la pantalla y este POST, el forzado sigue
+        # valiendo: pedir motivo de más nunca aprueba nada que no tocara.
+        admitido = bloque_del_dia(dia, usuario, pendientes)
+        permitidos = {"LIMPIO", "FORZADO"} if forzado else {"LIMPIO"}
+        if admitido not in permitidos:
             raise ValidationError(
                 "Este día ya no se puede aprobar completo: alguna actividad "
                 "cambió o necesita revisarse una por una."
             )
 
         for registro in pendientes:
-            aprobar_registro(registro, usuario)
+            aprobar_registro(registro, usuario, motivo=motivo)
     return len(pendientes)
 
 
@@ -522,10 +541,36 @@ def _exigir_pendiente(registro):
         raise ValidationError("Este día todavía no lo ha aceptado quien lo registra.")
 
 
+def _avisos_de(registro):
+    """Códigos de los avisos que lleva el renglón, o `[]` si no hay triaje.
+
+    Si quien llama ya lo evaluó —la cola lo hace para toda la pantalla de una
+    vez— se reutiliza esa evaluación. Volver a calcularla aquí costaría tres
+    consultas por renglón, y en una firma de treinta serían noventa.
+    """
+    evaluacion = getattr(registro, "evaluacion", None)
+    if evaluacion is None:
+        from django.apps import apps as registro_de_apps
+
+        if not registro_de_apps.is_installed("apps.revision"):
+            return []
+        from apps.revision.api import Contexto
+        from apps.revision.senales import evaluar
+
+        evaluacion = evaluar(registro, registro.dia, Contexto([registro.dia]))
+    return [s.codigo for s in evaluacion.senales]
+
+
 @transaction.atomic
-def aprobar_registro(registro, usuario):
-    """Da por buena una actividad. Sus horas pasan a contar como legalizadas."""
+def aprobar_registro(registro, usuario, motivo=""):
+    """Da por buena una actividad. Sus horas pasan a contar como legalizadas.
+
+    Si el renglón traía avisos del triaje, la firma queda marcada como forzada
+    y se guardan los códigos anulados. No cambia lo que se aprueba —un aviso
+    nunca fue un veto— pero deja el rastro de qué regla se saltó.
+    """
     _exigir_aprobador_registro(usuario, registro)
+    avisos = _avisos_de(registro)
 
     # Se relee bajo bloqueo: si el PM y un Admin firman a la vez, sin esto el
     # segundo pisaría la firma del primero.
@@ -536,12 +581,59 @@ def aprobar_registro(registro, usuario):
     registro.aprobado_por = usuario
     registro.aprobado_en = timezone.now()
     registro.motivo_devolucion = ""
+    registro.aprobacion_forzada = bool(avisos)
+    registro.senales_anuladas = avisos
+    registro.motivo_aprobacion = (motivo or "").strip()[:300] if avisos else ""
     registro.save(update_fields=[
-        "estado", "aprobado_por", "aprobado_en", "motivo_devolucion", "updated_at",
+        "estado", "aprobado_por", "aprobado_en", "motivo_devolucion",
+        "aprobacion_forzada", "senales_anuladas", "motivo_aprobacion", "updated_at",
     ])
 
     registro.dia.recalcular_estado()
     return registro
+
+
+def aprobar_seleccion(ids, usuario):
+    """Firma las actividades marcadas a mano, estén donde estén de la cola.
+
+    **Cada una por su cuenta, no todas o ninguna.** Se marcan treinta y una ya
+    la firmó otro hace un minuto: tumbar las veintinueve buenas por eso obliga
+    a repetir el trabajo entero y es la mejor forma de que nadie use el botón.
+    Se firma lo que se pueda y se dice en voz alta lo que no.
+
+    No pide motivo aunque haya avisos: marcar una casilla es un acto por
+    renglón, igual que pulsar su botón. El motivo se pide en el día completo,
+    que es el que firma sin mirar renglón a renglón.
+    """
+    pedidos = {int(pk) for pk in ids if str(pk).isdigit()}
+    registros = list(
+        RegistroHoras.objects
+        .select_related("dia", "dia__recurso", "proyecto", "tipo_actividad")
+        .filter(pk__in=pedidos)
+    )
+    aprobados, fallos = [], []
+
+    # Lo que se marcó y ya no está: se borró el renglón o se reabrió el día
+    # mientras la pantalla estaba a la vista. Se cuenta, no se calla.
+    perdidos = len(pedidos) - len(registros)
+    if perdidos:
+        fallos.append((
+            f"{perdidos} actividad{'es' if perdidos > 1 else ''} marcada{'s' if perdidos > 1 else ''}",
+            "ya no existe: se borró o se reabrió el día mientras revisabas.",
+        ))
+
+    for registro in registros:
+        etiqueta = (
+            f"{registro.proyecto.codigo if registro.proyecto_id else registro.tipo_actividad.nombre}"
+            f" — {registro.dia.recurso.nombre}, {registro.dia.fecha:%d/%m/%Y}"
+        )
+        try:
+            aprobar_registro(registro, usuario)
+        except (ValidationError, PermissionDenied) as exc:
+            fallos.append((etiqueta, "; ".join(getattr(exc, "messages", [str(exc)]))))
+        else:
+            aprobados.append(registro)
+    return aprobados, fallos
 
 
 @transaction.atomic

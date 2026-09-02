@@ -105,6 +105,40 @@ class Contexto:
         return self._devoluciones.get(recurso_id, 0)
 
 
+def bloque_del_dia(dia, usuario, pendientes=None) -> str:
+    """Qué firma en bloque admite este día: ninguna, limpia o forzada.
+
+    Devuelve `""`, `"LIMPIO"` o `"FORZADO"`. Tres condiciones estructurales
+    valen para las dos formas —Admin, todo interno, más de un renglón— y lo
+    único que las separa es si queda algún aviso encima de la mesa.
+
+    Que el forzado exista no vacía el triaje: solo se ofrece donde ya se
+    ofrecía el limpio, sigue sin tocar horas de cliente, y pide un motivo que
+    se guarda con los códigos anulados. La diferencia con marcar las casillas
+    una a una es real: allí se mira cada renglón, aquí no.
+    """
+    from apps.accounts.roles import es_admin
+    from apps.legalizacion.models import RegistroHoras
+
+    if not es_admin(usuario):
+        return ""
+
+    # `pendientes` se recibe ya evaluado cuando quien llama tiene los objetos en
+    # la mano. Releerlos de la base traeria instancias distintas, sin la
+    # evaluacion puesta, y entonces esto diria que no siempre.
+    if pendientes is None:
+        pendientes = [r for r in dia.registros.all() if r.estado == RegistroHoras.PENDIENTE]
+    if len(pendientes) < 2:
+        return ""
+    if any(r.facturable for r in pendientes):
+        return ""
+
+    evaluados = [getattr(r, "evaluacion", None) for r in pendientes]
+    if any(e is None for e in evaluados):
+        return ""
+    return "LIMPIO" if all(e.banda == sn.RUTINA for e in evaluados) else "FORZADO"
+
+
 def aprobable_en_bloque(dia, usuario, pendientes=None) -> bool:
     """Si este día se puede firmar de una vez, sin mirar renglón a renglón.
 
@@ -128,25 +162,7 @@ def aprobable_en_bloque(dia, usuario, pendientes=None) -> bool:
     Esto decide si el botón se ofrece. Que se pueda pulsar no autoriza nada: el
     servicio vuelve a comprobarlo todo antes de escribir.
     """
-    from apps.accounts.roles import es_admin
-    from apps.legalizacion.models import RegistroHoras
-
-    if not es_admin(usuario):
-        return False
-
-    # `pendientes` se recibe ya evaluado cuando quien llama tiene los objetos en
-    # la mano. Releerlos de la base traeria instancias distintas, sin la
-    # evaluacion puesta, y entonces esto diria que no siempre.
-    if pendientes is None:
-        pendientes = [r for r in dia.registros.all() if r.estado == RegistroHoras.PENDIENTE]
-    if len(pendientes) < 2:
-        return False
-    if any(r.facturable for r in pendientes):
-        return False
-    return all(
-        getattr(r, "evaluacion", None) is not None and r.evaluacion.banda == sn.RUTINA
-        for r in pendientes
-    )
+    return bloque_del_dia(dia, usuario, pendientes) == "LIMPIO"
 
 
 def clasificar(dias, usuario=None):
@@ -176,9 +192,18 @@ def clasificar(dias, usuario=None):
         )
         for registro in dia.pendientes_mios:
             recuento[registro.evaluacion.banda] += 1
-        dia.aprobable_en_bloque = (
-            aprobable_en_bloque(dia, usuario) if usuario is not None else False
-        )
+        dia.n_avisos = sum(1 for r in dia.pendientes_mios if r.evaluacion.senales)
+        # Se le pasan los renglones ya evaluados. Dejar que los relea de la base
+        # traeria instancias sin `evaluacion` y el boton no se ofreceria nunca;
+        # hoy funciona solo porque el prefetch devuelve estos mismos objetos, y
+        # eso es una casualidad de la que no conviene depender.
+        pendientes = [
+            r for r in list(dia.pendientes_mios) + list(dia.otros)
+            if r.estado == RegistroHoras.PENDIENTE
+        ]
+        dia.bloque = bloque_del_dia(dia, usuario, pendientes) if usuario is not None else ""
+        dia.aprobable_en_bloque = dia.bloque == "LIMPIO"
+        dia.forzable_en_bloque = dia.bloque == "FORZADO"
 
     # Lo que necesita mirarse primero, primero. Dentro de cada banda se conserva
     # el orden que traía (fecha y nombre), que es el que hace la lista legible.
