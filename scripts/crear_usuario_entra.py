@@ -328,14 +328,20 @@ def procesar(entrada, rol_forzado, roles, sp_id, simular, solo_rol=False, sin_ro
     alias, email_corporativo, upn = normalizar_email(entrada)
     ficha = ficha_en_plantilla(email_corporativo) or {}
 
+    # Con --sin-rol el app role lo pone Terraform, así que aquí da igual cuál
+    # sea. Exigirlo creaba un círculo imposible al estrenar un rol nuevo: sin la
+    # identidad en el tenant Terraform no puede planear —`data azuread_user`
+    # falla— y sin el rol ya creado en Entra este script se negaba a crear la
+    # identidad. --sin-rol es exactamente por dónde se rompe ese círculo.
     rol = rol_forzado or ficha.get("rol")
-    if not rol:
-        raise Fallo(
-            f"{email_corporativo}: no está en {PLANTILLA_RECURSOS.name} y no se indicó --rol.\n"
-            f"  roles disponibles: {', '.join(sorted(roles))}"
-        )
-    if rol not in roles:
-        raise Fallo(f"{email_corporativo}: rol '{rol}' no existe. Disponibles: {', '.join(sorted(roles))}")
+    if not sin_rol:
+        if not rol:
+            raise Fallo(
+                f"{email_corporativo}: no está en {PLANTILLA_RECURSOS.name} y no se indicó --rol.\n"
+                f"  roles disponibles: {', '.join(sorted(roles))}"
+            )
+        if rol not in roles:
+            raise Fallo(f"{email_corporativo}: rol '{rol}' no existe. Disponibles: {', '.join(sorted(roles))}")
 
     nombre_visible = ficha.get("nombre") or alias
 
