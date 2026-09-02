@@ -393,6 +393,25 @@ def actividades_planificadas(dias) -> dict:
     return planificadas
 
 
+def triar(dias) -> dict:
+    """Pide a `apps.revision` que ordene la cola, si está instalada.
+
+    El import va aquí dentro y no arriba a propósito. `revision` está por
+    encima de esta app en la pila de capas, así que una dependencia estructural
+    crearía un ciclo; y además esto tiene que poder faltar: si el módulo se
+    quita de INSTALLED_APPS, la cola se pinta como siempre y no se rompe nada.
+
+    Devuelve el recuento por banda, o un diccionario vacío si no hay triaje.
+    """
+    from django.apps import apps as registro_de_apps
+
+    if not registro_de_apps.is_installed("apps.revision"):
+        return {}
+    from apps.revision.api import clasificar
+
+    return clasificar(dias)
+
+
 def dias_por_aprobar(usuario):
     """La misma cola, agrupada por día para poder pintarla.
 

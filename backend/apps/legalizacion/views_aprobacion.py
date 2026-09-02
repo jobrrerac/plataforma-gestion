@@ -42,8 +42,14 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
         ).exists()
 
     def _ctx(self, request, **extra):
+        dias = svc.dias_por_aprobar(request.user)
+        # El triaje ordena la cola y explica por que; si el modulo no esta,
+        # `recuento` viene vacio y la pantalla se pinta como antes.
+        recuento = svc.triar(dias)
         ctx = {
-            "dias": svc.dias_por_aprobar(request.user),
+            "dias": dias,
+            "recuento": recuento,
+            "hay_triaje": bool(recuento),
             "es_admin": es_admin(request.user),
         }
         ctx.update(extra)

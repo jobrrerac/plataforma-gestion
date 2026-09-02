@@ -1,6 +1,6 @@
 # Triaje de horas — asistir la aprobación sin que nada la firme solo
 
-Estado: **Fase 0 implementada.** El resto está diseñado y decidido, sin escribir.
+Estado: **Fases 0 y 1 implementadas.** El resto está diseñado y decidido, sin escribir.
 
 Aprobar cien registros de horas al día no es un problema de lectura, es de
 triaje: quien aprueba no necesita leer más rápido, necesita que le lleguen
@@ -122,23 +122,48 @@ Nada de esto necesita IA y todo mejora la pantalla por su cuenta.
 
 ## Lo que viene
 
-### Fase 1 — Señales deterministas y carriles · sin LLM
+### Fase 1 — Señales deterministas y carriles · sin LLM · **hecha**
 
-Reordenar la cola en tres carriles (Rutina / Revisar / Atención) a partir de SQL
+Vive en `apps/revision`, que se puede quitar de `INSTALLED_APPS` y la cola
+vuelve a pintarse como antes. **Sin modelos ni migraciones**: las señales se
+calculan al vuelo. `EvaluacionRegistro` sigue siendo de la fase 3, donde existe
+para dejar constancia de lo que dijo un modelo — aquí no hay nada que registrar
+que no se pueda recalcular.
+
+Reordena la cola en tres carriles (Rutina / Revisar / Atención) a partir de SQL
 sobre lo que ya existe:
 
-| Señal | De dónde sale | Sugiere |
+| Código | Qué mira | Banda |
 |---|---|---|
-| Horas por encima del plan | `Asignacion` aprobada del día · `mapa_carga()` | Revisar |
-| Proyecto sin asignación aprobada | `proyectos_disponibles()` | Atención |
-| El día no cuadra con la jornada | `DiaLegalizado.cuadra` | Revisar |
-| Detalle muy corto o casi idéntico al de ayer | Longitud · trigram (`pg_trgm`) | Revisar |
-| Racha reciente de devoluciones | `RegistroHoras.motivo_devolucion` | Revisar |
-| **Actividad no facturable que se lleva medio día o más** | `facturable` · `horas / jornada_esperada` | Revisar |
-| Actividad sin proyecto con el día ya al tope | `tipo_actividad.requiere_proyecto` | Atención |
+| `SIN_PLAN` | Horas a un proyecto de cliente sin asignación aprobada que cubra el día | Atención |
+| `NO_FACTURABLE_CON_PLAN_LLENO` | Horas no facturables cuando el plan ya ocupaba la jornada entera | Atención |
+| `SOBRE_PLAN` | Declaró más de lo previsto ese día en ese proyecto, con medio punto de margen | Revisar |
+| **`NO_FACTURABLE_MEDIA_JORNADA`** | No facturable ≥ 50 % de la jornada | Revisar |
+| `DETALLE_POBRE` | Menos de 25 caracteres o de 3 palabras | Revisar |
+| `DETALLE_REPETIDO` | El mismo texto, palabra por palabra, en otro día de ±14 | Revisar |
+| — | Ninguna de las anteriores | Rutina |
 
-La fila en negrita es la que habría cazado el renglón de estudio de 7,5 h. Sin
-modelo, sin embeddings: una división.
+La fila en negrita caza el renglón de estudio de 7,5 h. Sin modelo, sin
+embeddings: una división. El de `INT-DEPART` dispara además `DETALLE_POBRE`.
+
+#### Lo que cambió respecto al diseño, y por qué
+
+- **«El día no cuadra con la jornada» no existe.** `registrar_dia()` ya lo
+  impide, así que un día REGISTRADO siempre cuadra: sería código muerto.
+- **«Racha de devoluciones» no cambia la banda.** Se calcula y se muestra como
+  contexto del día, pero marcar todos los renglones de alguien porque el mes
+  pasado le devolvieron dos es ruidoso y se lee como un reproche.
+- **`NO_FACTURABLE_CON_PLAN_LLENO` es nueva.** Si el plan decía jornada entera en
+  proyectos y aun así hay horas internas, o el plan se corrió o desplazaron
+  trabajo de cliente. Cualquiera de las dos merece una pregunta.
+- **La repetición se detecta por coincidencia exacta**, normalizando tildes y
+  espacios, no con trigramas. No hace falta habilitar `pg_trgm` para cazar el
+  copiar y pegar, que es el caso real. La similitud parcial se añade el día que
+  haga falta.
+- **La firma en bloque no está.** Es una mutación, y solo es segura cuando el
+  carril de rutina ya se ganó la confianza: si la clasificación falla, firmar en
+  bloque multiplica el error en vez de contenerlo. Primero se valida que Rutina
+  sea rutina de verdad.
 
 Reglas de interfaz que sostienen el invariante 1: la banda **ordena, no
 decide** —los tres carriles llevan los mismos botones— y nunca se escribe «el

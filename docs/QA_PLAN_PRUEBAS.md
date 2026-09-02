@@ -330,6 +330,17 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-19 | Una asignación solicitada se marca | Repetir con una asignación aún en estado Solicitada | Aparece igual, con el sufijo **(solicitada)** |
 | HAP-20 | No se cuela la tarea de otro proyecto | Mirar un renglón de un proyecto **sin** asignación con actividad | **No** aparece la línea Planificado; no se muestra la tarea de otro proyecto ni de otra fecha |
 | HAP-21 | Sin actividad no molesta | Renglón de formación o estudio (sin proyecto) | No aparece la línea Planificado; el renglón se ve como siempre |
+| HAP-22 | **Los tres carriles** | Abrir `/horas/aprobar/` con la cola cargada | Arriba, tres recuadros: Atención, Revisar y Rutina, con su número |
+| HAP-23 | **Los números cuadran** | Sumar los tres recuadros | La suma es igual al total de actividades que **puedes firmar** (no cuenta las de otros PM) |
+| HAP-24 | Lo urgente va primero | Mirar el orden de los días | Los días con Atención salen antes que los de Revisar, y estos antes que los de Rutina |
+| HAP-25 | **La banda ordena, no decide** | Contar los botones Aprobar y Devolver en los tres carriles | Todas las actividades pendientes conservan sus dos botones. Nada queda oculto ni preseleccionado |
+| HAP-26 | **Media jornada no facturable** | Registrar 7,5 h de Estudio en una jornada de 8,5 y mirar la cola | Aviso naranja: «7.5 h de 8.5 (88% del día) … no es facturable» |
+| HAP-27 | **Detalle pobre** | Registrar horas con el detalle «muchas tareas» | Aviso: ««muchas tareas» no dice qué se hizo: 13 caracteres, 2 palabras» |
+| HAP-28 | Un día normal es Rutina | Día completo en un proyecto asignado, con detalle específico | **Sin** avisos y sin etiqueta de banda; cuenta en el carril Rutina |
+| HAP-29 | Pasarse del plan | Declarar 8,5 h en un proyecto cuya asignación decía 4,3 h/día | Aviso: «Declaró 8.5 h y el plan preveía 4.3 h/día en este proyecto» |
+| HAP-30 | **Proyecto sin asignación** | Que un Admin revoque la asignación y volver a la cola | Aviso rojo de Atención: «No tenía asignación aprobada a … el dd/mm/aaaa» |
+| HAP-31 | Texto copiado de otro día | Registrar dos días con exactamente el mismo detalle | Aviso: «El mismo texto, palabra por palabra, en dd/mm» |
+| HAP-32 | Devoluciones recientes | Mirar un día de alguien con 2+ devoluciones en 30 días | Bajo su nombre, la nota «Se le devolvieron N actividades…». **No** cambia la banda |
 
 ---
 

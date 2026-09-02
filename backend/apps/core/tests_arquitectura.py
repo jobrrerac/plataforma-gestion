@@ -36,6 +36,7 @@ RAIZ_APPS = Path(__file__).resolve().parent.parent
 #   calendar_engine  qué días son hábiles para cada quien
 #   assignments      quién está asignado a qué y cuándo (el plan)
 #   legalizacion     qué hizo cada quien con su jornada (lo declarado)
+#   revision         triaje de la cola de aprobación (se puede apagar entero)
 #   dashboard        pantallas que componen todo lo anterior
 CAPAS = [
     "accounts",
@@ -43,6 +44,7 @@ CAPAS = [
     "calendar_engine",
     "assignments",
     "legalizacion",
+    "revision",
     "dashboard",
 ]
 
