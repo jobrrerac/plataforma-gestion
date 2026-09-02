@@ -99,6 +99,21 @@ resource "azurerm_postgresql_flexible_server_configuration" "log_conexiones" {
   value     = "on"
 }
 
+# Extensiones permitidas. En Azure no basta con que la extension exista: hasta
+# que no esta en esta lista, `CREATE EXTENSION` falla con "is not allow-listed
+# for users in Azure Database for PostgreSQL" — y el parametro viene VACIO de
+# fabrica, aunque `allowedValues` las liste todas. Mirar `allowedValues` y dar
+# por hecho que estaba disponible fue lo que tumbo un despliegue.
+#
+# pg_trgm: busqueda por parecido de texto para los precedentes del triaje de
+# horas (apps/revision/precedentes.py). El parametro es dinamico, asi que
+# cambiarlo no reinicia el servidor.
+resource "azurerm_postgresql_flexible_server_configuration" "extensiones" {
+  name      = "azure.extensions"
+  server_id = azurerm_postgresql_flexible_server.principal.id
+  value     = "pg_trgm"
+}
+
 # Zona horaria del servidor alineada con Django (America/Bogota).
 resource "azurerm_postgresql_flexible_server_configuration" "timezone" {
   name      = "timezone"
