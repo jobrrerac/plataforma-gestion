@@ -26,6 +26,26 @@ resource "azurerm_postgresql_flexible_server" "principal" {
   # llena, se sube a mano de forma consciente.
   auto_grow_enabled = false
 
+  # Las dos autenticaciones a la vez, no una en lugar de la otra.
+  #
+  # Entra permite conectarse con un token en lugar de con la contrasena, que es
+  # lo unico que hoy separa la base de cualquiera que llegue a ella. Pero
+  # apagar la contrasena aqui dejaria la aplicacion sin poder entrar en el
+  # mismo instante del apply: Django todavia se conecta con POSTGRES_PASSWORD.
+  #
+  # Asi que esto es el cimiento, no la mudanza. La contrasena se apaga el dia
+  # que la aplicacion sepa pedir un token — y ese dia hay que apagarla, porque
+  # mientras las dos esten abiertas la superficie es la de la mas debil.
+  # → docs/DECISIONES_INFRA.md#autenticacion-de-la-base
+  #
+  # OJO: activar Entra habilita la extension PGAadAuth y **reinicia el
+  # servidor**. Sin alta disponibilidad eso es un corte de un par de minutos.
+  authentication {
+    active_directory_auth_enabled = true
+    password_auth_enabled         = true
+    tenant_id                     = data.azurerm_client_config.actual.tenant_id
+  }
+
   # Acceso publico + firewall. La alternativa (inyeccion en VNet con acceso
   # privado) tambien es gratis y mas segura, pero deja la base inalcanzable
   # desde la maquina del desarrollador, y aqui hace falta restaurar el dump
@@ -53,6 +73,39 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
     # habiendo comprobado antes que existe un backup reciente.
     prevent_destroy = true
   }
+}
+
+# ---------------------------------------------------------------------------
+# Administrador de Entra sobre la base
+# ---------------------------------------------------------------------------
+#
+# Quien aplica este Terraform. No se fija a una persona por su object_id a
+# mano: eso envejece en cuanto cambie quien administra, y deja un identificador
+# de alguien real escrito en el repositorio.
+#
+# Para que una persona se conecte, el token va en el sitio de la contrasena:
+#
+#   export PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms \
+#                       --query accessToken -o tsv)
+#   psql "host=... user=admin@inetumoffshore.onmicrosoft.com dbname=plataforma_gestion sslmode=require"
+#
+# El token dura entre 5 y 60 minutos: se pide justo antes de conectar y no se
+# guarda en ningun script. Eso es precisamente lo que lo hace mejor que la
+# contrasena compartida de `pgadmin`, que no caduca nunca.
+#
+# Si algun dia esto lo aplicara un service principal desde CI, la busqueda de
+# `azuread_user` fallaria y habria que pasar a `azuread_service_principal`.
+data "azuread_user" "admin_base" {
+  object_id = data.azurerm_client_config.actual.object_id
+}
+
+resource "azurerm_postgresql_flexible_server_active_directory_administrator" "principal" {
+  server_name         = azurerm_postgresql_flexible_server.principal.name
+  resource_group_name = azurerm_resource_group.principal.name
+  tenant_id           = data.azurerm_client_config.actual.tenant_id
+  object_id           = data.azuread_user.admin_base.object_id
+  principal_name      = data.azuread_user.admin_base.user_principal_name
+  principal_type      = "User"
 }
 
 # ---------------------------------------------------------------------------
@@ -95,6 +148,21 @@ resource "azurerm_postgresql_flexible_server_configuration" "tls_obligatorio" {
 # Deja rastro de quien se conecta. Con la cuota de logs topada no supone coste.
 resource "azurerm_postgresql_flexible_server_configuration" "log_conexiones" {
   name      = "log_connections"
+  server_id = azurerm_postgresql_flexible_server.principal.id
+  value     = "on"
+}
+
+# Frena los intentos repetidos de conexion fallidos desde la misma IP.
+#
+# Es la contrapartida directa de la regla 0.0.0.0 de aqui arriba: como esa
+# regla deja que cualquier recurso de Azure —de cualquier suscripcion y de
+# cualquier tenant— llegue al puerto 5432, lo unico que separa la base de un
+# desconocido es la contrasena. Sin esto, probarla en bucle sale gratis.
+#
+# Viene apagado de fabrica. El parametro es dinamico, asi que activarlo no
+# reinicia el servidor ni corta ninguna conexion viva.
+resource "azurerm_postgresql_flexible_server_configuration" "freno_conexiones" {
+  name      = "connection_throttle.enable"
   server_id = azurerm_postgresql_flexible_server.principal.id
   value     = "on"
 }
