@@ -1,5 +1,5 @@
 from django.test import TestCase
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from datetime import date
 from decimal import Decimal
 from apps.core.models import Recurso, Proyecto, TarifaVigente
@@ -1095,3 +1095,119 @@ class LiberacionAccionesExigenPostTests(TestCase):
         self.client.post(f"/admin/assignments/asignacion/aprobar/{otra.pk}/confirmar/")
         otra.refresh_from_db()
         self.assertEqual(otra.estado, "APROBADA")
+
+
+class CostosEnElLogDeAuditoriaTests(TestCase):
+    """El log de auditoría no puede filtrar costos a un Ingeniero.
+
+    Hallazgo de una auditoría externa. `GET /api/asignaciones/<id>/log/` solo
+    exige estar autenticado, y `LogAuditoriaSerializer` devolvía `detalle` tal
+    cual — un JSON que lleva `tarifa_inicio`, `costo_estimado`, `tarifa_hora`,
+    los cambios de tarifa del rango y el `monto_descontado` de las cesiones.
+
+    Contra la regla que dice que el rol Ingeniero **nunca** ve costos. Y no era
+    teórico: bastaba con conocer el id de una asignación propia.
+
+    El resto del log sí lo ve: quién hizo qué, cuándo, y con qué motivo. Eso es
+    lo que hace útil una auditoría para quien la sufre.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("adm_log", "al@test.com", "pass")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+
+        self.ingeniero = User.objects.create_user("ing_log", "il@test.com", "clave-larga-1")
+        self.ingeniero.groups.add(Group.objects.get_or_create(name="Ingeniero")[0])
+
+        self.pm = User.objects.create_user("pm_log", "pl@test.com", "clave-larga-1")
+        self.pm.groups.add(Group.objects.get_or_create(name="PM")[0])
+
+        self.recurso = Recurso.objects.create(
+            nombre="Dev Log", email="devlog@test.com", banda="SR",
+        )
+        self.proyecto = Proyecto.objects.create(
+            codigo="P-LOG", nombre="Con tarifa", cliente="X",
+            fecha_inicio=date(2025, 1, 1), pm=self.admin,
+        )
+        self.asignacion = Asignacion.objects.create(
+            recurso=self.recurso, proyecto=self.proyecto,
+            fecha_inicio=date(2025, 1, 13), fecha_fin=date(2025, 1, 17),
+            dias_habiles=5, horas_totales=40, intensidad_diaria=8,
+            estado="SOLICITADA", solicitada_por=self.admin,
+        )
+        # Un log con todas las formas que tiene el dinero de colarse aquí.
+        LogAuditoria.objects.create(
+            asignacion=self.asignacion, accion="CREAR", actor=self.admin,
+            detalle={
+                "modo": "RANGO",
+                "dias_habiles": 5,
+                "motivo": "arranque del proyecto",
+                "tarifa_inicio": 85000.0,
+                "tarifa_hora": 85000.0,
+                "costo_estimado": 3400000.0,
+                "monto_descontado": 120000.0,
+                "tarifa_cambios": [{"desde": "2025-02-01", "valor": 90000.0}],
+            },
+        )
+
+    def _log(self):
+        return f"/api/asignaciones/{self.asignacion.pk}/log/"
+
+    # ── lo que no puede salir ───────────────────────────────────────────────
+
+    def test_un_ingeniero_no_ve_ninguna_cifra_de_dinero(self):
+        self.client.force_login(self.ingeniero)
+        cuerpo = self.client.get(self._log()).content.decode()
+
+        for cifra in ("85000", "3400000", "120000", "90000"):
+            self.assertNotIn(
+                cifra, cuerpo,
+                f"el importe {cifra} llegó a un Ingeniero por el log de auditoría",
+            )
+
+    def test_las_claves_de_dinero_desaparecen_no_se_vacian(self):
+        """Dejar la clave con `null` ya cuenta cuánto hay que mirar."""
+        self.client.force_login(self.ingeniero)
+        detalle = self.client.get(self._log()).json()[0]["detalle"]
+
+        for clave in ("tarifa_inicio", "tarifa_hora", "costo_estimado",
+                      "monto_descontado", "tarifa_cambios"):
+            self.assertNotIn(clave, detalle)
+
+    def test_tambien_dentro_de_las_listas_anidadas(self):
+        """`tarifa_cambios` es una lista de diccionarios: filtrar solo el
+        primer nivel dejaba el importe dentro."""
+        self.client.force_login(self.ingeniero)
+        cuerpo = self.client.get(self._log()).content.decode()
+        self.assertNotIn("90000", cuerpo)
+
+    # ── lo que sí tiene que seguir viendo ───────────────────────────────────
+
+    def test_el_ingeniero_sigue_viendo_quien_hizo_que_y_por_que(self):
+        """Taparlo todo convertiria la auditoria en algo inutil para quien la
+        sufre, que es justo quien mas necesita poder consultarla."""
+        self.client.force_login(self.ingeniero)
+        fila = self.client.get(self._log()).json()[0]
+
+        self.assertEqual(fila["accion"], "CREAR")
+        self.assertEqual(fila["actor_username"], "adm_log")
+        self.assertIn("timestamp", fila)
+        self.assertEqual(fila["detalle"]["motivo"], "arranque del proyecto")
+        self.assertEqual(fila["detalle"]["dias_habiles"], 5)
+
+    def test_un_admin_lo_ve_todo(self):
+        self.client.force_login(self.admin)
+        detalle = self.client.get(self._log()).json()[0]["detalle"]
+
+        self.assertEqual(detalle["costo_estimado"], 3400000.0)
+        self.assertEqual(detalle["tarifa_cambios"][0]["valor"], 90000.0)
+
+    def test_un_pm_lo_ve_todo(self):
+        """Un PM responde por el presupuesto de su proyecto."""
+        self.client.force_login(self.pm)
+        detalle = self.client.get(self._log()).json()[0]["detalle"]
+        self.assertEqual(detalle["tarifa_hora"], 85000.0)
+
+    def test_sin_sesion_no_se_ve_nada(self):
+        self.client.logout()
+        self.assertIn(self.client.get(self._log()).status_code, (401, 403, 302))
