@@ -26,23 +26,38 @@ resource "azurerm_postgresql_flexible_server" "principal" {
   # llena, se sube a mano de forma consciente.
   auto_grow_enabled = false
 
-  # Las dos autenticaciones a la vez, no una en lugar de la otra.
+  # Solo Entra. La contrasena esta apagada.
   #
-  # Entra permite conectarse con un token en lugar de con la contrasena, que es
-  # lo unico que hoy separa la base de cualquiera que llegue a ella. Pero
-  # apagar la contrasena aqui dejaria la aplicacion sin poder entrar en el
-  # mismo instante del apply: Django todavia se conecta con POSTGRES_PASSWORD.
+  # Se hizo en dos pasos a proposito. Primero se activaron las dos a la vez y
+  # la aplicacion aprendio a pedir un token (config/db/entra/); solo cuando se
+  # comprobo en produccion que conecta como la identidad y no como `pgadmin` se
+  # apago esta. Al reves habria dejado la aplicacion fuera en el mismo instante
+  # del apply.
   #
-  # Asi que esto es el cimiento, no la mudanza. La contrasena se apaga el dia
-  # que la aplicacion sepa pedir un token — y ese dia hay que apagarla, porque
-  # mientras las dos esten abiertas la superficie es la de la mas debil.
+  # **Mientras las dos estuvieron abiertas, esto no protegia de nada**: la
+  # superficie era la de la mas debil. El paso que importa es este.
+  #
+  # Lo que se gana: ya no existe una credencial compartida que no caduca nunca
+  # y que hay que rotar a mano. Los tokens duran horas, no los conoce nadie y
+  # se piden solos.
+  #
+  # Lo que se pierde: si Entra tiene una caida, no entra nadie — ni la
+  # aplicacion ni una persona con psql. No hay puerta de atras, y es
+  # deliberado; una puerta de atras que nunca se usa es una credencial que
+  # nadie vigila. Volver a abrirla es poner esto en `true` y aplicar (~2 min de
+  # reinicio), no una migracion.
+  #
+  # Ojo con la asimetria respecto al login de la aplicacion: alli el login
+  # local se conserva porque el secreto de Entra caduca en una fecha conocida y
+  # dejaria a todo el mundo fuera. Aqui no hay secreto que caduque — la
+  # identidad administrada no tiene uno — asi que ese argumento no aplica.
   # → docs/DECISIONES_INFRA.md#autenticacion-de-la-base
   #
-  # OJO: activar Entra habilita la extension PGAadAuth y **reinicia el
-  # servidor**. Sin alta disponibilidad eso es un corte de un par de minutos.
+  # OJO: cambiar esto reinicia el servidor. Sin alta disponibilidad, un corte
+  # de un par de minutos.
   authentication {
     active_directory_auth_enabled = true
-    password_auth_enabled         = true
+    password_auth_enabled         = false
     tenant_id                     = data.azurerm_client_config.actual.tenant_id
   }
 
