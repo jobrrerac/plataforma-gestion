@@ -75,6 +75,29 @@ locals {
     # por sorpresa, probablemente ya sin quien monto esto.
     { name = "OIDC_SECRETO_CADUCA", value = azuread_application_password.sso.end_date },
     { name = "OIDC_DIAS_AVISO_CADUCIDAD", value = tostring(var.dias_aviso_caducidad_secreto) },
+
+    # Con esto la aplicacion se conecta con un token de Entra en lugar de con
+    # POSTGRES_PASSWORD. La contrasena sigue arriba a proposito: es la red de
+    # seguridad mientras el camino nuevo no lleve tiempo funcionando.
+    #
+    # El usuario es distinto de POSTGRES_USER porque el servidor no autentica a
+    # `pgadmin` con un token, sino al rol que lleva la etiqueta de seguridad de
+    # esta identidad. Ese rol NO lo crea Terraform —es SQL dentro de la base, no
+    # un recurso de Azure— y se da de alta con:
+    #
+    #   CREATE ROLE "id-platgestion-prod-eus2-001" WITH LOGIN;
+    #   SECURITY LABEL FOR "pgaadauth" ON ROLE "id-platgestion-prod-eus2-001"
+    #     IS 'aadauth,oid=<principal_id de la identidad>,type=service';
+    #   GRANT pgadmin TO "id-platgestion-prod-eus2-001";
+    #
+    # El orden no importa: si el rol todavia no existe, el servidor rechaza el
+    # token y la aplicacion entra con la contrasena (config/db/entra/base.py).
+    #
+    # Van al final de la lista a proposito: Terraform compara estas listas por
+    # posicion, asi que insertarlas en medio reescribe el diff de todas las de
+    # abajo y vuelve ilegible un cambio de dos lineas.
+    { name = "POSTGRES_ENTRA_USER", value = azurerm_user_assigned_identity.app.name },
+    { name = "POSTGRES_ENTRA_CLIENT_ID", value = azurerm_user_assigned_identity.app.client_id },
   ]
 }
 
