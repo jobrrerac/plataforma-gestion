@@ -1,4 +1,6 @@
+from django.contrib import admin
 from django.contrib.auth.models import AnonymousUser, Group, User
+from django.core.management import call_command
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -407,3 +409,105 @@ class SinPasswordNoLlegaAProduccionTests(TestCase):
         User.objects.create_user(username="prod.form", password="Clave2026!")
         formulario = AuthenticationForm(data={"username": "prod.form", "password": ""})
         self.assertFalse(formulario.is_valid())
+
+
+class ElAdminVeTodoLoQueHayEnElAdminTests(TestCase):
+    """Cada pantalla del admin tiene que estar en los permisos del grupo Admin.
+
+    Se descubrió porque `qa.admin@inetum.com` veía menos secciones que la cuenta
+    de arranque. No era un fallo de esa cuenta: la de arranque es superusuario y
+    **se salta los permisos**, así que era la única que veía el admin completo.
+    Cualquier Admin de verdad entraba y le faltaban cinco pantallas — entre
+    ellas el listado de firmas forzadas, construido precisamente para que
+    alguien lo leyera.
+
+    El fallo es de los que no avisan: registrar un `ModelAdmin` no da permisos a
+    nadie, y quien lo prueba suele hacerlo con el superusuario. Esta prueba es
+    la que convierte ese silencio en un fallo rojo.
+
+    No exige `add`/`change`/`delete`: hay pantallas de solo lectura a propósito.
+    Exige `view`, que es lo que decide si la sección aparece en el menú.
+    """
+
+    def setUp(self):
+        call_command("setup_grupos", verbosity=0)
+
+    def _permisos_del_grupo(self, nombre):
+        grupo = Group.objects.get(name=nombre)
+        return {
+            (p.content_type.app_label, p.content_type.model)
+            for p in grupo.permissions.select_related("content_type")
+            if p.codename.startswith("view_")
+        }
+
+    def _modelos_del_admin(self):
+        # `admin`, `sessions` y `contenttypes` son de Django y no se gestionan
+        # desde este proyecto.
+        return {
+            (m._meta.app_label, m._meta.model_name)
+            for m in admin.site._registry
+            if m._meta.app_label not in ("admin", "sessions", "contenttypes")
+        }
+
+    def test_ninguna_pantalla_del_admin_se_queda_fuera(self):
+        faltan = self._modelos_del_admin() - self._permisos_del_grupo("Admin")
+        self.assertEqual(
+            faltan, set(),
+            "Estas pantallas estan registradas en el admin pero el grupo Admin "
+            "no puede verlas, asi que solo las ve un superusuario: "
+            f"{sorted(faltan)}. Anadirlas en setup_grupos.py.",
+        )
+
+    def test_las_cinco_que_faltaban_estan(self):
+        """Escritas por su nombre: si una refactorizacion las vuelve a dejar
+        fuera, se sabe cual y no hay que deducirlo del conjunto vacio."""
+        permisos = self._permisos_del_grupo("Admin")
+        for clave in [
+            ("accounts", "cambiopasswordpendiente"),
+            ("assignments", "cesionhoras"),
+            ("assignments", "liberacionrecurso"),
+            ("legalizacion", "dialegalizado"),
+            ("legalizacion", "registrohoras"),
+        ]:
+            self.assertIn(clave, permisos)
+
+    def test_un_admin_que_no_es_superusuario_ve_el_menu_completo(self):
+        """La comprobacion de verdad: lo que se pinta en /admin/.
+
+        Los permisos podrian estar bien y el menu seguir incompleto si alguna
+        pantalla se registrase en otro `AdminSite`.
+        """
+        admin_user = User.objects.create_user("admin_no_super", "ans@test.com", "clave-larga-1")
+        admin_user.is_staff = True
+        admin_user.save(update_fields=["is_staff"])
+        admin_user.groups.add(Group.objects.get(name="Admin"))
+
+        self.client.force_login(admin_user)
+        resp = self.client.get("/admin/")
+        self.assertEqual(resp.status_code, 200)
+
+        visibles = {
+            (app["app_label"], modelo["object_name"].lower())
+            for app in resp.context["app_list"]
+            for modelo in app["models"]
+        }
+        faltan = self._modelos_del_admin() - visibles
+        self.assertEqual(
+            faltan, set(),
+            f"No aparecen en el menu de un Admin no superusuario: {sorted(faltan)}",
+        )
+
+    def test_el_visor_no_gana_pantallas_por_esto(self):
+        """El Visor no es staff y no entra al admin; sus permisos existen solo
+        para que la API en lectura le responda. Que el Admin gane pantallas no
+        puede arrastrarlo a el."""
+        permisos = self._permisos_del_grupo("Visor")
+        self.assertNotIn(("accounts", "cambiopasswordpendiente"), permisos)
+        self.assertNotIn(("legalizacion", "dialegalizado"), permisos)
+
+    def test_el_ingeniero_sigue_sin_ver_costos(self):
+        """Regla no negociable: aqui se comprueba que ampliar el Admin no le
+        haya dado tarifas al Ingeniero de rebote."""
+        permisos = self._permisos_del_grupo("Ingeniero")
+        self.assertNotIn(("core", "tarifavigente"), permisos)
+        self.assertNotIn(("assignments", "logauditoria"), permisos)
