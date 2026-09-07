@@ -46,15 +46,25 @@ output "postgres_usuario" {
   value       = azurerm_postgresql_flexible_server.principal.administrator_login
 }
 
+# La contrasena existe pero el servidor YA NO LA ACEPTA: `password_auth_enabled`
+# esta en false. Se conserva —no se borra el `random_password`— porque volver a
+# abrir la puerta es poner ese flag en true y aplicar, sin generar credenciales
+# nuevas ni tocar la base. Mientras tanto es una cadena inerte.
 output "postgres_password" {
-  description = "Contrasena de PostgreSQL. Ver con: terraform output -raw postgres_password"
+  description = "Contrasena de PostgreSQL. INERTE: el servidor solo acepta Entra."
   value       = random_password.postgres.result
   sensitive   = true
 }
 
+# Con la contrasena apagada, la unica forma de entrar es con un token, y el
+# token va en el sitio de la contrasena. Dura entre 5 y 60 minutos: se pide
+# justo antes de conectar y no se guarda en ningun script.
 output "postgres_cadena_psql" {
-  description = "Comando psql listo para usar (requiere ip_desarrollador en el firewall)."
-  value       = "psql \"host=${azurerm_postgresql_flexible_server.principal.fqdn} port=5432 dbname=${var.postgres_db_name} user=${var.postgres_admin_user} sslmode=require\""
+  description = "Como conectarse con psql usando Entra (requiere ip_desarrollador en el firewall)."
+  value       = <<-EOT
+    export PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
+    psql "host=${azurerm_postgresql_flexible_server.principal.fqdn} port=5432 dbname=${var.postgres_db_name} user=$(az ad signed-in-user show --query userPrincipalName -o tsv) sslmode=require"
+  EOT
 }
 
 # ---------------------------------------------------------------------------

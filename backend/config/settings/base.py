@@ -73,7 +73,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        # Backend propio: el de PostgreSQL de siempre, con una sola cosa
+        # cambiada — si hay identidad administrada, se conecta con un token de
+        # Entra en lugar de con la contraseña. Fuera de Azure no hay identidad,
+        # así que en local y en los tests se comporta exactamente como el
+        # backend estándar. Ver config/db/entra/base.py.
+        "ENGINE": "config.db.entra",
         "NAME": env("POSTGRES_DB"),
         "USER": env("POSTGRES_USER"),
         "PASSWORD": env("POSTGRES_PASSWORD"),
@@ -89,6 +94,15 @@ DATABASES = {
             # desarrollo no tiene certificado, por eso el default es "prefer":
             # usa TLS si está disponible y no falla si no lo está.
             "sslmode": env("POSTGRES_SSLMODE", default="prefer"),
+        },
+        # Identidad administrada con la que pedir el token. Vacío = no se
+        # intenta y se usa la contraseña; es lo que pasa en desarrollo.
+        # El usuario es distinto de POSTGRES_USER a propósito: el servidor no
+        # autentica a `pgadmin` con un token, sino al rol que lleva la etiqueta
+        # de seguridad de la identidad.
+        "ENTRA": {
+            "USER": env("POSTGRES_ENTRA_USER", default=""),
+            "CLIENT_ID": env("POSTGRES_ENTRA_CLIENT_ID", default=""),
         },
     }
 }
