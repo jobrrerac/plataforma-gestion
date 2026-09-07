@@ -121,8 +121,6 @@ class LosDosCasosRealesTests(BaseTriaje):
         boton. Es exactamente lo que este modulo vino a que alguien mirase.
         """
         from django.contrib.auth.models import Group
-        from apps.revision.api import bloque_del_dia, clasificar
-        from apps.legalizacion import services as svc
 
         admin = User.objects.create_user("admin_info", "ai@test.com", "x")
         admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
@@ -148,8 +146,6 @@ class LosDosCasosRealesTests(BaseTriaje):
     def test_aprobar_una_informativa_no_cuenta_como_forzada(self):
         """El registro de firmas forzadas solo sirve si dice que regla se salta
         la gente de verdad. Contando esta, la mitad eran ruido."""
-        from apps.legalizacion import services as svc
-
         dia = self._dia()
         r = self._renglon(
             dia, "8.5", "Ruta de aprendizaje de Databricks, modulos 1 a 4",
