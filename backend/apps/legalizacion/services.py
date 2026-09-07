@@ -558,7 +558,11 @@ def _avisos_de(registro):
         from apps.revision.senales import evaluar
 
         evaluacion = evaluar(registro, registro.dia, Contexto([registro.dia]))
-    return [s.codigo for s in evaluacion.senales]
+    # Solo las accionables. Una señal informativa no se está anulando al
+    # aprobar: no pedía nada. Contarla inflaba el registro de firmas forzadas
+    # —era la mitad— y ese registro solo sirve si dice qué regla se salta la
+    # gente de verdad.
+    return [s.codigo for s in evaluacion.accionables]
 
 
 @transaction.atomic

@@ -65,10 +65,17 @@ MARGEN_HORAS = 0.5
 
 @dataclass
 class Senal:
-    """Un motivo concreto, con su banda y su explicación en una frase."""
+    """Un motivo concreto, con su banda y su explicación en una frase.
+
+    **`informativa` es una señal que se enseña pero no pide nada.** No sube la
+    banda del día, no pinta ámbar y aprobar el renglón no cuenta como forzar
+    nada. Existe porque una regla puede acertar en qué mirar y equivocarse en
+    cuánto insistir, y son dos cosas distintas que antes iban juntas.
+    """
     codigo: str
     banda: str
     texto: str
+    informativa: bool = False
 
 
 @dataclass
@@ -76,10 +83,18 @@ class Evaluacion:
     senales: list = field(default_factory=list)
 
     @property
+    def accionables(self):
+        """Las que piden una decisión. Las informativas solo acompañan."""
+        return [s for s in self.senales if not s.informativa]
+
+    @property
     def banda(self):
-        if not self.senales:
+        # Sale de las accionables: una señal informativa no puede sacar un
+        # renglón de Rutina, o volveríamos a tener el carril de atención lleno
+        # de días normales.
+        if not self.accionables:
             return RUTINA
-        return max((s.banda for s in self.senales), key=lambda b: ORDEN[b])
+        return max((s.banda for s in self.accionables), key=lambda b: ORDEN[b])
 
     @property
     def etiqueta(self):
@@ -140,11 +155,39 @@ def sobre_plan(registro, dia, ctx):
 
 
 def no_facturable_media_jornada(registro, dia, ctx):
-    """Media jornada o más en algo que no se cobra a nadie.
+    """Media jornada o más en algo que no se cobra a nadie. **Informativa.**
 
     Es la regla que caza los dos casos que motivaron el módulo: 7,5 h para
     escoger una certificación, y una jornada entera en «Actividades
     Departamentales» descrita como «muchas tareas».
+
+    **Por qué dejó de pedir una decisión, con los números de la primera semana
+    en producción:**
+
+        regla                          salta   devoluciones que atrapó
+        NO_FACTURABLE_MEDIA_JORNADA       47        3 de 3   (100%)
+        DETALLE_REPETIDO                  29        1 de 3
+        DETALLE_POBRE                     20        0 de 3
+
+    Es la única que no se perdió nada de lo que un humano rechazó de verdad —
+    pero para conseguirlo grita 44 veces de más. La mitad de todas las
+    aprobaciones forzadas eran solo esto, y una regla que se anula el 94% de
+    las veces enseña a ignorar también las que aciertan.
+
+    Se pensó en quitarla solo para proyectos internos, que era de donde venía
+    la mayor parte del ruido. Los datos lo desaconsejaron: una de las tres
+    devoluciones fue precisamente 5 h en INT-DEPART descritas como «modulo de
+    aprobación de recursos», devueltas por «no cumple con la especificidad de
+    la tarea». Esa exención habría cegado justo ese caso.
+
+    Así que se queda, se enseña, y no pide nada. Lo que sí conserva es que un
+    día con esto **no se puede firmar de un clic** (ver `bloque_del_dia`): ahí
+    hay algo que mirar, aunque casi siempre esté bien.
+
+    Lo que estos tres rechazos piden de verdad no es una regla de duración. Los
+    tres motivos dicen lo mismo —«no dijiste qué»— y uno de ellos tenía 227
+    caracteres y 31 palabras, así que no hay umbral de longitud que lo separe.
+    Eso es la fase 4.
     """
     if registro.facturable:
         return None
@@ -159,6 +202,7 @@ def no_facturable_media_jornada(registro, dia, ctx):
         "NO_FACTURABLE_MEDIA_JORNADA", REVISAR,
         f"{float(registro.horas):g} h de {jornada:g} ({fraccion:.0%} del día) "
         f"en {destino}, que no es facturable.",
+        informativa=True,
     )
 
 

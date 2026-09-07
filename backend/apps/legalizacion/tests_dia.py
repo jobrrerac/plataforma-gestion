@@ -685,7 +685,23 @@ class FechasNoLegalizablesTests(BaseLegalizacion):
         return fecha
 
     def _demasiado_atras(self):
-        return date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 10)
+        """Un dia habil fuera de la ventana de los ultimos 30.
+
+        Mismo problema que en `_futuro()` y en su espejo exacto: con `hoy - 40`
+        fijo, la prueba fallaba los jueves y los viernes, cuando esa fecha caia
+        en sabado o domingo. La vista tomaba entonces la rama de "no es
+        laborable", `modo_edicion` ni llegaba al contexto y saltaba un KeyError
+        que no tenia nada que ver con lo que se quiere probar — que un dia
+        demasiado antiguo no se puede legalizar.
+
+        Se retrocede, nunca se avanza: alejarse mas de hoy lo mantiene fuera de
+        la ventana, mientras que acercarse podria devolverlo dentro y entonces
+        la prueba dejaria de probar nada.
+        """
+        fecha = date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 10)
+        while not svc.estado_del_dia(self.recurso, fecha)["habil"]:
+            fecha -= timedelta(days=1)
+        return fecha
 
     def setUp(self):
         super().setUp()

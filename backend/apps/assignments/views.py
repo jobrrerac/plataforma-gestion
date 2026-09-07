@@ -143,6 +143,16 @@ class AsignacionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def log(self, request, pk=None):
+        """Historial de una asignacion. Lo consulta cualquiera con sesion.
+
+        El `request` va en el contexto porque el serializer lo necesita para
+        saber quien pregunta: `detalle` lleva tarifas y costos, y el rol
+        Ingeniero no puede verlos. Sin contexto el serializer tapa el dinero
+        igualmente —falla hacia el lado seguro— pero entonces tambien se lo
+        ocultaria a un Admin.
+        """
         asignacion = self.get_object()
         logs = LogAuditoria.objects.filter(asignacion=asignacion)
-        return Response(LogAuditoriaSerializer(logs, many=True).data)
+        return Response(
+            LogAuditoriaSerializer(logs, many=True, context={"request": request}).data
+        )

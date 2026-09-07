@@ -9,14 +9,26 @@ name: Deploy a Azure
 # Los valores de AZURE_* y las variables de repositorio los imprime Terraform:
 #   terraform output -raw cicd_comandos_gh
 
+# Se dispara cuando CI TERMINA BIEN sobre main, no cuando alguien empuja.
+#
+# Antes los dos workflows arrancaban a la vez con el mismo push, asi que una
+# rama con pruebas rojas construia la imagen, ejecutaba las migraciones y se
+# publicaba mientras CI todavia estaba corriendo — o justo despues de fallar.
+# Nada lo impedia: el despliegue no miraba a CI para nada.
+#
+# `branches: [main]` filtra por la rama de la ejecucion de CI, asi que ni las
+# de `develop` ni las de los pull requests llegan aqui.
+#
+# Se pierde el `paths-ignore` que evitaba desplegar por un cambio de solo
+# documentacion: `workflow_run` no lo admite. Es un intercambio consciente —un
+# despliegue de mas de seis minutos frente a la posibilidad de publicar codigo
+# sin probar— y calcular los ficheros tocados aqui fallaria en un push de
+# varios commits, saltandose un despliegue que si hacia falta.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    # Cambios que no afectan a la imagen no justifican un despliegue.
-    paths-ignore:
-      - "docs/**"
-      - "terraform/**"
-      - "**.md"
   workflow_dispatch:
 
 concurrency:
@@ -34,8 +46,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: produccion
 
+    # `workflow_run` salta con CUALQUIER final de CI, tambien con el fallido.
+    # Sin esta condicion el arreglo no arreglaria nada: seguiria desplegando
+    # codigo roto, solo que unos minutos mas tarde.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
     steps:
+      # El commit que aprobo CI, no la punta de main. Sin `ref`, dos merges
+      # seguidos harian que el despliegue del primero construyera el codigo del
+      # segundo — el que todavia no ha pasado las pruebas.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Autenticarse en Azure (OIDC)
         uses: azure/login@v2
@@ -61,8 +85,13 @@ jobs:
           ACR: ${{ vars.ACR_NAME }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_SHA::12}"
+          # Del codigo que hay en disco, no de GITHUB_SHA: en un `workflow_run`
+          # esa variable apunta a la punta de la rama por defecto, que puede no
+          # ser el commit que aprobo CI y que acabamos de sacar. La etiqueta de
+          # la imagen tiene que decir la verdad sobre lo que lleva dentro.
+          TAG="$(git rev-parse --short=12 HEAD)"
           IMAGEN="${ACR}.azurecr.io/plataforma-gestion:${TAG}"
+          echo "Construyendo $TAG"
 
           az acr login --name "$ACR"
           docker build -t "$IMAGEN" -t "${ACR}.azurecr.io/plataforma-gestion:latest" ./backend
