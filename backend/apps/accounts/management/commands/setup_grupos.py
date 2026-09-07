@@ -34,10 +34,20 @@ class Command(BaseCommand):
             # miente sobre lo que el rol puede hacer.
             ("assignments",  "cesionhoras",             ["view"]),
             ("assignments",  "liberacionrecurso",       ["view"]),
-            ("legalizacion", "registrohoras",           ["view"]),
+            # `view` bastaba para la pantalla suelta de registros, que es de
+            # solo lectura a proposito —aprobar tiene que pasar por
+            # `aprobar_registro`, no por un formulario—. Pero el mismo modelo
+            # aparece como inline EDITABLE dentro de un dia legalizado, y ahi
+            # sin `change` el Admin veia los renglones y no podia corregir ni
+            # una hora mal imputada. Dos pantallas, dos clases, un solo
+            # permiso: la restrictiva se defiende sola en su ModelAdmin.
+            #
+            # `delete` incluido: quitar un renglon sobrante es soft-delete
+            # (SoftDeleteModel), no un borrado fisico.
+            ("legalizacion", "registrohoras",           ["add", "change", "delete", "view"]),
             # Estas dos si se editan desde el admin: reabrir un dia y resolver
             # un cambio de contrasena pendiente son acciones de Admin.
-            ("legalizacion", "dialegalizado",           ["change", "view"]),
+            ("legalizacion", "dialegalizado",           ["add", "change", "delete", "view"]),
             ("accounts",     "cambiopasswordpendiente", ["change", "view"]),
         ])
 
