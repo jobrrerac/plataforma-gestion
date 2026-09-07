@@ -21,6 +21,24 @@ class Command(BaseCommand):
             ("auth",        "user",          ["add", "change", "delete", "view"]),
             ("auth",        "group",         ["add", "change", "delete", "view"]),
             ("legalizacion", "tipoactividad", ["add", "change", "delete", "view"]),
+
+            # Estas cinco pantallas existian en el admin pero ningun Admin las
+            # veia: solo el superusuario, que se salta los permisos y por eso
+            # nadie lo noto. Un Admin de verdad entraba a /admin/ y le faltaban
+            # las cesiones, las liberaciones, los dias legalizados y —lo mas
+            # absurdo— el listado de firmas forzadas, que se construyo
+            # precisamente para que alguien lo leyera.
+            #
+            # Solo `view` donde el ModelAdmin bloquea escribir. Dar `change` de
+            # un modelo que la pantalla no deja cambiar no habilita nada y
+            # miente sobre lo que el rol puede hacer.
+            ("assignments",  "cesionhoras",             ["view"]),
+            ("assignments",  "liberacionrecurso",       ["view"]),
+            ("legalizacion", "registrohoras",           ["view"]),
+            # Estas dos si se editan desde el admin: reabrir un dia y resolver
+            # un cambio de contrasena pendiente son acciones de Admin.
+            ("legalizacion", "dialegalizado",           ["change", "view"]),
+            ("accounts",     "cambiopasswordpendiente", ["change", "view"]),
         ])
 
         perms_pm = self._perms([

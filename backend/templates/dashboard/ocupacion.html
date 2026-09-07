@@ -50,8 +50,21 @@
       cursor: not-allowed;
     }
     .cell-bench   { background: #fff; }
-    /* Interno con equipo: ocupa el tiempo, no la capacidad. */
-    .cell-interno { background: #ebecf0; color: #6b7280; }
+    /* Interno con equipo: ocupa el tiempo, no la capacidad.
+
+       Con trama y no gris plano. El gris de antes (#ebecf0) quedaba entre el
+       blanco del bench y el #d4d4d4 del dia no habil: tres tonos claros
+       seguidos que en una pantalla mal saturada —o en un proyector— se leen
+       igual, y entonces no se distingue "no trabaja nadie" de "trabaja en algo
+       interno". Una trama se ve aunque el color no.
+
+       Va a 135°, al reves que la ausencia, para que las dos se separen por la
+       direccion incluso en escala de grises. Y en gris apagado a proposito:
+       esto no es un aviso, es trabajo que cede en cuanto aparezca un cliente. */
+    .cell-interno {
+      background: repeating-linear-gradient(135deg, #e6e8ee, #e6e8ee 4px, #c2c7d6 4px, #c2c7d6 7px);
+      color: #4b5563;
+    }
     .cell-low     { background: #d1fae5; }
     .cell-mid     { background: #fef08a; }
     .cell-high    { background: #fdba74; }
@@ -157,8 +170,8 @@
       <span><span class="legend-box" style="background:#fef08a;"></span>25–50%</span>
       <span><span class="legend-box" style="background:#fdba74;"></span>50–75%</span>
       <span><span class="legend-box" style="background:#f87171;"></span>75–100%</span>
-      <span><span class="legend-box" style="background:#ebecf0;"></span>Interno (cede)</span>
-      <span><span class="legend-box" style="background:#f0f0f0;"></span>No hábil</span>
+      <span><span class="legend-box" style="background:repeating-linear-gradient(135deg, #e6e8ee, #e6e8ee 4px, #c2c7d6 4px, #c2c7d6 7px)"></span>Interno (cede)</span>
+      <span><span class="legend-box" style="background:#d4d4d4;"></span>No hábil</span>
       <span style="margin-left:18px;padding-left:18px;border-left:1px solid var(--inet-linea)">
         <span class="legend-tri legend-tri-ok"></span>Horas aprobadas</span>
       <span><span class="legend-tri legend-tri-pend"></span>Horas sin aprobar</span>
