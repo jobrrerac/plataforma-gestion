@@ -60,8 +60,39 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          # Hace falta la historia para saber si este commit sigue siendo la
+          # punta de main o ya lo adelantaron.
+          fetch-depth: 0
+
+      # No desplegar un commit que ya quedo atras.
+      #
+      # Dos merges seguidos disparan dos CI y dos despliegues. El grupo de
+      # concurrencia los pone en fila, pero NO garantiza el orden: el 07/09 el
+      # despliegue del commit viejo termino el ultimo y dejo en produccion la
+      # imagen anterior. Peor aun, su job de migraciones ejecuto el
+      # `setup_grupos` de esa imagen, y como ese comando hace
+      # `permissions.set(...)` —reescribe el grupo entero— revirtio los permisos
+      # que el despliegue nuevo acababa de aplicar.
+      #
+      # `cancel-in-progress: true` no vale: cancelaria un despliegue a mitad de
+      # las migraciones, y esas corren en un Container Apps Job que el workflow
+      # ya no controla. Es mas seguro que el viejo se aparte solo: el nuevo ya
+      # trae todo lo suyo.
+      - name: Comprobar que este commit sigue siendo la punta de main
+        id: vigente
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          if git merge-base --is-ancestor HEAD origin/main && [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "::notice::$(git rev-parse --short HEAD) ya fue adelantado por $(git rev-parse --short origin/main). Se aparta: el despliegue de ese commit trae tambien estos cambios."
+            echo "seguir=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Desplegando $(git rev-parse --short HEAD), punta de main."
+            echo "seguir=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Autenticarse en Azure (OIDC)
+        if: steps.vigente.outputs.seguir == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -69,6 +100,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Comprobar que es la suscripción correcta
+        if: steps.vigente.outputs.seguir == 'true'
         # Misma idea que el guard de Terraform: el pipeline no debe poder tocar
         # otra suscripción aunque alguien cambie un secret por error.
         run: |
@@ -80,6 +112,7 @@ jobs:
           echo "Suscripción verificada: $ACTUAL"
 
       - name: Construir y publicar la imagen
+        if: steps.vigente.outputs.seguir == 'true'
         id: imagen
         env:
           ACR: ${{ vars.ACR_NAME }}
@@ -101,6 +134,7 @@ jobs:
           echo "imagen=$IMAGEN" >> "$GITHUB_OUTPUT"
 
       - name: Aplicar migraciones
+        if: steps.vigente.outputs.seguir == 'true'
         # Antes de publicar la nueva revisión: el código nuevo puede depender de
         # columnas nuevas, y durante el despliegue conviven réplicas viejas y
         # nuevas. Va en un job aparte para que solo un proceso ejecute `migrate`,
@@ -137,6 +171,7 @@ jobs:
           exit 1
 
       - name: Publicar la nueva revisión
+        if: steps.vigente.outputs.seguir == 'true'
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
           APP: ${{ vars.CONTAINER_APP_NAME }}
@@ -152,6 +187,7 @@ jobs:
           echo "Imagen: \`$IMAGEN\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verificar que la app responde
+        if: steps.vigente.outputs.seguir == 'true'
         # Con min_replicas = 0 la app puede estar apagada: la primera petición la
         # despierta y el arranque en frío tarda. Por eso se reintenta.
         env:
