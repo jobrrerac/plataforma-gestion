@@ -95,13 +95,78 @@ class LosDosCasosRealesTests(BaseTriaje):
             tipo=self.estudio,
         )
         evaluacion = self._evaluar(r, dia)
+
+        # Se sigue viendo: es el caso que motivo el modulo entero.
         self.assertIn("NO_FACTURABLE_MEDIA_JORNADA", {s.codigo for s in evaluacion.senales})
-        self.assertEqual(evaluacion.banda, sn.REVISAR)
+
+        # Pero ya no pide una decision. Tras la primera semana en produccion la
+        # regla saltaba 47 veces y solo 3 acababan en devolucion: era la mitad
+        # de todas las firmas forzadas. Se enseña, no exige.
+        self.assertEqual(evaluacion.banda, sn.RUTINA)
+        self.assertEqual(evaluacion.accionables, [])
+        self.assertTrue(evaluacion.senales[0].informativa)
+
         # El motivo tiene que ser legible por si solo: quien firma lo lee sin
         # tener que abrir nada mas.
         texto = evaluacion.senales[0].texto
         self.assertIn("7.5 h de 8.5", texto)
         self.assertIn("88%", texto)
+
+    def test_ese_mismo_dia_no_se_puede_firmar_de_un_clic(self):
+        """La contrapartida de haberla vuelto informativa, y lo que impide que
+        el cambio abra un agujero.
+
+        Si al dejar de subir la banda esos renglones cayeran en Rutina sin mas,
+        una jornada entera de estudio descrita a medias seria aprobable con un
+        boton. Es exactamente lo que este modulo vino a que alguien mirase.
+        """
+        from django.contrib.auth.models import Group
+        from apps.revision.api import bloque_del_dia, clasificar
+        from apps.legalizacion import services as svc
+
+        admin = User.objects.create_user("admin_info", "ai@test.com", "x")
+        admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+
+        dia = self._dia()
+        self._renglon(
+            dia, "7.5",
+            "Escoger certificacion y ver que ruta de estudio tomar por parte de learn microsoft",
+            tipo=self.estudio,
+        )
+        self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
+
+        dias = svc.dias_por_aprobar(admin)
+        clasificar(dias, admin)
+        d = dias[0]
+
+        # Ni verde ni ambar: ningun boton de dia. Se aprueba marcando casillas.
+        self.assertEqual(d.bloque, "")
+        self.assertFalse(d.aprobable_en_bloque)
+        self.assertFalse(d.forzable_en_bloque)
+        self.assertEqual(d.banda, sn.RUTINA, "una informativa no sube la banda")
+
+    def test_aprobar_una_informativa_no_cuenta_como_forzada(self):
+        """El registro de firmas forzadas solo sirve si dice que regla se salta
+        la gente de verdad. Contando esta, la mitad eran ruido."""
+        from apps.legalizacion import services as svc
+
+        dia = self._dia()
+        r = self._renglon(
+            dia, "8.5", "Ruta de aprendizaje de Databricks, modulos 1 a 4",
+            tipo=self.estudio,
+        )
+        svc.aprobar_registro(r, self.admin_para_firmar())
+
+        r.refresh_from_db()
+        self.assertEqual(r.estado, RegistroHoras.APROBADO)
+        self.assertFalse(r.aprobacion_forzada)
+        self.assertEqual(r.senales_anuladas, [])
+
+    def admin_para_firmar(self):
+        from django.contrib.auth.models import Group
+        u = User.objects.create_user("admin_firma", "af@test.com", "x")
+        u.groups.add(Group.objects.get_or_create(name="Admin")[0])
+        return u
 
     def test_la_jornada_entera_en_actividades_departamentales(self):
         """8,5 de 8,5 en un proyecto interno, descrito como «muchas tareas»."""

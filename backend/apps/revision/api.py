@@ -136,7 +136,23 @@ def bloque_del_dia(dia, usuario, pendientes=None) -> str:
     evaluados = [getattr(r, "evaluacion", None) for r in pendientes]
     if any(e is None for e in evaluados):
         return ""
-    return "LIMPIO" if all(e.banda == sn.RUTINA for e in evaluados) else "FORZADO"
+
+    # Tres estados, y el del medio es el que sostiene todo esto:
+    #
+    # - sin ninguna señal          -> LIMPIO,  botón verde de un clic;
+    # - con alguna accionable      -> FORZADO, botón ámbar que pide motivo;
+    # - solo con informativas      -> "",      ningún botón de día.
+    #
+    # Ese caso del medio es media jornada o más en algo no facturable. Ya no
+    # sube la banda ni pide motivo —era la mitad de todas las forzadas— pero
+    # tampoco puede firmarse de un clic: una jornada entera de estudio descrita
+    # a medias es exactamente lo que este módulo vino a que alguien mirase.
+    # Se aprueba marcando las casillas, que son dos clics y ningún motivo.
+    if any(e.accionables for e in evaluados):
+        return "FORZADO"
+    if any(e.senales for e in evaluados):
+        return ""
+    return "LIMPIO"
 
 
 def aprobable_en_bloque(dia, usuario, pendientes=None) -> bool:

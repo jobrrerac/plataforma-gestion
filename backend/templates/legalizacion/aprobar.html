@@ -77,6 +77,7 @@
   .s-atencion { background:#f8ebea; color:#8f231f; }
   .s-revisar  { background:#fbf1e3; color:#7d4915; }
   .contexto { font-size:.78rem; color:#97591a; }
+  .s-info { background:#eef0f4; color:#4b5563; }
 
   /* Precedentes: lo que ya paso, para poder comparar. Deliberadamente discreto
      —no es un aviso, es contexto— salvo lo devuelto, que si pesa. */
@@ -258,8 +259,14 @@
           </div>
           {% endif %}
           {% for s in r.evaluacion.senales %}
-          <div class="senal s-{{ s.banda|lower }} mt-1">
-            <i class="bi bi-{% if s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
+          {% comment %}
+            Una senal informativa se enseña pero no pide nada: gris y con icono
+            neutro, para que no compita con las que si exigen una decision. Era
+            la mitad de todas las firmas forzadas, y una alerta que se anula el
+            94% de las veces enseña a ignorar tambien las que aciertan.
+          {% endcomment %}
+          <div class="senal {% if s.informativa %}s-info{% else %}s-{{ s.banda|lower }}{% endif %} mt-1">
+            <i class="bi bi-{% if s.informativa %}info-circle{% elif s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
           </div>
           {% endfor %}
           {% if r.precedentes %}
@@ -335,8 +342,14 @@
           </div>
           {% endif %}
           {% for s in r.evaluacion.senales %}
-          <div class="senal s-{{ s.banda|lower }} mt-1">
-            <i class="bi bi-{% if s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
+          {% comment %}
+            Una senal informativa se enseña pero no pide nada: gris y con icono
+            neutro, para que no compita con las que si exigen una decision. Era
+            la mitad de todas las firmas forzadas, y una alerta que se anula el
+            94% de las veces enseña a ignorar tambien las que aciertan.
+          {% endcomment %}
+          <div class="senal {% if s.informativa %}s-info{% else %}s-{{ s.banda|lower }}{% endif %} mt-1">
+            <i class="bi bi-{% if s.informativa %}info-circle{% elif s.banda == "ATENCION" %}exclamation-octagon{% else %}exclamation-triangle{% endif %} me-1"></i>{{ s.texto }}
           </div>
           {% endfor %}
           {% if r.precedentes %}
