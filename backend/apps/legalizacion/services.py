@@ -793,7 +793,12 @@ def guardar_renglones(dia, renglones):
         )
 
     # Reemplaza solo lo editable: lo aprobado se queda como está.
-    dia.registros.exclude(estado=RegistroHoras.APROBADO).delete()  # soft-delete
+    #
+    # Esto es un `delete()` de queryset, que hasta ahora bajaba directo a SQL
+    # y borraba las filas de verdad, pese al comentario que decía lo
+    # contrario. Corregir un día ya registrado hacía desaparecer lo anterior
+    # sin rastro. Ahora `SoftDeleteQuerySet.delete()` las marca.
+    dia.registros.exclude(estado=RegistroHoras.APROBADO).delete()
     RegistroHoras.objects.bulk_create([
         RegistroHoras(
             dia=dia, tipo_actividad=actividad, proyecto=proyecto,

@@ -17,7 +17,11 @@ from apps.assignments.services import (
     capacidad_maxima_dia,
 )
 from apps.core.models import Proyecto
-from apps.legalizacion.models import TipoActividad
+from decimal import Decimal
+
+from apps.core.models import Recurso
+from apps.legalizacion import services as svc
+from apps.legalizacion.models import DiaLegalizado, RegistroHoras, TipoActividad
 
 
 class CatalogoActividadesTests(TestCase):
@@ -186,3 +190,90 @@ class PermisosCatalogoTests(TestCase):
         codigos = set(grupo.permissions.values_list("codename", flat=True))
         for accion in ("add", "change", "delete", "view"):
             self.assertIn(f"{accion}_tipoactividad", codigos)
+
+
+class BorrarUnConjuntoTambienEsSoftDeleteTests(TestCase):
+    """`queryset.delete()` no puede borrar filas de verdad.
+
+    Lo reportó QA: registró unas horas, las borró, las volvió a registrar y
+    dejaron de sumar. Al mirar producción faltaban **194 filas** de
+    `RegistroHoras` — no marcadas como borradas: ausentes de la tabla.
+
+    La causa: `SoftDeleteModel.delete()` es un método de **instancia**, y
+    `legalizacion/services.py` reemplazaba los renglones no aprobados con
+    `dia.registros.exclude(...).delete()`, que es otro método y baja directo a
+    SQL. Al lado había un comentario que decía «soft-delete».
+
+    Es la misma trampa que ya obligó a escribir `SoftDeleteAdminMixin` para el
+    borrado masivo del admin. Allí se tapó en el admin; el agujero seguía
+    abierto para cualquier código de servicio.
+
+    Va contra la primera regla no negociable del proyecto: soft-delete en todas
+    las entidades, nunca borrado físico. Y el daño no es solo perder datos:
+    corregir un día borraba la evidencia de qué había antes, que es justo lo que
+    hace falta para investigar un caso como el que lo destapó.
+    """
+
+    def setUp(self):
+        self.recurso = Recurso.objects.create(
+            nombre="Borra Conjuntos", email="bc@test.com", banda="SR",
+        )
+        self.tipo = TipoActividad.objects.create(nombre="Estudio SD", requiere_proyecto=False)
+        self.dia = DiaLegalizado.objects.create(
+            # ABIERTO: `guardar_renglones` solo toca dias editables, y el caso
+            # que se prueba es corregir un dia antes de cerrarlo.
+            recurso=self.recurso, fecha=date(2026, 1, 5), estado=DiaLegalizado.ABIERTO,
+            total_horas=Decimal("4"), jornada_esperada=Decimal("8.5"),
+        )
+        for texto in ("uno", "dos"):
+            RegistroHoras.objects.create(
+                dia=self.dia, tipo_actividad=self.tipo, horas=Decimal("2"), detalle=texto,
+            )
+
+    def _filas(self):
+        return RegistroHoras.all_objects.filter(dia=self.dia).count()
+
+    def _visibles(self):
+        return RegistroHoras.objects.filter(dia=self.dia).count()
+
+    def test_borrar_un_conjunto_conserva_las_filas(self):
+        self.dia.registros.all().delete()
+        self.assertEqual(self._visibles(), 0, "deberian dejar de verse")
+        self.assertEqual(self._filas(), 2, "pero las filas tienen que seguir ahi")
+
+    def test_las_filas_quedan_marcadas_con_la_fecha(self):
+        self.dia.registros.all().delete()
+        for r in RegistroHoras.all_objects.filter(dia=self.dia):
+            self.assertIsNotNone(r.deleted_at)
+
+    def test_borrar_una_instancia_sigue_funcionando_igual(self):
+        RegistroHoras.objects.filter(dia=self.dia).first().delete()
+        self.assertEqual(self._visibles(), 1)
+        self.assertEqual(self._filas(), 2)
+
+    def test_volver_a_guardar_el_dia_no_borra_lo_anterior(self):
+        """El caso real que lo destapo: corregir un dia ya registrado.
+
+        `guardar_renglones` reemplaza los renglones no aprobados. Antes los
+        hacia desaparecer de la tabla, asi que no quedaba forma de saber que
+        habia declarado la persona en el primer intento.
+        """
+        svc.guardar_renglones(self.dia, [
+            {"tipo_actividad": self.tipo, "proyecto": None,
+             "horas": "3", "detalle": "lo que quedo tras corregir"},
+        ])
+        self.assertEqual(self._visibles(), 1, "deberia quedar solo el renglon nuevo")
+        self.assertGreaterEqual(
+            self._filas(), 3,
+            "los dos renglones anteriores se perdieron al corregir el dia",
+        )
+
+    def test_hard_delete_sigue_existiendo_para_quien_lo_necesite(self):
+        """Limpiar datos de prueba tiene que poder hacerse, pero a proposito."""
+        RegistroHoras.objects.filter(dia=self.dia).hard_delete()
+        self.assertEqual(self._filas(), 0)
+
+    def test_all_objects_borra_de_verdad(self):
+        """Es la via de los scripts de limpieza y no lleva red, a proposito."""
+        RegistroHoras.all_objects.filter(dia=self.dia).delete()
+        self.assertEqual(self._filas(), 0)
