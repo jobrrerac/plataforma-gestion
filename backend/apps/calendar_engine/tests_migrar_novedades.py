@@ -5,8 +5,10 @@ de `/horas/`, así que una fila de más deja a alguien sin poder legalizar un d�
 que sí trabajó. Casi todo lo que se prueba aquí es cuándo **no** hay que crear:
 
 - lo que ya terminó, que no cambia nada hacia adelante;
-- lo que ya existe en la plataforma, aunque las fechas no coincidan exactas;
-- los medios días, que este modelo no sabe representar.
+- lo que ya existe en la plataforma, aunque las fechas no coincidan exactas.
+
+Los medios día se cargan como día entero: es una decisión tomada, no una
+limitación pendiente.
 
 Y una cosa del camino feliz que es fácil equivocar: el corte mira la **fecha de
 fin**, no la de inicio. Unas vacaciones que empezaron en agosto y acaban mañana
@@ -112,17 +114,21 @@ class MigrarNovedadesTests(TestCase):
         ejecutar(self._fila(futuro, futuro, estado="Pendiente"), confirmar=True)
         self.assertEqual(Indisponibilidad.objects.count(), 0)
 
-    def test_un_medio_dia_no_se_carga_y_se_avisa(self):
-        """Cargarlo como dia completo sacaria ese dia de /horas/ y esa persona
-        no podria legalizar la mitad que si trabajo."""
+    def test_un_medio_dia_se_carga_como_dia_entero(self):
+        """Decision tomada: no se meten medias jornadas en el modelo.
+
+        La consecuencia es que ese dia desaparece de /horas/ y no se legaliza.
+        Se acepta a cambio de no tocar el calendario ni el calculo de capacidad.
+        """
         futuro = self.hoy + timedelta(days=10)
-        salida = ejecutar(
+        ejecutar(
             self._fila(futuro, futuro, notas="Medio día de asuntos personales"),
             confirmar=True,
         )
-        self.assertEqual(Indisponibilidad.objects.count(), 0)
-        self.assertIn("medio día", salida)
-        self.assertIn("resolverlas a mano", salida)
+        novedad = Indisponibilidad.objects.get()
+        self.assertEqual(novedad.fecha_inicio, futuro)
+        self.assertEqual(novedad.fecha_fin, futuro)
+        self.assertEqual(novedad.tipo, "PERMISO")
 
     def test_no_duplica_lo_que_ya_existe_en_la_plataforma(self):
         """Luisa ya habia pedido la suya desde /novedades/."""

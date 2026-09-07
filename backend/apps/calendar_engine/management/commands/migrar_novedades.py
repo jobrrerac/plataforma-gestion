@@ -24,10 +24,11 @@ una por una sería teatro, y mientras tanto la capacidad estaría mal. Se deja
 `solicitada_por` vacío, que es justo lo que el modelo documenta para lo cargado
 antes de existir el flujo.
 
-**Los medios días no se cargan.** `Indisponibilidad` trabaja con días
-completos. Registrar medio día como día entero haría desaparecer esa jornada de
-`/horas/`, y esa persona no podría legalizar la mitad que sí trabajó — peor que
-no tenerlo. Se listan aparte para que se resuelvan a mano.
+**Medio día se trata como día entero.** `Indisponibilidad` trabaja con días
+completos y así se queda: es una decisión tomada, no una limitación pendiente.
+La consecuencia es que ese día desaparece de `/horas/` y no se legaliza — la
+persona no registra la mitad que sí trabajó. Se acepta a cambio de no meter
+medias jornadas en el modelo, el calendario y el cálculo de capacidad.
 
 Uso:
     python manage.py migrar_novedades datos/novedades_excel.tsv --simular
@@ -75,10 +76,6 @@ def deducir_tipo(notas: str) -> str:
     diferencia es la política de RRHH, no lo que la plataforma necesita saber.
     """
     return "VACACION" if "vacacion" in normalizar(notas) else "PERMISO"
-
-
-def es_medio_dia(notas: str) -> bool:
-    return "medio dia" in normalizar(notas)
 
 
 class Command(BaseCommand):
@@ -214,12 +211,6 @@ class Command(BaseCommand):
         if fin < hoy:
             return {**base, "accion": "OMITE", "motivo": f"terminó el {fin:%d/%m/%Y}, ya no aplica"}
 
-        if es_medio_dia(fila["notas"]):
-            return {
-                **base, "accion": "MANO",
-                "motivo": "es medio día y el modelo solo maneja días completos",
-            }
-
         recurso = Recurso.all_objects.filter(email__iexact=fila["correo"]).first()
         if recurso is None:
             raise CommandError(
@@ -254,12 +245,8 @@ class Command(BaseCommand):
 
     def _mostrar(self, plan):
         etiquetas = {"VACACION": "Vacaciones", "PERMISO": "Permiso"}
-        marcas = {"CREA": "crea ", "OMITE": "omite", "MANO": "MANO "}
-        estilos = {
-            "CREA": lambda t: t,
-            "OMITE": self.style.WARNING,
-            "MANO": self.style.ERROR,
-        }
+        marcas = {"CREA": "crea ", "OMITE": "omite"}
+        estilos = {"CREA": lambda t: t, "OMITE": self.style.WARNING}
         for p in plan:
             rango = (
                 f"{p['inicio']:%d/%m/%Y} a {p['fin']:%d/%m/%Y}" if p["inicio"] else " " * 22
@@ -272,18 +259,8 @@ class Command(BaseCommand):
                 linea += f"   <- {p['motivo']}"
             self.stdout.write(estilos[p["accion"]](linea))
 
-        a_mano = [p for p in plan if p["accion"] == "MANO"]
-        if a_mano:
-            self.stdout.write("")
-            self.stdout.write(self.style.ERROR(
-                "Estas hay que resolverlas a mano: el modelo no tiene medio día, y "
-                "cargarlas como día completo dejaría a esa persona sin poder "
-                "legalizar la mitad que sí trabajó."
-            ))
-
-        resumen = {a: sum(1 for p in plan if p["accion"] == a) for a in ("CREA", "OMITE", "MANO")}
+        resumen = {a: sum(1 for p in plan if p["accion"] == a) for a in ("CREA", "OMITE")}
         self.stdout.write("")
         self.stdout.write(
-            f"{len(plan)} filas: {resumen['CREA']} por crear, "
-            f"{resumen['OMITE']} omitidas, {resumen['MANO']} a mano."
+            f"{len(plan)} filas: {resumen['CREA']} por crear, {resumen['OMITE']} omitidas."
         )
