@@ -60,9 +60,20 @@
 
        Va a 135°, al reves que la ausencia, para que las dos se separen por la
        direccion incluso en escala de grises. Y en gris apagado a proposito:
-       esto no es un aviso, es trabajo que cede en cuanto aparezca un cliente. */
+       esto no es un aviso, es trabajo que cede en cuanto aparezca un cliente.
+
+       Se afino en dos pasos. El primer intento (#c2c7d6 sobre #e6e8ee, banda
+       de 4px) se leia como un patron y competia con los colores de carga, que
+       son los que de verdad hay que mirar. Subir el contraste fue ir hacia el
+       lado equivocado.
+
+       Ahora es blanco con una raya gris clara: el mismo fondo que el bench,
+       con una textura encima. Dice exactamente lo que significa —la persona
+       esta disponible para un cliente, pero ahora mismo tiene algo— y lo dice
+       sin competir con los colores de carga, que son los que de verdad hay que
+       mirar en este tablero. */
     .cell-interno {
-      background: repeating-linear-gradient(135deg, #e6e8ee, #e6e8ee 4px, #c2c7d6 4px, #c2c7d6 7px);
+      background: repeating-linear-gradient(135deg, #fff, #fff 5px, #e5e7eb 5px, #e5e7eb 8px);
       color: #4b5563;
     }
     .cell-low     { background: #d1fae5; }
@@ -170,7 +181,7 @@
       <span><span class="legend-box" style="background:#fef08a;"></span>25–50%</span>
       <span><span class="legend-box" style="background:#fdba74;"></span>50–75%</span>
       <span><span class="legend-box" style="background:#f87171;"></span>75–100%</span>
-      <span><span class="legend-box" style="background:repeating-linear-gradient(135deg, #e6e8ee, #e6e8ee 4px, #c2c7d6 4px, #c2c7d6 7px)"></span>Interno (cede)</span>
+      <span><span class="legend-box" style="background:repeating-linear-gradient(135deg, #fff, #fff 5px, #e5e7eb 5px, #e5e7eb 8px)"></span>Interno (cede)</span>
       <span><span class="legend-box" style="background:#d4d4d4;"></span>No hábil</span>
       <span style="margin-left:18px;padding-left:18px;border-left:1px solid var(--inet-linea)">
         <span class="legend-tri legend-tri-ok"></span>Horas aprobadas</span>
