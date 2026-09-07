@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from apps.accounts import roles
 from apps.accounts.models import CambioPasswordPendiente
+from apps.legalizacion.models import RegistroHoras
 
 
 class RolesTests(TestCase):
@@ -511,3 +512,61 @@ class ElAdminVeTodoLoQueHayEnElAdminTests(TestCase):
         permisos = self._permisos_del_grupo("Ingeniero")
         self.assertNotIn(("core", "tarifavigente"), permisos)
         self.assertNotIn(("assignments", "logauditoria"), permisos)
+
+
+class ElAdminPuedeCorregirHorasTests(TestCase):
+    """Un Admin tiene que poder arreglar unas horas mal imputadas.
+
+    `RegistroHoras` sale en dos sitios del admin y con dos clases distintas:
+
+    - `RegistroHorasAdmin`, la pantalla suelta, es **de solo lectura a
+      propósito**. Aprobar pasa por `aprobar_registro`, que relee bajo bloqueo y
+      comprueba quién puede firmar qué; un formulario sobre `estado` sería una
+      segunda vía de aprobación sin ninguna de las dos cosas. Eso lo defiende la
+      propia clase con `has_change_permission = False`, así que no depende de
+      los permisos del grupo.
+    - `RegistroHorasInline`, dentro de un día legalizado, **sí es editable**: es
+      la vía sensata para corregir una hora puesta al proyecto equivocado.
+
+    Al dar permisos al grupo se concedió solo `view`, mirando la primera y
+    olvidando la segunda. Resultado: el Admin veía los renglones del día y no
+    podía tocar ni una hora.
+    """
+
+    def setUp(self):
+        call_command("setup_grupos", verbosity=0)
+        self.admin = User.objects.create_user("adm_corrige", "ac@test.com", "clave-larga-1")
+        self.admin.is_staff = True
+        self.admin.save(update_fields=["is_staff"])
+        self.admin.groups.add(Group.objects.get(name="Admin"))
+
+    def test_tiene_los_permisos_para_editar_el_inline(self):
+        tiene = self.admin.get_all_permissions()
+        for accion in ("add", "change", "delete", "view"):
+            self.assertIn(f"legalizacion.{accion}_registrohoras", tiene)
+            self.assertIn(f"legalizacion.{accion}_dialegalizado", tiene)
+
+    def test_la_pantalla_suelta_sigue_siendo_de_solo_lectura(self):
+        """El permiso no la abre: la bloquea la clase. Si esto empieza a fallar,
+        alguien quitó esa defensa y hay una segunda vía de aprobación."""
+        from apps.legalizacion.admin import RegistroHorasAdmin
+
+        opciones = RegistroHorasAdmin(RegistroHoras, admin.site)
+        self.assertFalse(opciones.has_add_permission(None))
+        self.assertFalse(opciones.has_change_permission(None))
+        self.assertFalse(opciones.has_delete_permission(None))
+
+    def test_el_ingeniero_no_gana_nada_con_esto(self):
+        ing = User.objects.create_user("ing_corrige", "ic@test.com", "clave-larga-1")
+        ing.groups.add(Group.objects.get(name="Ingeniero"))
+        tiene = ing.get_all_permissions()
+        self.assertNotIn("legalizacion.change_registrohoras", tiene)
+        self.assertNotIn("legalizacion.delete_registrohoras", tiene)
+
+    def test_el_visor_tampoco(self):
+        """El Visor mira y no escribe en ninguna parte."""
+        visor = User.objects.create_user("vis_corrige", "vc@test.com", "clave-larga-1")
+        visor.groups.add(Group.objects.get(name="Visor"))
+        escribe = [p for p in visor.get_all_permissions()
+                   if not p.split(".")[1].startswith("view_")]
+        self.assertEqual(escribe, [], f"el Visor tiene permisos de escritura: {escribe}")
