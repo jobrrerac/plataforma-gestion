@@ -197,7 +197,7 @@ class AsignacionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             self.message_user(
                 request,
                 format_html(
-                    'Para crear una solicitud de asignación usá el '
+                    'Para crear una solicitud de asignación usa el '
                     '<a href="/solicitud/" style="font-weight:600">flujo de solicitud de recursos</a>.'
                 ),
                 level=messages.INFO,

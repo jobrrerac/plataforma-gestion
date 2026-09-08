@@ -302,13 +302,13 @@ def marcar_elegibilidad(resultados, dias_flexibles, modo_busqueda, horas_requeri
             r["elegible"] = r["horas_libres"] >= horas_requeridas
             r["motivo_no_elegible"] = "" if r["elegible"] else (
                 f"Solo {r['horas_libres']} h libres de las {horas_requeridas} h solicitadas. "
-                "Activá 'Días flexibles' para extender la fecha fin."
+                "Activa 'Días flexibles' para extender la fecha fin."
             )
         else:
             r["elegible"] = r["horas_libres"] > 0 and r["dias_sin_cupo"] == 0
             r["motivo_no_elegible"] = "" if r["elegible"] else (
                 f"{r['dias_sin_cupo']} día(s) del rango sin cupo. "
-                "Activá 'Días flexibles' para saltarlos recomputando la fecha fin."
+                "Activa 'Días flexibles' para saltarlos recomputando la fecha fin."
                 if r["horas_libres"] > 0 else "Sin horas libres en el período."
             )
     return resultados
@@ -466,7 +466,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         errores = []
         proyecto = None
         if not proyecto_id:
-            errores.append("Debés seleccionar un proyecto.")
+            errores.append("Debes seleccionar un proyecto.")
         else:
             try:
                 proyecto = Proyecto.objects.get(pk=proyecto_id, estado="ACTIVO")
@@ -515,7 +515,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
 
         proyecto = None
         if not proyecto_id:
-            errores.append("Debés seleccionar un proyecto.")
+            errores.append("Debes seleccionar un proyecto.")
         else:
             try:
                 proyecto = Proyecto.objects.get(pk=proyecto_id, estado="ACTIVO")
@@ -536,7 +536,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
             if dias_bloqueados_previos:
                 ctx["errores"] = [
                     f"El recurso tiene {len(dias_bloqueados_previos)} día(s) sin cupo en el período "
-                    "necesario para completar las horas. Activá 'Días flexibles' en la búsqueda "
+                    "necesario para completar las horas. Activa 'Días flexibles' en la búsqueda "
                     "para saltarlos extendiendo la fecha fin."
                 ]
                 ctx["post"] = request.POST
@@ -614,7 +614,7 @@ class SolicitudCrearView(PMOAdminRequiredMixin, View):
         if conflict_dates and not ctx["dias_flexibles"]:
             ctx["errores"] = [
                 f"El recurso no está disponible en {len(conflict_dates)} día(s) del rango solicitado. "
-                "Activá 'Días flexibles' en la búsqueda si aceptás recomputar la fecha fin saltándolos."
+                "Activa 'Días flexibles' en la búsqueda si aceptas recomputar la fecha fin saltándolos."
             ]
             ctx["post"] = request.POST
             return render(request, "dashboard/solicitud_crear.html", ctx)
@@ -722,7 +722,7 @@ class SolicitudRecurrenteView(PMOAdminRequiredMixin, View):
                 continue
             horas_por_dia[num] = horas
         if not horas_por_dia and not errores:
-            errores.append("Indicá las horas de al menos un día de la semana.")
+            errores.append("Indica las horas de al menos un día de la semana.")
 
         return fi, semanas, horas_por_dia, errores
 
@@ -750,11 +750,11 @@ class SolicitudRecurrenteView(PMOAdminRequiredMixin, View):
         fi, semanas, horas_por_dia, errores = self._parse_patron(datos)
 
         if ctx["recurso"] is None:
-            errores.insert(0, "Seleccioná un recurso.")
+            errores.insert(0, "Selecciona un recurso.")
 
         proyecto = None
         if not datos.get("proyecto"):
-            errores.append("Debés seleccionar un proyecto.")
+            errores.append("Debes seleccionar un proyecto.")
         else:
             try:
                 proyecto = Proyecto.objects.get(pk=datos["proyecto"], estado="ACTIVO")
@@ -775,7 +775,7 @@ class SolicitudRecurrenteView(PMOAdminRequiredMixin, View):
                     fechas = ", ".join(p["fecha"].strftime("%d/%m") for p in sin_cupo)
                     ctx["errores"] = [
                         f"El recurso no tiene cupo en {len(sin_cupo)} sesión(es) del patrón ({fechas}). "
-                        "Activá 'Días flexibles' si aceptás crear la serie omitiendo esos días."
+                        "Activa 'Días flexibles' si aceptas crear la serie omitiendo esos días."
                     ]
                     ctx.update({
                         "plan": plan,

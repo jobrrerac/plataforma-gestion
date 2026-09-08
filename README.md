@@ -7,7 +7,7 @@ Aplicación web interna para asignar ingenieros a proyectos, calcular fechas de 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) >= 4.x
 - Git
 
-> **No necesitás instalar Python ni PostgreSQL localmente.** Todo corre dentro de Docker.
+> **No necesitas instalar Python ni PostgreSQL localmente.** Todo corre dentro de Docker.
 
 ## Inicio rápido (4 pasos)
 

@@ -59,7 +59,7 @@
 
   <label class="campo">Proyecto receptor <span style="color:#dc3545">*</span></label>
   <select name="proyecto" required style="min-width:420px">
-    <option value="">— Seleccioná el proyecto que recibe las horas —</option>
+    <option value="">— Selecciona el proyecto que recibe las horas —</option>
     {% for p in proyectos %}
     <option value="{{ p.pk }}" {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
       {{ p.codigo }}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})

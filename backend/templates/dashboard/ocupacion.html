@@ -204,7 +204,7 @@
       </div>
     </div>
     <div class="card-body p-0" id="heatmap-container">
-      <p class="p-4 text-muted">Seleccioná un rango y presioná <strong>Cargar</strong>.</p>
+      <p class="p-4 text-muted">Selecciona un rango y presiona <strong>Cargar</strong>.</p>
     </div>
   </div>
 
@@ -386,7 +386,7 @@
       renderHeatmap(data);
     } catch (e) {
       document.getElementById("heatmap-container").innerHTML =
-        '<p class="p-4 text-danger">Error de conexión. Verificá que el servidor esté corriendo.</p>';
+        '<p class="p-4 text-danger">Error de conexión. Verifica que el servidor esté corriendo.</p>';
     } finally {
       document.getElementById("loading").classList.remove("show");
       document.getElementById("btn-cargar").disabled = false;

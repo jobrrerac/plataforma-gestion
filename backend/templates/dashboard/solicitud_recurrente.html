@@ -95,7 +95,7 @@
         <div class="mb-3">
           <label class="form-label fw-semibold">Recurso <span class="text-danger">*</span></label>
           <select name="recurso" class="form-select form-select-sm" required style="max-width:560px">
-            <option value="">— Seleccioná un recurso —</option>
+            <option value="">— Selecciona un recurso —</option>
             {% for r in recursos %}
             <option value="{{ r.pk }}" {% if recurso and recurso.pk == r.pk %}selected{% endif %}>
               {{ r.nombre }} ({{ r.get_banda_display }})
@@ -112,7 +112,7 @@
         <div class="mb-3">
           <label class="form-label fw-semibold">Proyecto <span class="text-danger">*</span></label>
           <select name="proyecto" class="form-select form-select-sm" required style="max-width:560px">
-            <option value="">— Seleccioná un proyecto —</option>
+            <option value="">— Selecciona un proyecto —</option>
             {% for p in proyectos %}
             <option value="{{ p.pk }}" {% if proyecto_sel == p.pk|stringformat:"s" %}selected{% endif %}>
               {{ p.codigo }}{% if p.grafo %} · Grafo {{ p.grafo }}{% endif %} — {{ p.nombre }} ({{ p.cliente }})
@@ -144,7 +144,7 @@
         </div>
 
         <label class="form-label fw-semibold mb-1">Horas por día de la semana</label>
-        <p class="text-muted mb-2" style="font-size:.78rem">Dejá vacío los días que no aplican. Máximo 8.5 h (lun–jue) / 8 h (vie).</p>
+        <p class="text-muted mb-2" style="font-size:.78rem">Deja vacíos los días que no aplican. Máximo 8.5 h (lun–jue) / 8 h (vie).</p>
         <div class="d-flex gap-3 mb-4 flex-wrap">
           {% for d in dias_form %}
           <div class="text-center">
