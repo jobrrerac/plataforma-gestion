@@ -1,10 +1,13 @@
+from collections import Counter
 from datetime import date, timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.shortcuts import render, get_object_or_404
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -255,9 +258,21 @@ class OcupacionAPIView(APIView):
         if params.get("sin_registrar") in ("1", "true", "si"):
             # Dias habiles del rango sin horas legalizadas. Es la pregunta que
             # de verdad se hace un PM: a quien tengo que perseguir.
+            #
+            # Los anteriores al arranque de la plataforma no cuentan: nadie
+            # tenia donde registrarlos. Sin este corte, mirar cualquier rango
+            # que tocara agosto marcaba a la plantilla entera.
+            from apps.legalizacion.services import inicio_exigencia
+
+            desde_cuando = inicio_exigencia().isoformat()
             result = [
                 r for r in result
-                if any(d["horas"] is None and not d["no_habil"] for d in r["detalle_por_dia"])
+                if any(
+                    d["horas"] is None
+                    and not d["no_habil"]
+                    and d["fecha"] >= desde_cuando
+                    for d in r["detalle_por_dia"]
+                )
             ]
 
         return Response({
@@ -797,6 +812,44 @@ class SolicitudRecurrenteView(PMOAdminRequiredMixin, View):
 class RecursoDetalleView(View):
     """Detalle de un recurso: asignaciones en curso y próximas."""
 
+    def post(self, request, pk):
+        """Reabrir un día ya firmado para que la persona lo corrija.
+
+        Vive aquí y no en el admin a propósito. El formulario del admin permite
+        editar las horas de un día aprobado sin dejar rastro: ni log, ni quién
+        deshizo la firma, ni por qué. Esta acción sí lo deja, y por eso es la
+        que debe usarse.
+
+        Puede hacerlo el PM del proyecto, su aprobador delegado y el Admin, y
+        cada uno solo sobre las firmas que le corresponden.
+
+        El servicio revalida el permiso y el estado: que el botón se pinte no
+        autoriza nada. Esta vista está abierta a cualquiera que haya entrado, así
+        que la comprobación de verdad tiene que estar allí.
+        """
+        from apps.legalizacion import services as legalizacion
+        from apps.legalizacion.models import DiaLegalizado
+
+        dia_id = request.POST.get("dia")
+        dia = DiaLegalizado.objects.filter(pk=dia_id, recurso_id=pk).first()
+        if dia is None:
+            messages.error(request, "Ese día no existe o no es de esta persona.")
+            return redirect("recurso-detalle", pk=pk)
+        try:
+            cuantos = legalizacion.reabrir_dia(
+                dia, request.user, request.POST.get("motivo", ""),
+            )
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                f"Reabierto el {dia.fecha:%d/%m/%Y}: {cuantos} actividad"
+                f"{'es' if cuantos != 1 else ''} devuelta"
+                f"{'s' if cuantos != 1 else ''} a {dia.recurso.nombre} para corregir.",
+            )
+        return redirect("recurso-detalle", pk=pk)
+
     def get(self, request, pk):
         recurso = get_object_or_404(
             Recurso.objects.prefetch_related("recurso_skills__skill"),
@@ -828,6 +881,35 @@ class RecursoDetalleView(View):
             (r.horas for r in horas_aprobadas if r.facturable), Decimal("0")
         )
 
+        # Cuantas firmas de cada dia le corresponde deshacer a quien mira. No es
+        # lo mismo que los renglones del dia: en un dia repartido entre dos
+        # proyectos, cada PM solo puede reabrir su parte.
+        #
+        # Se cuenta con una consulta aparte y no sobre `horas_aprobadas`, que
+        # viene cortado a 25 filas: contando sobre el corte, un dia partido por
+        # el limite anunciaria menos actividades de las que va a devolver.
+        from apps.legalizacion import services as legalizacion
+
+        firmados = (
+            RegistroHoras.objects
+            .filter(dia_id__in={r.dia_id for r in horas_aprobadas},
+                    estado=RegistroHoras.APROBADO)
+            .select_related("proyecto")
+        )
+        mios = Counter(
+            r.dia_id for r in firmados
+            if legalizacion.puede_aprobar_registro(request.user, r)
+        )
+
+        # El boton de reabrir es del DIA, no del renglon, asi que se marca solo
+        # el primero de cada dia. Repetirlo en cada fila seria ofrecer tres
+        # veces la misma accion y hacer creer que afecta solo a esa linea.
+        visto = set()
+        for r in horas_aprobadas:
+            r.abre_dia = r.dia_id not in visto and mios[r.dia_id] > 0
+            r.renglones_del_dia = mios[r.dia_id]
+            visto.add(r.dia_id)
+
         # Ausencias que vienen: quien planifica necesita verlas antes de asignar,
         # no descubrirlas cuando el calendario ya no cuadra.
         from apps.calendar_engine.models import Indisponibilidad
@@ -846,6 +928,10 @@ class RecursoDetalleView(View):
             "total_aprobadas": total_aprobadas,
             "facturables_aprobadas": facturables_aprobadas,
             "no_facturables_aprobadas": total_aprobadas - facturables_aprobadas,
+            # Deshacer una firma alcanza hasta donde alcanza ponerla: el PM del
+            # proyecto, su aprobador delegado y el Admin. La columna aparece si
+            # hay alguna firma que le toque a quien mira; el boton, dia a dia.
+            "puede_reabrir": bool(mios),
             "ausencias": ausencias,
             "hoy": hoy,
         })

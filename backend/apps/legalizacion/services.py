@@ -25,11 +25,26 @@ from apps.assignments.services import capacidad_maxima_dia
 from apps.calendar_engine.services import CalendarioRango
 from apps.core.models import Recurso
 
-from .models import DiaLegalizado, RegistroHoras, TipoActividad
+from .models import (
+    DiaLegalizado,
+    ParametrosLegalizacion,
+    ReaperturaDia,
+    RegistroHoras,
+    TipoActividad,
+)
 
 # Hasta cuántos días atrás se puede legalizar. La gente rellena tarde, pero
 # dejar el pasado abierto para siempre vacía de sentido el cierre.
 DIAS_ATRAS_MAX = 30
+
+
+def inicio_exigencia() -> date:
+    """Desde cuándo la plataforma reclama días sin registrar.
+
+    Sale de `ParametrosLegalizacion`, no de una constante ni del entorno, para
+    que moverla sea entrar al admin y no un despliegue.
+    """
+    return ParametrosLegalizacion.cargar().inicio_exigencia
 
 
 def recurso_de(usuario):
@@ -265,6 +280,14 @@ def dias_pendientes(recurso, desde=None, hasta=None):
     hoy = date.today()
     hasta = hasta or hoy
     desde = desde or (hoy - timedelta(days=DIAS_ATRAS_MAX))
+    # No se reclaman dias anteriores al arranque de la plataforma: nadie tenia
+    # donde legalizarlos. La lista salia pidiendo agosto entero, que son falsos
+    # positivos, y una lista que se equivoca la mitad de las veces deja de
+    # leerse tambien las veces que acierta.
+    desde = max(desde, inicio_exigencia())
+
+    if desde > hasta:
+        return []
 
     cal = CalendarioRango(desde, hasta, [recurso])
     cerrados = set(
@@ -807,3 +830,124 @@ def guardar_renglones(dia, renglones):
         for actividad, proyecto, horas, detalle in validados
     ])
     return dia
+
+
+def registros_reabribles(usuario, dia):
+    """Renglones firmados de ese día cuya firma esta persona puede deshacer.
+
+    El alcance para deshacer es el mismo que para firmar: si podías aprobarlo,
+    puedes reabrirlo. Así entran el PM del proyecto y su aprobador delegado, no
+    solo el Admin.
+
+    Se filtra renglón a renglón **a propósito**. Un día repartido entre dos
+    proyectos lo firman dos personas distintas, y dejar que una reabriera el día
+    entero sería devolverle a la otra un trabajo ya cerrado sin poder ni
+    avisarla. Cada quien deshace lo suyo; lo demás se queda firmado, que es lo
+    que el día ya sabe hacer —`recalcular_estado` lo reabre y mantiene bloqueado
+    lo aprobado—.
+
+    El Admin los ve todos, incluidos los renglones sin proyecto —formación,
+    estudio—, que no tienen PM al que pertenecer.
+    """
+    return [
+        r for r in dia.registros.filter(estado=RegistroHoras.APROBADO)
+        .select_related("proyecto", "aprobado_por")
+        if puede_aprobar_registro(usuario, r)
+    ]
+
+
+def puede_reabrir(usuario, dia) -> bool:
+    """Si a esta persona le corresponde deshacer alguna firma de ese día."""
+    return bool(registros_reabribles(usuario, dia))
+
+
+@transaction.atomic
+def reabrir_dia(dia, usuario, motivo):
+    """Devuelve un día ya firmado a quien lo registró, para que lo corrija.
+
+    Hasta ahora, corregir un día aprobado solo se podía borrando y volviendo a
+    registrar. Eso destruía lo anterior —así se perdieron 194 renglones en
+    producción— y borraba de paso quién había firmado qué.
+
+    Lo que hace, en una transacción:
+
+    1. **Deja constancia primero.** Se guarda una copia de las firmas antes de
+       tocarlas, con quién aprobó y cuándo. Si algo falla después, la
+       transacción lo deshace todo — pero si se guardara al final y fallara
+       antes, se habrían deshecho firmas sin registrarlo.
+    2. Los renglones aprobados **que le corresponden a quien reabre** pasan a
+       DEVUELTO con el motivo. No se borra ninguno: la persona los corrige
+       sobre lo que ya escribió.
+    3. El día vuelve a ABIERTO, que es lo que lo hace editable de nuevo. Lo que
+       firmó otro PM sigue aprobado y bloqueado dentro de ese día abierto.
+
+    **No toca los renglones que ya estaban devueltos ni los pendientes**: los
+    primeros ya están en manos de quien los escribió, y los segundos siguen su
+    curso normal por la cola.
+
+    Quién puede: el PM del proyecto, su aprobador delegado y el Admin — el
+    mismo alcance con el que se firma, porque deshacer una firma no debería
+    estar más repartido que ponerla.
+
+    El motivo es obligatorio y lo ve quien registró el día. Reabrir sin decir
+    qué está mal deja a la persona adivinando, que es exactamente lo que ya se
+    decidió al hacer obligatorio el motivo de devolución.
+    """
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ValidationError(
+            "Explica por qué hay que reabrirlo; el motivo lo verá quien registró el día."
+        )
+
+    dia = DiaLegalizado.objects.select_for_update().select_related("recurso").get(pk=dia.pk)
+
+    if dia.estado == DiaLegalizado.ABIERTO:
+        raise ValidationError("Este día ya está abierto: quien lo registró puede corregirlo.")
+
+    firmados = registros_reabribles(usuario, dia)
+    if not firmados:
+        # Se distinguen los dos casos: no hay nada firmado, o lo hay pero es de
+        # otro. Un solo mensaje para ambos manda al PM a buscar un fallo donde
+        # no lo hay.
+        if dia.registros.filter(estado=RegistroHoras.APROBADO).exists():
+            raise PermissionDenied(
+                "Las actividades firmadas de este día son de otro proyecto. "
+                "Puede reabrirlas su PM, su aprobador delegado o un administrador."
+            )
+        raise ValidationError(
+            "Este día no tiene ninguna actividad aprobada que deshacer. "
+            "Para corregirlo, devuelve las actividades desde la cola."
+        )
+
+    ReaperturaDia.objects.create(
+        dia=dia,
+        actor=usuario,
+        estado_anterior=dia.estado,
+        motivo=motivo[:300],
+        firmas_revertidas=[
+            {
+                "registro": r.pk,
+                "horas": str(r.horas),
+                "detalle": r.detalle,
+                "aprobado_por": r.aprobado_por.username if r.aprobado_por_id else None,
+                "aprobado_en": r.aprobado_en.isoformat() if r.aprobado_en else None,
+            }
+            for r in firmados
+        ],
+    )
+
+    for registro in firmados:
+        registro.estado = RegistroHoras.DEVUELTO
+        registro.motivo_devolucion = motivo[:300]
+        # La firma se deshace de verdad: dejarla puesta haria creer que sigue
+        # aprobado. Quien firmo queda en la reapertura, que es donde toca.
+        registro.aprobado_por = None
+        registro.aprobado_en = None
+        registro.save(update_fields=[
+            "estado", "motivo_devolucion", "aprobado_por", "aprobado_en", "updated_at",
+        ])
+
+    dia.motivo_devolucion = motivo[:300]
+    dia.save(update_fields=["motivo_devolucion", "updated_at"])
+    dia.recalcular_estado()
+    return len(firmados)

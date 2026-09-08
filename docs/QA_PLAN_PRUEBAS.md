@@ -310,6 +310,10 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HOR-30 | Avisa al acercarse al tope | Escribir más de 270 caracteres | El contador cambia de gris a ámbar antes de llegar al límite |
 | HOR-31 | **Dice que se revisa** | Leer el texto bajo el campo | Explica que son 300 caracteres y que se revisa que el detalle alcance para aprobar esas horas |
 | HOR-32 | El contador se reinicia | Añadir el renglón a la lista | El campo se vacía y el contador vuelve a `0 / 300` |
+| HOR-33 | **No pide días anteriores al arranque** | Mirar «Días hábiles sin registrar» | **No** salen días de antes del 1 de septiembre: no había dónde registrarlos |
+| HOR-34 | **La fecha se cambia sin desplegar** | Como Admin, `/admin/legalizacion/parametroslegalizacion/`, mover «Se exigen días desde» al 15 de septiembre y recargar `/horas/` | La lista se recorta sola. No hace falta tocar nada más |
+| HOR-35 | Una sola fila de parámetros | En esa pantalla, buscar «Añadir» | No está: hay una fila y se edita, no se crean más |
+| HOR-36 | Un día viejo sí se puede registrar a mano | Elegir en el calendario un día anterior al arranque, dentro de los últimos 30 | Deja registrarlo. No listarlo no es prohibirlo |
 
 ---
 ## 13. HAP — Aprobación de horas (PM y Admin)
@@ -381,6 +385,23 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-60 | El PM no firma lo que no es suyo | Como `qa.pm`, marcar una actividad de Estudio (sin proyecto) | **No** se aprueba; sale el motivo. Queda Pendiente |
 | HAP-61 | **La selección también deja rastro** | Marcar una actividad con aviso y aprobarla; mirar el admin filtrado | Sale con su `DETALLE_POBRE` anulado, y con el **motivo vacío**: se miró una a una, no hace falta explicarlo |
 | HAP-62 | Aprobar una limpia no la marca como forzada | Marcar una actividad sin avisos y aprobarla | En el admin filtrado por «aprobación forzada» **no** aparece |
+| HAP-63 | **Reabrir un día firmado** | Como `qa.admin`, ficha de un recurso (`/recursos/<id>/`), sección **Horas aprobadas**, botón **Reabrir día** | Se despliega una caja ámbar con el motivo obligatorio y dice cuántas actividades va a devolver |
+| HAP-64 | Sale una vez por día | Mirar un día con 3 actividades aprobadas | El botón aparece **solo en la primera fila** del día, no en las tres |
+| HAP-65 | **Sin motivo no reabre** | Confirmar con la caja vacía | No deja enviar; nada cambia de estado |
+| HAP-66 | **No borra nada** | Reabrir un día de 5 actividades y volver a mirarlo | Las 5 siguen ahí, ahora **Devueltas**, con el texto que la persona había escrito |
+| HAP-67 | **La firma se deshace de verdad** | Mirar esas actividades | Ya **no** figura quién las aprobó: si siguiera puesto, parecería que siguen aprobadas |
+| HAP-68 | **Queda el rastro** | Abrir `/admin/legalizacion/reaperturadia/` | Una entrada con quién reabrió, cuándo, el motivo, y **cuántas firmas** deshizo |
+| HAP-69 | Se guarda quién firmaba antes | Abrir esa entrada | En *Firmas revertidas* está la copia: horas, detalle, **quién aprobó y cuándo**. Es lo que responde «¿quién aprobó esto?» cuando ya no está aprobado |
+| HAP-70 | **Ese rastro no se puede tocar** | En esa pantalla, buscar Guardar o Eliminar | No hay ninguno de los dos. El modelo es append-only y PostgreSQL lo respalda |
+| HAP-71 | **El PM reabre lo suyo** | Como `qa.pm`, reabrir un día con horas de su proyecto | Lo reabre. El mensaje dice cuántas devolvió |
+| HAP-72 | **Y solo lo suyo** | Día repartido entre dos proyectos: reabrir como el PM de uno | Se devuelven **solo** sus actividades; las del otro proyecto siguen **Aprobadas** con su firma intacta |
+| HAP-73 | El aprobador delegado también | Como `qa.visor` designada delegada de un proyecto, reabrir un día de ese proyecto | Puede, aunque no sea PM ni Admin: la designación es la autorización |
+| HAP-74 | **Un ajeno no puede** | Como PM de otro proyecto, forzar el envío del formulario | Mensaje diciendo que esas actividades son de otro proyecto y quién sí puede |
+| HAP-75 | Un día sin firmar no se reabre | Intentarlo sobre un día **Registrado** | No aparece el botón; para eso está Devolver desde la cola |
+| HAP-76 | **La persona lo ve y lo corrige** | Como el ingeniero, volver a ese día | Franja de devolución con el motivo, y el día editable otra vez con lo que había escrito |
+| HAP-77 | Lo ajeno sigue bloqueado | En ese día reabierto a medias, mirar la actividad del otro proyecto | Se ve, pero **no** se puede editar |
+| HAP-78 | **Y el total se recalcula** | Corregir y volver a aceptar el día | El total del día cuadra con lo que quedó, no con lo anterior |
+| HAP-79 | **El admin ya no deja corregir horas** | Abrir `/admin/legalizacion/dialegalizado/` y entrar en un día | Se ve en solo lectura: sin Guardar, sin Eliminar, y los renglones tampoco se editan. Corregir es reabrir |
 
 ---
 
@@ -487,8 +508,8 @@ no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
 2. **Una sola réplica.** Sin autoescalado, por decisión: se espera a ver rendimiento real.
 3. **Sin horas extra.** Un día no puede pasar de la jornada. El módulo de extras está fuera de alcance por ahora.
 4. **Sin nómina ni recargos.** Se registran horas; no se calcula lo que valen.
-5. **Reapertura de un día aprobado.** Todavía no existe circuito para que el ingeniero *pida* reabrir un día ya aprobado; solo quien aprueba puede devolver uno **registrado**.
-6. **Un solo PM basta.** Si un día mezcla proyectos de varios PM, cualquiera de ellos puede aprobarlo entero.
+5. **Reapertura a petición.** Un día aprobado lo reabre quien podía firmarlo (PM, aprobador delegado o Admin), y queda registrado. Lo que no existe es un circuito para que el ingeniero lo **pida** desde la aplicación: por ahora se pide por fuera.
+6. **Un solo PM basta para aprobar.** Si un día mezcla proyectos de varios PM, cualquiera de ellos puede aprobarlo entero. Reabrir **no** funciona así: ahí cada quien solo alcanza lo suyo.
 7. **Solo Colombia.** No se gestionan recursos de España ni su jornada.
 
 ---
