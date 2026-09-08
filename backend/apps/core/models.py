@@ -6,9 +6,41 @@ from django.utils import timezone
 from .validators import validar_codigo_pep, validar_codigo_proyecto, validar_grafo
 
 
+class SoftDeleteQuerySet(models.QuerySet):
+    """Cierra la puerta de conjunto, no solo la de instancia.
+
+    `SoftDeleteModel.delete()` es un metodo de **instancia**. Un
+    `queryset.delete()` es otro metodo distinto que baja directo a SQL, asi que
+    marcar la fila en el modelo no protegia de nada en cuanto alguien escribia
+    `dia.registros.filter(...).delete()`.
+
+    Y alguien lo escribio: `legalizacion/services.py` borraba asi los renglones
+    no aprobados al volver a guardar un dia, con un comentario que decia
+    «soft-delete» al lado. En produccion faltaban **194 filas** de
+    `RegistroHoras` — no marcadas como borradas: ausentes de la tabla. Cada vez
+    que alguien corregia un dia ya registrado, lo anterior desaparecia sin
+    rastro, y con ello la posibilidad de saber que habia antes.
+
+    Es la misma trampa que ya obligo a escribir `SoftDeleteAdminMixin` para el
+    borrado masivo del admin. Ahi se tapo en el admin; aqui se cierra en el
+    origen, que es donde tenia que estar desde el principio.
+
+    `hard_delete()` queda para cuando de verdad haga falta —limpiar datos de
+    prueba, por ejemplo— pero hay que escribirlo a proposito.
+    """
+
+    def delete(self):
+        return self.update(deleted_at=timezone.now())
+
+    def hard_delete(self):
+        return super().delete()
+
+
 class SoftDeleteManager(models.Manager):
     def get_queryset(self):
-        return super().get_queryset().filter(deleted_at__isnull=True)
+        return SoftDeleteQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
 
 
 class SoftDeleteModel(models.Model):
@@ -17,6 +49,8 @@ class SoftDeleteModel(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     objects = SoftDeleteManager()
+    # Incluye lo borrado. Su `delete()` es el de Django: borra de verdad. Es la
+    # via para los scripts de limpieza, y por eso no se le pone red.
     all_objects = models.Manager()
 
     def delete(self, using=None, keep_parents=False):
