@@ -233,7 +233,7 @@
 <header>
   <div class="filete"></div>
   <div class="marca">Inetum &nbsp;·&nbsp; Plataforma de Gestión de Recursos</div>
-  <h1>Ronda de QA — 250 casos de prueba</h1>
+  <h1>Ronda de QA — 253 casos de prueba</h1>
   <p class="bajada">
     Primero cómo funciona la plataforma y dónde ya han aparecido errores.
     Después los casos, marcables a medida que se ejecutan.
@@ -357,10 +357,10 @@
   puedes cerrar la página y volver.
 </p>
 
-<div class="indice"><a href="#b-AUT"><span>AUT</span><b>10</b></a><a href="#b-SSO"><span>SSO</span><b>12</b></a><a href="#b-RBAC"><span>RBAC</span><b>19</b></a><a href="#b-MAE"><span>MAE</span><b>12</b></a><a href="#b-CAL"><span>CAL</span><b>8</b></a><a href="#b-SOL"><span>SOL</span><b>10</b></a><a href="#b-APR"><span>APR</span><b>7</b></a><a href="#b-CES"><span>CES</span><b>5</b></a><a href="#b-LIB"><span>LIB</span><b>7</b></a><a href="#b-NOV"><span>NOV</span><b>16</b></a><a href="#b-HOR"><span>HOR</span><b>36</b></a><a href="#b-HAP"><span>HAP</span><b>79</b></a><a href="#b-APD"><span>APD</span><b>14</b></a><a href="#b-DASH"><span>DASH</span><b>5</b></a><a href="#b-AUD"><span>AUD</span><b>4</b></a><a href="#b-INF"><span>INF</span><b>6</b></a></div>
+<div class="indice"><a href="#b-AUT"><span>AUT</span><b>10</b></a><a href="#b-SSO"><span>SSO</span><b>12</b></a><a href="#b-RBAC"><span>RBAC</span><b>19</b></a><a href="#b-MAE"><span>MAE</span><b>12</b></a><a href="#b-CAL"><span>CAL</span><b>8</b></a><a href="#b-SOL"><span>SOL</span><b>10</b></a><a href="#b-APR"><span>APR</span><b>7</b></a><a href="#b-CES"><span>CES</span><b>5</b></a><a href="#b-LIB"><span>LIB</span><b>7</b></a><a href="#b-NOV"><span>NOV</span><b>16</b></a><a href="#b-HOR"><span>HOR</span><b>36</b></a><a href="#b-HAP"><span>HAP</span><b>82</b></a><a href="#b-APD"><span>APD</span><b>14</b></a><a href="#b-DASH"><span>DASH</span><b>5</b></a><a href="#b-AUD"><span>AUD</span><b>4</b></a><a href="#b-INF"><span>INF</span><b>6</b></a></div>
 
 <div class="progreso">
-  <span class="cifra"><span id="hechos">0</span> / 250</span>
+  <span class="cifra"><span id="hechos">0</span> / 253</span>
   <div class="barra"><span id="barra"></span></div>
   <button type="button" id="reiniciar">Reiniciar</button>
 </div>
@@ -552,7 +552,7 @@
 <label class="caso" for="c-HOR-36"><input type="checkbox" id="c-HOR-36" data-caso="HOR-36"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HOR-36</span><span class="ctit">Un día viejo sí se puede registrar a mano</span></div><div class="campo"><span class="etq">Pasos</span>Elegir en el calendario un día anterior al arranque, dentro de los últimos 30</div><div class="campo"><span class="etq">Esperado</span>Deja registrarlo. No listarlo no es prohibirlo</div></div></label>
 </section>
 <section class="bloque" id="b-HAP">
-<div class="bloque-cab"><span class="sigla">HAP</span><h3>Aprobación de horas (PM y Admin)</h3><span class="cuenta">79 casos</span></div>
+<div class="bloque-cab"><span class="sigla">HAP</span><h3>Aprobación de horas (PM y Admin)</h3><span class="cuenta">82 casos</span></div>
 <div class="nota"><strong>Quién aprueba qué.</strong> El PM aprueba los días que tocan <strong>sus</strong> proyectos. El Admin ve <strong>todos</strong> — es la válvula de escape para cuando un PM está de vacaciones, se va o simplemente tarda, y la <strong>única</strong> vía para un día sin ningún proyecto, que no tiene PM que lo reclame. Este bloque necesita <code>qa.pm</code>, <code>qa.admin</code> y <code>carmen.leon</code> (como PM ajeno).</div>
 <label class="caso" for="c-HAP-01"><input type="checkbox" id="c-HAP-01" data-caso="HAP-01"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-01</span><span class="ctit">El PM ve lo suyo</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>qa.pm</code>, abrir <code>/horas/aprobar/</code> tras registrar días con horas de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>Ve esos días: es el PM del proyecto</div></div></label>
 <label class="caso" for="c-HAP-02"><input type="checkbox" id="c-HAP-02" data-caso="HAP-02"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-02</span><span class="ctit">Un PM ajeno no lo ve</span></div><div class="campo"><span class="etq">Pasos</span>Como <code>carmen.leon</code>, que es PM de <code>QA-002</code> pero <strong>no</strong> de <code>QA-001</code></div><div class="campo"><span class="etq">Esperado</span>La cola <strong>no</strong> incluye esos días</div></div></label>
@@ -633,6 +633,9 @@
 <label class="caso" for="c-HAP-77"><input type="checkbox" id="c-HAP-77" data-caso="HAP-77"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-77</span><span class="ctit">Lo ajeno sigue bloqueado</span></div><div class="campo"><span class="etq">Pasos</span>En ese día reabierto a medias, mirar la actividad del otro proyecto</div><div class="campo"><span class="etq">Esperado</span>Se ve, pero <strong>no</strong> se puede editar</div></div></label>
 <label class="caso" for="c-HAP-78"><input type="checkbox" id="c-HAP-78" data-caso="HAP-78"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-78</span><span class="ctit"><strong>Y el total se recalcula</strong></span></div><div class="campo"><span class="etq">Pasos</span>Corregir y volver a aceptar el día</div><div class="campo"><span class="etq">Esperado</span>El total del día cuadra con lo que quedó, no con lo anterior</div></div></label>
 <label class="caso" for="c-HAP-79"><input type="checkbox" id="c-HAP-79" data-caso="HAP-79"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-79</span><span class="ctit"><strong>El admin ya no deja corregir horas</strong></span></div><div class="campo"><span class="etq">Pasos</span>Abrir <code>/admin/legalizacion/dialegalizado/</code> y entrar en un día</div><div class="campo"><span class="etq">Esperado</span>Se ve en solo lectura: sin Guardar, sin Eliminar, y los renglones tampoco se editan. Corregir es reabrir</div></div></label>
+<label class="caso" for="c-HAP-80"><input type="checkbox" id="c-HAP-80" data-caso="HAP-80"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-80</span><span class="ctit"><strong>Un día de hace más de 30 días se reabre y se corrige</strong></span></div><div class="campo"><span class="etq">Pasos</span>Reabrir un día anterior a la ventana de 30 días y entrar como esa persona</div><div class="campo"><span class="etq">Esperado</span>Sale en «Días hábiles sin registrar», el calendario deja elegir esa fecha, y se puede guardar</div></div></label>
+<label class="caso" for="c-HAP-81"><input type="checkbox" id="c-HAP-81" data-caso="HAP-81"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-81</span><span class="ctit">La excepción es ese día, no el pasado entero</span></div><div class="campo"><span class="etq">Pasos</span>Con ese día reabierto, intentar otro día viejo cualquiera</div><div class="campo"><span class="etq">Esperado</span>Sigue diciendo que solo se legalizan los últimos 30 días</div></div></label>
+<label class="caso" for="c-HAP-82"><input type="checkbox" id="c-HAP-82" data-caso="HAP-82"><div class="caso-cuerpo"><div class="caso-cab"><span class="cid">HAP-82</span><span class="ctit">Y se cierra sola</span></div><div class="campo"><span class="etq">Pasos</span>Corregir ese día y volver a aceptarlo; entrar de nuevo a esa fecha</div><div class="campo"><span class="etq">Esperado</span>Vuelve a estar fuera de la ventana</div></div></label>
 </section>
 <section class="bloque" id="b-APD">
 <div class="bloque-cab"><span class="sigla">APD</span><h3>Aprobador delegado</h3><span class="cuenta">14 casos</span></div>

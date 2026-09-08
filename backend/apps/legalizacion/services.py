@@ -47,6 +47,31 @@ def inicio_exigencia() -> date:
     return ParametrosLegalizacion.cargar().inicio_exigencia
 
 
+def _reabierto_y_pendiente(recurso, fecha: date) -> bool:
+    """Si ese día lo reabrió alguien y todavía está sin corregir.
+
+    Sirve para dejarlo escapar de la ventana de 30 días. La ventana existe para
+    que el pasado no quede abierto por inercia; una reapertura es justo lo
+    contrario: alguien con autoridad dijo, con nombre y motivo, que **ese día
+    concreto** hay que corregirlo.
+
+    Sin esta salida, reabrir un día viejo lo dejaba sin nadie capaz de
+    arreglarlo. Y no es un empate: al reabrirlo sus horas dejan de contar como
+    aprobadas, así que el día se quedaba peor que si no se hubiera tocado, y el
+    único mensaje disponible —«pídeselo a un administrador»— apuntaba a una
+    puerta que ya no existe.
+
+    Se cierra sola: en cuanto la persona vuelve a registrar el día, deja de
+    estar ABIERTO y la ventana vuelve a aplicar.
+    """
+    return DiaLegalizado.objects.filter(
+        recurso=recurso,
+        fecha=fecha,
+        estado=DiaLegalizado.ABIERTO,
+        reaperturas__isnull=False,
+    ).exists()
+
+
 def recurso_de(usuario):
     """Recurso asociado a la cuenta, o None."""
     return Recurso.objects.filter(usuario=usuario).first()
@@ -101,10 +126,12 @@ def motivo_no_legalizable(recurso, fecha: date) -> str:
     hoy = date.today()
     if fecha > hoy:
         return "Ese día todavía no ha pasado: no hay horas que legalizar."
-    if fecha < hoy - timedelta(days=DIAS_ATRAS_MAX):
+    if fecha < hoy - timedelta(days=DIAS_ATRAS_MAX) and not _reabierto_y_pendiente(
+        recurso, fecha
+    ):
         return (
             f"Solo se pueden legalizar los últimos {DIAS_ATRAS_MAX} días. "
-            "Para algo más antiguo, pídeselo a un administrador."
+            "Para algo más antiguo, pídele a un administrador que lo reabra."
         )
 
     estado = estado_del_dia(recurso, fecha)
@@ -113,10 +140,27 @@ def motivo_no_legalizable(recurso, fecha: date) -> str:
     return ""
 
 
-def rango_legalizable() -> tuple[date, date]:
-    """Primer y último día que la pantalla debe dejar elegir."""
+def rango_legalizable(recurso=None) -> tuple[date, date]:
+    """Primer y último día que la pantalla debe dejar elegir.
+
+    Si esa persona tiene un día reabierto más antiguo que la ventana, el
+    selector se estira hasta él. Dejar que se pueda corregir pero no elegir la
+    fecha sería la misma trampa un paso más allá.
+    """
     hoy = date.today()
-    return hoy - timedelta(days=DIAS_ATRAS_MAX), hoy
+    desde = hoy - timedelta(days=DIAS_ATRAS_MAX)
+    if recurso is not None:
+        mas_viejo = (
+            DiaLegalizado.objects
+            .filter(recurso=recurso, estado=DiaLegalizado.ABIERTO,
+                    reaperturas__isnull=False)
+            .order_by("fecha")
+            .values_list("fecha", flat=True)
+            .first()
+        )
+        if mas_viejo and mas_viejo < desde:
+            desde = mas_viejo
+    return desde, hoy
 
 
 def _validar_fecha_legalizable(recurso, fecha: date):
@@ -302,6 +346,17 @@ def dias_pendientes(recurso, desde=None, hasta=None):
         if cal.es_habil(fecha, recurso) and fecha not in cerrados:
             pendientes.append(fecha)
         fecha += timedelta(days=1)
+
+    # Los dias reabiertos se listan aunque queden fuera de la ventana. Es la
+    # unica pantalla donde la persona se entera de que le devolvieron algo, asi
+    # que dejarlo fuera equivale a no habersele dicho.
+    pendientes += [
+        f for f in DiaLegalizado.objects.filter(
+            recurso=recurso, estado=DiaLegalizado.ABIERTO,
+            reaperturas__isnull=False, fecha__lte=hasta,
+        ).values_list("fecha", flat=True)
+        if f not in pendientes
+    ]
     return sorted(pendientes, reverse=True)
 
 
