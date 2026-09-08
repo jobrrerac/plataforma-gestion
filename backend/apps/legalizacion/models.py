@@ -6,10 +6,13 @@ distintos que pueden no coincidir, y esa discrepancia es justamente lo que se
 quiere poder ver.
 """
 
+from datetime import date
+
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.core.models import Proyecto, Recurso, SoftDeleteModel
+from apps.core.models import AppendOnlyModel, Proyecto, Recurso, SoftDeleteModel
 
 
 class TipoActividad(models.Model):
@@ -303,3 +306,99 @@ class RegistroHoras(SoftDeleteModel):
         él no se aprobarían nunca.
         """
         return self.proyecto.pm if self.proyecto_id else None
+
+
+class ReaperturaDia(AppendOnlyModel):
+    """Por qué se reabrió un día ya aprobado, y qué firmas se deshicieron.
+
+    Hasta ahora la única forma de corregir un día firmado era borrarlo y volver
+    a registrarlo. Eso destruía la evidencia —así se perdieron 194 renglones en
+    producción— y dejaba sin respuesta la pregunta obvia: quién había aprobado
+    aquello y cuándo.
+
+    Reabrir devuelve el día a quien lo registró para que lo corrija, y deshace
+    las firmas. **Deshacer una firma no puede ser silencioso**: aquí queda quién
+    reabrió, por qué, y una copia de las firmas revertidas, para que la
+    aprobación original siga siendo consultable aunque ya no esté vigente.
+
+    Append-only, como `LogAuditoria`: si esto se pudiera editar no serviría de
+    nada. Lo imponen el modelo y un disparador de PostgreSQL.
+    """
+
+    dia = models.ForeignKey(
+        "DiaLegalizado", on_delete=models.PROTECT, related_name="reaperturas",
+    )
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="dias_reabiertos")
+    creado_en = models.DateTimeField(auto_now_add=True)
+    estado_anterior = models.CharField(max_length=12)
+    motivo = models.CharField(
+        max_length=300,
+        help_text="Por qué hubo que reabrirlo. Lo ve quien registró el día.",
+    )
+    # [{"registro": id, "horas": "2.0", "detalle": "...", "aprobado_por": "...",
+    #   "aprobado_en": "..."}] — la firma que se deshizo, tal como estaba.
+    firmas_revertidas = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-creado_en"]
+        verbose_name = "Reapertura de día"
+        verbose_name_plural = "Reaperturas de día"
+
+    def __str__(self):
+        return f"{self.dia} reabierto por {self.actor} ({self.creado_en:%d/%m/%Y})"
+
+
+class ParametrosLegalizacion(models.Model):
+    """Los ajustes de legalización que se cambian sin tocar el código.
+
+    Existe una sola fila. No es un modelo de datos: es la forma de que mover una
+    fecha sea entrar al admin, no un despliegue. Una variable de entorno habría
+    servido igual de bien para el valor, pero cambiarla en Container Apps crea
+    una revisión nueva y reinicia el contenedor, que es exactamente lo que se
+    quiere evitar para un número que se ajusta a ojo.
+
+    Se lee en cada carga de la pantalla del día. Es una consulta por clave
+    primaria sobre una tabla de una fila; no se cachea a propósito, porque un
+    caché aquí significaría cambiar la fecha y no ver el efecto, que anula la
+    razón de haberla sacado del código.
+    """
+
+    # Fecha en la que arrancó la plataforma. Antes de esto nadie tenía dónde
+    # legalizar, así que reclamar esos días es acusar a la gente de no haber
+    # usado algo que no existía.
+    INICIO_POR_DEFECTO = date(2026, 9, 1)
+
+    inicio_exigencia = models.DateField(
+        default=INICIO_POR_DEFECTO,
+        verbose_name="Se exigen días desde",
+        help_text=(
+            "Primer día que la plataforma reclama como pendiente. Los anteriores "
+            "no se listan ni se persiguen. Sí se pueden legalizar a mano si hace "
+            "falta recuperar alguno."
+        ),
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Parámetros de legalización"
+        verbose_name_plural = "Parámetros de legalización"
+
+    def __str__(self):
+        return f"Se exigen días desde {self.inicio_exigencia:%d/%m/%Y}"
+
+    def save(self, *args, **kwargs):
+        # Una sola fila, siempre la misma. Sin esto, guardar dos veces desde el
+        # admin dejaria dos filas y `cargar()` devolveria la primera, asi que el
+        # cambio recien hecho no se aplicaria y nadie sabria por que.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Los parámetros no se borran: cámbialos, que para eso están."
+        )
+
+    @classmethod
+    def cargar(cls):
+        """La fila de parámetros, creándola con los valores por defecto."""
+        return cls.objects.get_or_create(pk=1)[0]

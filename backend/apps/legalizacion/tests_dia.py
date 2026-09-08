@@ -19,7 +19,12 @@ from apps.accounts import roles
 from apps.calendar_engine import novedades as novedades_svc
 from apps.core.models import Proyecto, Recurso
 from apps.legalizacion import services as svc
-from apps.legalizacion.models import DiaLegalizado, RegistroHoras, TipoActividad
+from apps.legalizacion.models import (
+    DiaLegalizado,
+    ParametrosLegalizacion,
+    RegistroHoras,
+    TipoActividad,
+)
 
 
 def ultimo_miercoles():
@@ -809,3 +814,82 @@ class MensajeDeRegistroTests(BaseLegalizacion):
         # Sin refrescar a mano: el servicio deja el objeto recibido al dia.
         self.assertEqual(dia.total_horas, Decimal("8.5"))
         self.assertEqual(dia.estado, DiaLegalizado.REGISTRADO)
+
+
+class NoSeReclamanDiasAnterioresAlArranqueTests(TestCase):
+    """La lista de pendientes no puede pedir días que no existían.
+
+    La plataforma arrancó el 1 de septiembre. La lista de «días hábiles sin
+    registrar» miraba 30 días hacia atrás sin más, así que a todo el mundo le
+    salía agosto entero por rellenar: días en los que no había dónde hacerlo.
+
+    No es un detalle cosmético. Una lista que se equivoca la mitad de las veces
+    deja de leerse también las veces que acierta, y esta lista es lo único que
+    le recuerda a la gente qué le falta de verdad.
+
+    La fecha vive en `ParametrosLegalizacion` y no en el código a propósito:
+    moverla tiene que ser entrar al admin, no desplegar.
+    """
+
+    def setUp(self):
+        self.recurso = Recurso.objects.create(
+            nombre="Arranque Plataforma", email="ap@test.com", banda="SR",
+        )
+        self.params = ParametrosLegalizacion.cargar()
+
+    def _fijar(self, dias_atras):
+        """Pone el arranque a N días de hoy, para no atarse al calendario."""
+        self.params.inicio_exigencia = date.today() - timedelta(days=dias_atras)
+        self.params.save()
+
+    def test_no_lista_nada_anterior_al_arranque(self):
+        self._fijar(5)
+        pendientes = svc.dias_pendientes(self.recurso)
+        self.assertTrue(pendientes, "los días desde el arranque sí se reclaman")
+        self.assertTrue(
+            all(f >= self.params.inicio_exigencia for f in pendientes),
+            f"se están reclamando días previos al arranque: {pendientes}",
+        )
+
+    def test_con_el_arranque_en_el_futuro_no_reclama_nada(self):
+        """Caso de borde real: al desplegar esto antes de la fecha de arranque,
+        `desde` quedaba por detrás de `hasta` y el bucle recorría el rango al
+        revés en vez de no devolver nada."""
+        self.params.inicio_exigencia = date.today() + timedelta(days=10)
+        self.params.save()
+        self.assertEqual(svc.dias_pendientes(self.recurso), [])
+
+    def test_mover_la_fecha_cambia_la_lista_sin_tocar_codigo(self):
+        """Es la razón de que el valor esté en la base y no en una constante."""
+        self._fijar(3)
+        pocos = svc.dias_pendientes(self.recurso)
+        self._fijar(25)
+        muchos = svc.dias_pendientes(self.recurso)
+        self.assertGreater(len(muchos), len(pocos))
+
+    def test_un_dia_anterior_al_arranque_se_puede_legalizar_a_mano(self):
+        """No listarlo no es prohibirlo: si hay que recuperar un día viejo,
+        se entra a su fecha y se registra. Lo que se quita es la persecución."""
+        self._fijar(2)
+        fecha = ultimo_miercoles() - timedelta(days=7)
+        while fecha >= self.params.inicio_exigencia:
+            fecha -= timedelta(days=7)
+        self.assertEqual(svc.motivo_no_legalizable(self.recurso, fecha), "")
+
+    def test_el_valor_por_defecto_es_el_arranque_real(self):
+        self.assertEqual(
+            ParametrosLegalizacion.INICIO_POR_DEFECTO, date(2026, 9, 1),
+        )
+
+    def test_solo_hay_una_fila_de_parametros(self):
+        """Dos filas y `cargar()` devolvería la vieja: se cambiaría la fecha y
+        no pasaría nada, sin ningún mensaje que lo explicara."""
+        ParametrosLegalizacion(inicio_exigencia=date(2020, 1, 1)).save()
+        self.assertEqual(ParametrosLegalizacion.objects.count(), 1)
+        self.assertEqual(
+            ParametrosLegalizacion.cargar().inicio_exigencia, date(2020, 1, 1),
+        )
+
+    def test_los_parametros_no_se_borran(self):
+        with self.assertRaises(ValidationError):
+            ParametrosLegalizacion.cargar().delete()

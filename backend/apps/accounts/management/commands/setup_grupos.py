@@ -34,21 +34,29 @@ class Command(BaseCommand):
             # miente sobre lo que el rol puede hacer.
             ("assignments",  "cesionhoras",             ["view"]),
             ("assignments",  "liberacionrecurso",       ["view"]),
-            # `view` bastaba para la pantalla suelta de registros, que es de
-            # solo lectura a proposito —aprobar tiene que pasar por
-            # `aprobar_registro`, no por un formulario—. Pero el mismo modelo
-            # aparece como inline EDITABLE dentro de un dia legalizado, y ahi
-            # sin `change` el Admin veia los renglones y no podia corregir ni
-            # una hora mal imputada. Dos pantallas, dos clases, un solo
-            # permiso: la restrictiva se defiende sola en su ModelAdmin.
+            # Las horas y sus dias son de solo lectura en el admin. Aqui hubo
+            # `add/change/delete` mientras el inline de renglones era editable,
+            # que era la forma de corregir un dia ya firmado: sin autor, sin
+            # motivo, sin copia de lo que decia antes, y borrando de paso la
+            # firma del PM. Eso ahora se hace reabriendo el dia, que deja
+            # constancia de las tres cosas.
             #
-            # `delete` incluido: quitar un renglon sobrante es soft-delete
-            # (SoftDeleteModel), no un borrado fisico.
-            ("legalizacion", "registrohoras",           ["add", "change", "delete", "view"]),
-            # Estas dos si se editan desde el admin: reabrir un dia y resolver
-            # un cambio de contrasena pendiente son acciones de Admin.
-            ("legalizacion", "dialegalizado",           ["add", "change", "delete", "view"]),
+            # Se quedan en `view` a la vez que las clases del admin niegan
+            # escribir. Ninguna de las dos cosas sobra: el permiso no frena a un
+            # superusuario, y la clase sola dejaria un permiso concedido que no
+            # habilita nada, listo para volver a abrir el agujero sin querer.
+            ("legalizacion", "registrohoras",           ["view"]),
+            ("legalizacion", "dialegalizado",           ["view"]),
+            # Resolver un cambio de contrasena pendiente si es una accion de
+            # Admin que se hace desde el admin.
             ("accounts",     "cambiopasswordpendiente", ["change", "view"]),
+            # Solo `view`: la pantalla es de solo lectura y el modelo es
+            # append-only. Dar `change` mentiria sobre lo que se puede hacer.
+            ("legalizacion", "reaperturadia",           ["view"]),
+            # El unico sitio del modulo donde el Admin escribe: mover la fecha
+            # desde la que se reclaman dias sin registrar, sin desplegar. Sin
+            # `add` ni `delete` porque es una fila unica.
+            ("legalizacion", "parametroslegalizacion",  ["change", "view"]),
         ])
 
         perms_pm = self._perms([

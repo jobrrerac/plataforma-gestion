@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from apps.accounts import roles
 from apps.accounts.models import CambioPasswordPendiente
-from apps.legalizacion.models import RegistroHoras
+from apps.legalizacion.models import DiaLegalizado, RegistroHoras
 
 
 class RolesTests(TestCase):
@@ -514,23 +514,28 @@ class ElAdminVeTodoLoQueHayEnElAdminTests(TestCase):
         self.assertNotIn(("assignments", "logauditoria"), permisos)
 
 
-class ElAdminPuedeCorregirHorasTests(TestCase):
-    """Un Admin tiene que poder arreglar unas horas mal imputadas.
+class LasHorasNoSeCorrigenDesdeElAdminTests(TestCase):
+    """Corregir horas firmadas desde el admin no dejaba rastro de nada.
 
-    `RegistroHoras` sale en dos sitios del admin y con dos clases distintas:
+    `RegistroHoras` sale en dos sitios del admin: la pantalla suelta, que
+    siempre fue de solo lectura, y un inline dentro del dia legalizado que **si
+    era editable**. Se le dieron permisos de escritura al grupo Admin
+    precisamente para poder usarlo, y era la unica forma de arreglar unas horas
+    mal imputadas.
 
-    - `RegistroHorasAdmin`, la pantalla suelta, es **de solo lectura a
-      propósito**. Aprobar pasa por `aprobar_registro`, que relee bajo bloqueo y
-      comprueba quién puede firmar qué; un formulario sobre `estado` sería una
-      segunda vía de aprobación sin ninguna de las dos cosas. Eso lo defiende la
-      propia clase con `has_change_permission = False`, así que no depende de
-      los permisos del grupo.
-    - `RegistroHorasInline`, dentro de un día legalizado, **sí es editable**: es
-      la vía sensata para corregir una hora puesta al proyecto equivocado.
+    El problema es lo que costaba: cambiar ahi las horas de un dia aprobado no
+    dejaba autor, ni motivo, ni copia de lo que decia antes, y borraba de paso
+    la firma del PM. Un dia legalizado es una declaracion de en que se fue una
+    jornada, y alguien la reescribia sin que quedara constancia. Editar `estado`
+    en el formulario del dia era ademas una reapertura silenciosa.
 
-    Al dar permisos al grupo se concedió solo `view`, mirando la primera y
-    olvidando la segunda. Resultado: el Admin veía los renglones del día y no
-    podía tocar ni una hora.
+    Ahora se reabre el dia (`services.reabrir_dia`), que exige motivo, guarda
+    quien lo hizo y conserva las firmas deshechas.
+
+    Esto se sostiene sobre dos cosas a la vez, y ninguna sobra: los permisos del
+    grupo y la clase del admin. El permiso no frena a un superusuario, y la
+    clase sola dejaria concedido un permiso que no habilita nada, listo para
+    reabrir el agujero sin que nadie lo note.
     """
 
     def setUp(self):
@@ -540,21 +545,54 @@ class ElAdminPuedeCorregirHorasTests(TestCase):
         self.admin.save(update_fields=["is_staff"])
         self.admin.groups.add(Group.objects.get(name="Admin"))
 
-    def test_tiene_los_permisos_para_editar_el_inline(self):
+    def test_el_grupo_no_tiene_permiso_de_escribir_horas(self):
         tiene = self.admin.get_all_permissions()
-        for accion in ("add", "change", "delete", "view"):
-            self.assertIn(f"legalizacion.{accion}_registrohoras", tiene)
-            self.assertIn(f"legalizacion.{accion}_dialegalizado", tiene)
+        for accion in ("add", "change", "delete"):
+            self.assertNotIn(f"legalizacion.{accion}_registrohoras", tiene)
+            self.assertNotIn(f"legalizacion.{accion}_dialegalizado", tiene)
+
+    def test_pero_las_sigue_viendo(self):
+        """Quitar la escritura no es cerrar la pantalla: consultar un dia y sus
+        renglones es justo lo que hace falta para decidir si hay que reabrirlo."""
+        tiene = self.admin.get_all_permissions()
+        self.assertIn("legalizacion.view_registrohoras", tiene)
+        self.assertIn("legalizacion.view_dialegalizado", tiene)
+
+    def test_el_inline_del_dia_no_deja_escribir(self):
+        """La defensa que si alcanza al superusuario, que se salta los permisos."""
+        from apps.legalizacion.admin import RegistroHorasInline
+
+        opciones = RegistroHorasInline(DiaLegalizado, admin.site)
+        self.assertFalse(opciones.has_add_permission(None))
+        self.assertFalse(opciones.has_change_permission(None))
+        self.assertFalse(opciones.has_delete_permission(None))
+
+    def test_el_dia_legalizado_tampoco(self):
+        """Bajar `estado` de APROBADO a ABIERTO aqui era reabrir sin decirlo."""
+        from apps.legalizacion.admin import DiaLegalizadoAdmin
+
+        opciones = DiaLegalizadoAdmin(DiaLegalizado, admin.site)
+        self.assertFalse(opciones.has_add_permission(None))
+        self.assertFalse(opciones.has_change_permission(None))
+        self.assertFalse(opciones.has_delete_permission(None))
+        self.assertIn("estado", opciones.get_readonly_fields(None))
+        self.assertIn("total_horas", opciones.get_readonly_fields(None))
 
     def test_la_pantalla_suelta_sigue_siendo_de_solo_lectura(self):
-        """El permiso no la abre: la bloquea la clase. Si esto empieza a fallar,
-        alguien quitó esa defensa y hay una segunda vía de aprobación."""
+        """Si esto empieza a fallar, alguien quito esa defensa y hay una segunda
+        via de aprobacion sin bloqueo ni comprobacion de quien firma que."""
         from apps.legalizacion.admin import RegistroHorasAdmin
 
         opciones = RegistroHorasAdmin(RegistroHoras, admin.site)
         self.assertFalse(opciones.has_add_permission(None))
         self.assertFalse(opciones.has_change_permission(None))
         self.assertFalse(opciones.has_delete_permission(None))
+
+    def test_los_parametros_si_se_cambian_desde_el_admin(self):
+        """Es el ajuste que no deberia costar un despliegue."""
+        tiene = self.admin.get_all_permissions()
+        self.assertIn("legalizacion.change_parametroslegalizacion", tiene)
+        self.assertNotIn("legalizacion.delete_parametroslegalizacion", tiene)
 
     def test_el_ingeniero_no_gana_nada_con_esto(self):
         ing = User.objects.create_user("ing_corrige", "ic@test.com", "clave-larga-1")

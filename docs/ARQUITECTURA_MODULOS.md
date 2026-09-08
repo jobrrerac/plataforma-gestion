@@ -1,6 +1,6 @@
 # Módulos, capas y qué hay que reprobar cuando cambia algo
 
-El plan de QA tiene **229 casos**. Repasarlos entero cada vez que se toca una
+El plan de QA tiene **250 casos**. Repasarlos entero cada vez que se toca una
 pantalla no es sostenible: es la diferencia entre poder desplegar un martes y no
 poder.
 
@@ -55,11 +55,11 @@ Los bloques **propios** son los que ejercitan directamente ese módulo. Los
 
 | Si tocas… | Bloques propios | Arrastra | Casos |
 |---|---|---|---|
-| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 171 |
+| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 192 |
 | `core` | MAE, RBAC | SOL, APR, CES, LIB, HOR, HAP, APD, DASH | ~120 |
 | `calendar_engine` | CAL, NOV | SOL, APR, LIB, HOR | ~75 |
 | `assignments` | SOL, APR, CES, LIB, AUD | HAP, APD, DASH (leen el plan) | ~70 |
-| `legalizacion` | HOR, HAP, APD | DASH | ~64 |
+| `legalizacion` | HOR, HAP, APD | DASH | ~85 |
 | `revision` | HAP | — | 36 |
 | `dashboard` | DASH | — | 5 |
 | `templates/base.html` | AUT-09, AUT-10, RBAC-03 | — | 3 |

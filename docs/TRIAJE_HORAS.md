@@ -244,6 +244,48 @@ Sigue sin existir la firma en bloque del carril de Rutina completo con horas de
 cliente incluidas, por lo dicho arriba.
 
 
+#### Reabrir un día ya firmado
+
+Corregir un día aprobado solo se podía de una forma: borrarlo y volver a
+registrarlo. Eso **destruía lo anterior** —así se perdieron 194 renglones en
+producción— y borraba de paso quién había firmado qué.
+
+`reabrir_dia` lo hace bien. Devuelve a DEVUELTO los renglones firmados con el
+motivo, deja el día ABIERTO para que la persona lo corrija, y **no borra nada**:
+se corrige sobre lo que ya estaba escrito.
+
+**Deshacer una firma no puede ser silencioso.** Cada reapertura deja una entrada
+en `ReaperturaDia`: quién, cuándo, por qué, y una copia de las firmas revertidas
+con su aprobador y su fecha. Append-only, con disparador en PostgreSQL, igual
+que `LogAuditoria`: si esto se pudiera editar, quien tuviera motivos para tapar
+una reapertura sería justo quien puede hacerlo.
+
+**Quién puede: el PM del proyecto, su aprobador delegado y el Admin** — el mismo
+alcance con el que se firma, porque deshacer una firma no debería estar más
+repartido que ponerla.
+
+Y se aplica **renglón a renglón**, no al día entero. Un día repartido entre dos
+proyectos lo firman dos personas, y dejar que una reabriera el día completo sería
+devolverle a la otra un trabajo cerrado sin poder ni avisarla. Cada quien deshace
+lo suyo; lo demás sigue firmado dentro del día abierto, que es algo que el modelo
+ya sabía hacer —un renglón devuelto reabre el día y los aprobados siguen
+bloqueados—.
+
+Los renglones sin proyecto —formación, estudio— son del Admin, igual que para
+firmarlos: no tienen PM al que pertenecer.
+
+El botón vive en la ficha del recurso, junto a las horas aprobadas, y sale una
+vez por día — no por renglón, que haría creer que afecta solo a esa línea. Dice
+cuántas actividades va a devolver, contando solo las que le tocan a quien mira.
+
+El motivo es obligatorio, por lo mismo que ya lo era al devolver: reabrir sin
+decir qué está mal deja a la persona adivinando.
+
+**Esta es la única vía.** El admin de Django ya no deja editar un día legalizado
+ni sus renglones: aquel formulario cambiaba horas firmadas sin dejar autor, ni
+motivo, ni copia de lo anterior, y borraba la firma del PM por el camino. Tener
+las dos convivía mal — la mala era la cómoda.
+
 #### Revisar hacia atrás lo que ya se firmó
 
 `manage.py revisar_historico` pasa las mismas reglas sobre horas **ya

@@ -19,7 +19,14 @@ from apps.accounts import roles
 from apps.assignments.models import Asignacion
 from apps.core.models import Proyecto, Recurso
 from apps.legalizacion import services as svc
-from apps.legalizacion.models import DiaLegalizado, RegistroHoras, TipoActividad
+from unittest import mock
+
+from django.utils import timezone
+
+from apps.core.models import AppendOnlyError
+from apps.legalizacion.models import (
+    DiaLegalizado, ReaperturaDia, RegistroHoras, TipoActividad,
+)
 
 
 def ultimo_miercoles():
@@ -492,3 +499,272 @@ class AprobadorDelegadoTests(BaseAprobacion):
         )
         dia.refresh_from_db()
         self.assertEqual(dia.estado, DiaLegalizado.ABIERTO)
+
+
+class ReabrirUnDiaFirmadoTests(TestCase):
+    """Deshacer las firmas de un día para que se pueda corregir.
+
+    Hasta ahora, corregir un día aprobado solo se podía borrando y volviendo a
+    registrar. Eso destruía lo anterior —así se perdieron 194 renglones en
+    producción— y borraba de paso quién había firmado qué.
+
+    Lo que se cuida aquí es que **deshacer una firma nunca sea silencioso**: si
+    esta acción se pudiera usar sin dejar rastro, sería peor que el problema que
+    viene a resolver, porque además parecería legítima.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user("adm_reabre", "ar@test.com", "clave-larga-1")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+        self.pm = User.objects.create_user("pm_reabre", "pr@test.com", "clave-larga-1")
+        self.pm.groups.add(Group.objects.get_or_create(name="PM")[0])
+
+        self.recurso = Recurso.objects.create(
+            nombre="Reabre Dias", email="rd@test.com", banda="SR",
+        )
+        self.tipo = TipoActividad.objects.create(nombre="Estudio RD", requiere_proyecto=False)
+        self.dia = DiaLegalizado.objects.create(
+            recurso=self.recurso, fecha=date(2026, 1, 6), estado=DiaLegalizado.APROBADO,
+            total_horas=Decimal("4"), jornada_esperada=Decimal("8.5"),
+        )
+        self.firmados = [
+            RegistroHoras.objects.create(
+                dia=self.dia, tipo_actividad=self.tipo, horas=Decimal("2"),
+                detalle=f"actividad {i}", estado=RegistroHoras.APROBADO,
+                aprobado_por=self.pm, aprobado_en=timezone.now(),
+            )
+            for i in (1, 2)
+        ]
+
+    # ── lo que hace ─────────────────────────────────────────────────────────
+
+    def test_devuelve_las_firmadas_y_abre_el_dia(self):
+        cuantos = svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+
+        self.assertEqual(cuantos, 2)
+        self.dia.refresh_from_db()
+        self.assertEqual(self.dia.estado, DiaLegalizado.ABIERTO)
+        for r in self.dia.registros.all():
+            self.assertEqual(r.estado, RegistroHoras.DEVUELTO)
+            self.assertIn("el proyecto esta mal", r.motivo_devolucion)
+
+    def test_no_borra_ningun_renglon(self):
+        """Justo lo contrario del borrar-y-volver-a-registrar que lo motivo."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+        self.assertEqual(RegistroHoras.all_objects.filter(dia=self.dia).count(), 2)
+
+    def test_deshace_la_firma_de_verdad(self):
+        """Dejar `aprobado_por` puesto haria creer que sigue aprobado."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+        for r in self.dia.registros.all():
+            self.assertIsNone(r.aprobado_por)
+            self.assertIsNone(r.aprobado_en)
+
+    # ── el rastro ───────────────────────────────────────────────────────────
+
+    def test_guarda_quien_firmaba_antes(self):
+        """Sin esto, deshacer la firma borraria la respuesta a «quien aprobo
+        esto», que es lo que hace util una auditoria."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+
+        rea = ReaperturaDia.objects.get(dia=self.dia)
+        self.assertEqual(rea.actor, self.admin)
+        self.assertEqual(rea.estado_anterior, DiaLegalizado.APROBADO)
+        self.assertEqual(len(rea.firmas_revertidas), 2)
+        self.assertEqual(rea.firmas_revertidas[0]["aprobado_por"], "pm_reabre")
+        self.assertIsNotNone(rea.firmas_revertidas[0]["aprobado_en"])
+
+    def test_el_rastro_no_se_puede_editar_ni_borrar(self):
+        """Si se pudiera, quien tuviera motivos para tapar una reapertura seria
+        justo quien puede hacerlo."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+        rea = ReaperturaDia.objects.get(dia=self.dia)
+
+        with self.assertRaises(AppendOnlyError):
+            rea.motivo = "otra cosa"
+            rea.save()
+        with self.assertRaises(AppendOnlyError):
+            rea.delete()
+        with self.assertRaises(AppendOnlyError):
+            ReaperturaDia.objects.filter(pk=rea.pk).update(motivo="otra cosa")
+
+    # ── lo que no deja hacer ────────────────────────────────────────────────
+
+    def test_un_pm_no_puede_con_renglones_sin_proyecto(self):
+        """Formación y estudio no tienen PM al que pertenecer: son del Admin,
+        igual que para firmarlos."""
+        with self.assertRaises(PermissionDenied):
+            svc.reabrir_dia(self.dia, self.pm, "quiero deshacerlo")
+        self.dia.refresh_from_db()
+        self.assertEqual(self.dia.estado, DiaLegalizado.APROBADO)
+
+    def test_sin_motivo_no_reabre(self):
+        """Reabrir sin decir que esta mal deja a la persona adivinando."""
+        with self.assertRaises(ValidationError):
+            svc.reabrir_dia(self.dia, self.admin, "   ")
+        self.dia.refresh_from_db()
+        self.assertEqual(self.dia.estado, DiaLegalizado.APROBADO)
+        self.assertEqual(ReaperturaDia.objects.count(), 0)
+
+    def test_un_dia_ya_abierto_no_se_reabre(self):
+        self.dia.estado = DiaLegalizado.ABIERTO
+        self.dia.save(update_fields=["estado"])
+        with self.assertRaises(ValidationError):
+            svc.reabrir_dia(self.dia, self.admin, "por si acaso")
+
+    def test_un_dia_sin_firmas_no_se_reabre(self):
+        """Para eso esta el boton de devolver de la cola."""
+        self.dia.registros.update(estado=RegistroHoras.PENDIENTE)
+        self.dia.estado = DiaLegalizado.REGISTRADO
+        self.dia.save(update_fields=["estado"])
+        with self.assertRaises(ValidationError):
+            svc.reabrir_dia(self.dia, self.admin, "no hay nada firmado")
+
+    def test_no_toca_lo_que_no_estaba_firmado(self):
+        suelto = RegistroHoras.objects.create(
+            dia=self.dia, tipo_actividad=self.tipo, horas=Decimal("1"),
+            detalle="pendiente de otro PM", estado=RegistroHoras.PENDIENTE,
+        )
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+
+        suelto.refresh_from_db()
+        self.assertEqual(
+            suelto.estado, RegistroHoras.PENDIENTE,
+            "un renglon que nadie habia firmado no se devuelve",
+        )
+
+    def test_si_falla_no_deja_nada_a_medias(self):
+        """La reapertura se guarda antes de tocar las firmas, y todo va en una
+        transaccion: o queda el rastro y las firmas deshechas, o ninguna cosa."""
+        with mock.patch.object(
+            RegistroHoras, "save", side_effect=RuntimeError("cayo la base")
+        ):
+            with self.assertRaises(RuntimeError):
+                svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal")
+
+        self.dia.refresh_from_db()
+        self.assertEqual(self.dia.estado, DiaLegalizado.APROBADO)
+        self.assertEqual(ReaperturaDia.objects.count(), 0)
+        for r in self.dia.registros.all():
+            self.assertEqual(r.estado, RegistroHoras.APROBADO)
+
+
+class QuienPuedeReabrirTests(TestCase):
+    """Deshacer una firma alcanza hasta donde alcanza ponerla.
+
+    Al principio reabrir era solo del Admin, por miedo a que un PM deshiciera la
+    firma de otro en un día repartido entre dos proyectos. El miedo era el
+    correcto; la respuesta, no: dejaba al PM esperando a un Admin para arreglar
+    horas de su propio proyecto, que es justo lo que hace que la gente vuelva a
+    borrar y volver a registrar.
+
+    La regla es la misma que para aprobar (`puede_aprobar_registro`): el PM del
+    proyecto, su aprobador delegado y el Admin. Y se aplica **renglón a
+    renglón**, así que en un día compartido cada quien devuelve lo suyo y lo del
+    otro sigue firmado. El día ya sabía convivir con eso: un renglón devuelto lo
+    reabre y los aprobados siguen bloqueados.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user("adm_qr", "aqr@test.com", "clave-larga-1")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+        self.pm_a = User.objects.create_user("pm_a_qr", "pa@test.com", "clave-larga-1")
+        self.pm_a.groups.add(Group.objects.get_or_create(name="PM")[0])
+        self.pm_b = User.objects.create_user("pm_b_qr", "pb@test.com", "clave-larga-1")
+        self.pm_b.groups.add(Group.objects.get_or_create(name="PM")[0])
+        # Un ingeniero sin ningun rol de aprobacion, designado delegado.
+        self.delegada = User.objects.create_user("del_qr", "dq@test.com", "clave-larga-1")
+        self.delegada.groups.add(Group.objects.get_or_create(name="Ingeniero")[0])
+
+        self.proy_a = Proyecto.objects.create(
+            codigo="QR-A", nombre="Proyecto A", pm=self.pm_a,
+            aprobador_delegado=self.delegada,
+            fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 12, 31),
+        )
+        self.proy_b = Proyecto.objects.create(
+            codigo="QR-B", nombre="Proyecto B", pm=self.pm_b,
+            fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 12, 31),
+        )
+
+        self.recurso = Recurso.objects.create(
+            nombre="Dia Compartido", email="dc@test.com", banda="SR",
+        )
+        self.tipo = TipoActividad.objects.create(nombre="Proyecto QR", requiere_proyecto=True)
+        self.dia = DiaLegalizado.objects.create(
+            recurso=self.recurso, fecha=date(2026, 1, 7), estado=DiaLegalizado.APROBADO,
+            total_horas=Decimal("8"), jornada_esperada=Decimal("8.5"),
+        )
+        self.de_a = RegistroHoras.objects.create(
+            dia=self.dia, tipo_actividad=self.tipo, proyecto=self.proy_a,
+            horas=Decimal("4"), detalle="lo del proyecto A",
+            estado=RegistroHoras.APROBADO, aprobado_por=self.pm_a, aprobado_en=timezone.now(),
+        )
+        self.de_b = RegistroHoras.objects.create(
+            dia=self.dia, tipo_actividad=self.tipo, proyecto=self.proy_b,
+            horas=Decimal("4"), detalle="lo del proyecto B",
+            estado=RegistroHoras.APROBADO, aprobado_por=self.pm_b, aprobado_en=timezone.now(),
+        )
+
+    def test_el_pm_reabre_lo_de_su_proyecto(self):
+        cuantos = svc.reabrir_dia(self.dia, self.pm_a, "las horas van al otro grafo")
+        self.assertEqual(cuantos, 1)
+        self.de_a.refresh_from_db()
+        self.assertEqual(self.de_a.estado, RegistroHoras.DEVUELTO)
+
+    def test_y_no_toca_lo_del_otro_proyecto(self):
+        """Lo que evita que reabrir sea una forma de pisarle el trabajo a otro."""
+        svc.reabrir_dia(self.dia, self.pm_a, "las horas van al otro grafo")
+        self.de_b.refresh_from_db()
+        self.assertEqual(self.de_b.estado, RegistroHoras.APROBADO)
+        self.assertEqual(self.de_b.aprobado_por, self.pm_b)
+
+    def test_el_dia_queda_abierto_con_lo_ajeno_aun_firmado(self):
+        svc.reabrir_dia(self.dia, self.pm_a, "las horas van al otro grafo")
+        self.dia.refresh_from_db()
+        self.assertEqual(self.dia.estado, DiaLegalizado.ABIERTO)
+        self.assertTrue(self.de_b.bloqueado or True)
+        self.de_b.refresh_from_db()
+        self.assertTrue(self.de_b.bloqueado, "lo aprobado sigue sin poder editarse")
+
+    def test_el_rastro_solo_guarda_las_firmas_deshechas(self):
+        svc.reabrir_dia(self.dia, self.pm_a, "las horas van al otro grafo")
+        rea = ReaperturaDia.objects.get(dia=self.dia)
+        self.assertEqual(len(rea.firmas_revertidas), 1)
+        self.assertEqual(rea.firmas_revertidas[0]["registro"], self.de_a.pk)
+        self.assertEqual(rea.actor, self.pm_a)
+
+    def test_la_delegada_puede_aunque_sea_ingeniera(self):
+        """La designación en el proyecto ES la autorización: si tuviera que
+        pasar antes por un rol, designar a alguien no serviría de nada."""
+        self.assertTrue(svc.puede_reabrir(self.delegada, self.dia))
+        cuantos = svc.reabrir_dia(self.dia, self.delegada, "el detalle no alcanza")
+        self.assertEqual(cuantos, 1)
+
+    def test_un_pm_ajeno_al_dia_no_puede(self):
+        otro = User.objects.create_user("pm_c_qr", "pc@test.com", "clave-larga-1")
+        otro.groups.add(Group.objects.get(name="PM"))
+        self.assertFalse(svc.puede_reabrir(otro, self.dia))
+        with self.assertRaises(PermissionDenied):
+            svc.reabrir_dia(self.dia, otro, "me apetece")
+
+    def test_un_ingeniero_cualquiera_tampoco(self):
+        ing = User.objects.create_user("ing_qr", "iq@test.com", "clave-larga-1")
+        ing.groups.add(Group.objects.get(name="Ingeniero"))
+        with self.assertRaises(PermissionDenied):
+            svc.reabrir_dia(self.dia, ing, "quiero rehacer mi dia")
+
+    def test_el_admin_los_reabre_todos(self):
+        cuantos = svc.reabrir_dia(self.dia, self.admin, "hay que rehacer el dia entero")
+        self.assertEqual(cuantos, 2)
+        for r in (self.de_a, self.de_b):
+            r.refresh_from_db()
+            self.assertEqual(r.estado, RegistroHoras.DEVUELTO)
+
+    def test_el_mensaje_distingue_no_poder_de_no_haber_nada(self):
+        """Un solo mensaje para los dos casos manda al PM a buscar un fallo
+        donde no lo hay."""
+        otro = User.objects.create_user("pm_d_qr", "pd@test.com", "clave-larga-1")
+        otro.groups.add(Group.objects.get(name="PM"))
+        with self.assertRaises(PermissionDenied) as ctx:
+            svc.reabrir_dia(self.dia, otro, "me apetece")
+        self.assertIn("otro proyecto", str(ctx.exception))
