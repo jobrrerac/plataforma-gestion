@@ -278,7 +278,7 @@
       <div class="mb-4">
         <label class="form-label fw-semibold">Proyecto <span class="text-danger">*</span></label>
         <select name="proyecto" class="form-select" required>
-          <option value="">— Seleccioná un proyecto —</option>
+          <option value="">— Selecciona un proyecto —</option>
           {% for p in proyectos %}
           <option value="{{ p.pk }}" data-facturable="{% if p.facturable %}1{% else %}0{% endif %}"
             {% if post.proyecto == p.pk|stringformat:"s" %}selected{% endif %}>
@@ -355,7 +355,7 @@
           {% for s in segmentos %}{% if not forloop.first and s.valor != None %}
           · <strong style="color:#b45309">desde {{ s.desde|date:"d/m" }}: {{ s.valor }} €/h</strong>
           {% endif %}{% endfor %}
-          <span id="hint-rango"> · ingresá las horas/día para calcular</span>
+          <span id="hint-rango"> · ingresa las horas/día para calcular</span>
           <span id="hint-horas" style="display:none"> · la fecha fin se calcula saltando días ocupados</span>
         </div>
         <div class="text-muted mt-1" style="font-size:.72rem">

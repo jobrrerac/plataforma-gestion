@@ -95,7 +95,7 @@ class Command(BaseCommand):
             raise CommandError(
                 f"{len(conflictos)} recurso(s) ya tienen un número SAP distinto del que trae el "
                 "archivo. No se escribió nada. Si el archivo es el bueno, repite con "
-                "--sobrescribir; si no, corregí el archivo."
+                "--sobrescribir; si no, corrige el archivo."
             )
 
         if simular:

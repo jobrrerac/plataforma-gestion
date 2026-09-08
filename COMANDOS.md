@@ -94,7 +94,7 @@ docker compose cp web:/tmp/credenciales.csv ./credenciales_generadas.csv
 ```
 
 > El reporte de credenciales tiene contraseñas en texto plano: entregalo por canal
-> seguro, pedí cambio de clave en el primer ingreso y borralo. No lo subas a git.
+> seguro, pide cambio de clave en el primer ingreso y bórralo. No lo subas a git.
 
 ---
 

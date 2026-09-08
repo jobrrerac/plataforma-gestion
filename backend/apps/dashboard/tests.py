@@ -250,12 +250,12 @@ class SolicitudRecurrenteViewTests(TestCase):
         # Entrada directa desde el portal: se puede elegir el recurso en la página
         resp = self.client.get("/solicitud/recurrente/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Seleccioná un recurso")
+        self.assertContains(resp, "Selecciona un recurso")
         self.assertContains(resp, "DevRecView")
 
     def test_post_sin_recurso_da_error(self):
         resp = self._post("previsualizar", recurso="")
-        self.assertContains(resp, "Seleccioná un recurso")
+        self.assertContains(resp, "Selecciona un recurso")
         self.assertEqual(Asignacion.objects.count(), 0)
 
     def test_previsualizar_no_crea(self):
