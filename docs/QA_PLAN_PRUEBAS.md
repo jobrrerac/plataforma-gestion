@@ -402,6 +402,9 @@ Solo en Azure. **El login local debe seguir funcionando en todos estos casos**: 
 | HAP-77 | Lo ajeno sigue bloqueado | En ese día reabierto a medias, mirar la actividad del otro proyecto | Se ve, pero **no** se puede editar |
 | HAP-78 | **Y el total se recalcula** | Corregir y volver a aceptar el día | El total del día cuadra con lo que quedó, no con lo anterior |
 | HAP-79 | **El admin ya no deja corregir horas** | Abrir `/admin/legalizacion/dialegalizado/` y entrar en un día | Se ve en solo lectura: sin Guardar, sin Eliminar, y los renglones tampoco se editan. Corregir es reabrir |
+| HAP-80 | **Un día de hace más de 30 días se reabre y se corrige** | Reabrir un día anterior a la ventana de 30 días y entrar como esa persona | Sale en «Días hábiles sin registrar», el calendario deja elegir esa fecha, y se puede guardar |
+| HAP-81 | La excepción es ese día, no el pasado entero | Con ese día reabierto, intentar otro día viejo cualquiera | Sigue diciendo que solo se legalizan los últimos 30 días |
+| HAP-82 | Y se cierra sola | Corregir ese día y volver a aceptarlo; entrar de nuevo a esa fecha | Vuelve a estar fuera de la ventana |
 
 ---
 

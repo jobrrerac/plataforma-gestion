@@ -281,6 +281,14 @@ cuántas actividades va a devolver, contando solo las que le tocan a quien mira.
 El motivo es obligatorio, por lo mismo que ya lo era al devolver: reabrir sin
 decir qué está mal deja a la persona adivinando.
 
+**Un día reabierto escapa a la ventana de 30 días** mientras siga abierto. La
+ventana existe para que el pasado no quede abierto por inercia, y una reapertura
+es lo contrario del olvido: alguien con autoridad dijo, con nombre y motivo, que
+ese día concreto hay que corregirlo. Sin esa salida, reabrir un día viejo lo
+dejaría sin nadie capaz de arreglarlo —y sus horas ya no cuentan como
+aprobadas—, que es peor que no haberlo tocado. Se cierra sola en cuanto la
+persona vuelve a registrarlo.
+
 **Esta es la única vía.** El admin de Django ya no deja editar un día legalizado
 ni sus renglones: aquel formulario cambiaba horas firmadas sin dejar autor, ni
 motivo, ni copia de lo anterior, y borraba la firma del PM por el camino. Tener

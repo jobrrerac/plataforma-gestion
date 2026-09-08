@@ -60,7 +60,7 @@ class LegalizarDiaView(LoginRequiredMixin, View):
         # Limites del selector de fecha. La flecha de avanzar ya se deshabilita
         # en hoy, pero el `input type=date` la sorteaba: se podia teclear o
         # elegir del calendario un dia futuro.
-        ctx["fecha_min"], ctx["fecha_max"] = svc.rango_legalizable()
+        ctx["fecha_min"], ctx["fecha_max"] = svc.rango_legalizable(recurso)
 
         if recurso and fecha:
             # La puerta de verdad esta aqui, no en el atributo `max` del input:

@@ -768,3 +768,105 @@ class QuienPuedeReabrirTests(TestCase):
         with self.assertRaises(PermissionDenied) as ctx:
             svc.reabrir_dia(self.dia, otro, "me apetece")
         self.assertIn("otro proyecto", str(ctx.exception))
+
+
+class UnDiaReabiertoSePuedeCorregirTests(TestCase):
+    """Reabrir un día viejo no puede dejarlo sin nadie que lo arregle.
+
+    Legalizar tiene una ventana de 30 días hacia atrás, para que el pasado no
+    quede abierto por inercia. Hasta ahora el mensaje decía «para algo más
+    antiguo, pídeselo a un administrador», y el administrador lo resolvía
+    editando el día en el admin de Django.
+
+    Esa puerta se cerró: editaba horas firmadas sin dejar rastro. Pero cerrarla
+    dejó una trampa peor —y la abrió el mismo cambio que la creó—: al reabrir un
+    día de hace más de 30 días, sus horas dejan de contar como aprobadas y
+    **nadie** puede volver a registrarlas. El día se queda peor que si no se
+    hubiera tocado.
+
+    Un día reabierto escapa a la ventana mientras siga abierto. No es una
+    excepción cómoda: la ventana existe contra el olvido, y una reapertura es lo
+    contrario del olvido —alguien con autoridad dijo, con nombre y motivo, que
+    ese día concreto hay que corregirlo—. Se cierra sola en cuanto la persona
+    vuelve a registrarlo.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user("adm_viejo", "av@test.com", "clave-larga-1")
+        self.admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+        self.recurso = Recurso.objects.create(
+            nombre="Dia Antiguo", email="da@test.com", banda="SR",
+        )
+        self.tipo = TipoActividad.objects.create(nombre="Estudio viejo", requiere_proyecto=False)
+
+        # Un dia habil bastante mas atras que la ventana.
+        self.fecha = date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 20)
+        while self.fecha.weekday() >= 5:
+            self.fecha -= timedelta(days=1)
+
+        self.dia = DiaLegalizado.objects.create(
+            recurso=self.recurso, fecha=self.fecha, estado=DiaLegalizado.APROBADO,
+            total_horas=Decimal("4"), jornada_esperada=Decimal("8.5"),
+        )
+        RegistroHoras.objects.create(
+            dia=self.dia, tipo_actividad=self.tipo, horas=Decimal("4"),
+            detalle="lo que declaro entonces", estado=RegistroHoras.APROBADO,
+            aprobado_por=self.admin, aprobado_en=timezone.now(),
+        )
+
+    def test_antes_de_reabrirlo_la_ventana_manda(self):
+        """La ventana sigue en pie para todo lo demas: esto no la desactiva."""
+        self.assertIn(
+            "últimos", svc.motivo_no_legalizable(self.recurso, self.fecha),
+        )
+
+    def test_una_vez_reabierto_se_puede_corregir(self):
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        self.assertEqual(svc.motivo_no_legalizable(self.recurso, self.fecha), "")
+
+    def test_y_se_puede_guardar_de_verdad(self):
+        """`motivo_no_legalizable` es lo que pinta la pantalla; esta es la
+        puerta que de verdad bloqueaba al guardar."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        self.assertEqual(dia.pk, self.dia.pk)
+
+    def test_sale_en_la_lista_de_pendientes(self):
+        """Es la unica pantalla donde la persona se entera de que le devolvieron
+        algo: dejarlo fuera equivale a no habersele dicho."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        self.assertIn(self.fecha, svc.dias_pendientes(self.recurso))
+
+    def test_el_selector_llega_hasta_ese_dia(self):
+        """Poder corregirlo pero no poder elegir la fecha es la misma trampa un
+        paso mas alla."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        desde, _ = svc.rango_legalizable(self.recurso)
+        self.assertLessEqual(desde, self.fecha)
+
+    def test_no_le_abre_la_ventana_a_los_demas_dias(self):
+        """La excepcion es ese dia, no el pasado entero de esa persona."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        otro = self.fecha - timedelta(days=7)
+        self.assertIn("últimos", svc.motivo_no_legalizable(self.recurso, otro))
+
+    def test_ni_a_los_dias_viejos_de_otra_persona(self):
+        otro = Recurso.objects.create(nombre="Ajeno", email="aj@test.com", banda="SR")
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        self.assertIn("últimos", svc.motivo_no_legalizable(otro, self.fecha))
+
+    def test_al_volver_a_registrarlo_la_ventana_vuelve(self):
+        """La salida se cierra sola: si no, reabrir un dia una vez dejaria esa
+        fecha editable para siempre."""
+        svc.reabrir_dia(self.dia, self.admin, "el proyecto esta mal imputado")
+        self.dia.refresh_from_db()
+        self.dia.estado = DiaLegalizado.REGISTRADO
+        self.dia.save(update_fields=["estado"])
+        self.assertIn("últimos", svc.motivo_no_legalizable(self.recurso, self.fecha))
+
+    def test_el_mensaje_manda_a_la_puerta_que_si_existe(self):
+        """Decia «pideselo a un administrador», que era el formulario del admin.
+        Ese formulario ya no deja escribir: el mensaje mandaba a una puerta
+        cerrada."""
+        texto = svc.motivo_no_legalizable(self.recurso, self.fecha)
+        self.assertIn("reabra", texto)
