@@ -532,6 +532,22 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 | SEG-55 | **El PM no registra acciones** | Como `qa.pm`, entrar a Gestionar feedback | **No** aparece el formulario: sería un segundo canal de feedback |
 | SEG-56 | **La persona no ve el seguimiento** | Como `qa.ingeniero` | No hay forma de leer esas notas: son de gestión, no mensajes dirigidos |
 | SEG-57 | **La columna dice qué cuenta** | En el dashboard de proyecto, mirar la tabla del equipo | La cabecera es «Bloqueos activos», no «Bloqueada» |
+| SEG-58 | **El PM solo ve sus proyectos** | Como `qa.pm`, abrir el dashboard de proyecto | En el desplegable salen **solo** los que dirige |
+| SEG-59 | **Y no se cuela otro por la URL** | Entrar a `/dashboard/proyecto/?proyecto=<id_ajeno>` | Vuelve a «elige un proyecto». Si no, se leería el equipo y las horas de cualquiera |
+| SEG-60 | **El aprobador delegado entra** | Como `qa.visor` designada delegada de un proyecto, abrir el dashboard | Ve ese proyecto. La designación es la autorización |
+| SEG-61 | Y también solo el suyo | Probar con el id de otro proyecto | No lo abre |
+| SEG-62 | **Un ingeniero sin delegación sigue fuera** | Como `qa.ingeniero`, entrar a `/dashboard/proyecto/` | 403 |
+| SEG-63 | El enlace acompaña al permiso | Mirar el dashboard de ocupación como delegado y como ingeniero | Al delegado le sale «Ver por proyecto»; al ingeniero no |
+| SEG-64 | **El delegado no ve la señal reservada** | Como delegado, mirar las cifras de cabecera | **No** aparece «Claridad del objetivo»: un delegado es parte del proyecto |
+| SEG-65 | **La tabla se pagina** | En el dashboard de proyecto, con más de 25 actividades | Salen 25 y abajo «Página 1 de N» con Anterior/Siguiente |
+| SEG-66 | **Filtro por fechas** | Poner Desde y Hasta y pulsar Filtrar | Solo salen las actividades de ese rango |
+| SEG-67 | **Las cifras de arriba no se mueven** | Filtrar una semana y mirar «Horas aprobadas» | Sigue siendo el total del proyecto: el resumen resume el proyecto, no el filtro |
+| SEG-68 | Fechas al revés | Poner Desde posterior a Hasta | Las endereza; es un error de dedo, no una petición de cero resultados |
+| SEG-69 | **Quién aprobó** | Mirar la última columna | Sale el nombre de quien firmó cada actividad |
+| SEG-70 | **Descargar el detalle** | Pulsar Descargar | Baja un `.tsv` que se abre en Excel con los acentos bien |
+| SEG-71 | Baja lo filtrado entero | Filtrar un mes con 40 actividades, ir a la página 2 y descargar | Trae las **40**, no las 25 de una página |
+| SEG-72 | **Sin columnas de dinero** | Abrir el TSV | No hay tarifa ni costo: la pantalla la abre un delegado, que suele ser Ingeniero |
+| SEG-73 | Un detalle con tabuladores no rompe el fichero | Aprobar una actividad cuyo detalle tenga un tabulador y descargar | Todas las filas tienen 6 columnas |
 
 ---
 
