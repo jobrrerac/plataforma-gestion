@@ -100,6 +100,11 @@
 {% endblock %}
 
 {% block content %}
+{% comment %}
+  `base.html` no envuelve el bloque de contenido: cada plantilla pone su propio
+  contenedor. Sin el, el texto queda pegado al borde de la ventana.
+{% endcomment %}
+<div class="container py-4" style="max-width:1120px">
 <div class="blk-wrap">
 
   {% if messages %}
@@ -284,5 +289,6 @@
   </section>
   {% endif %}
 
+</div>
 </div>
 {% endblock %}
