@@ -249,27 +249,97 @@
     {% endif %}
   </div>
 
-  {# ── Lo último declarado ───────────────────────────────────────────── #}
-  <h5 class="fw-bold mb-3 seccion">Últimas actividades aprobadas</h5>
+  {# ── El detalle de lo aprobado ─────────────────────────────────────── #}
+  {% comment %}
+    Esta tabla existe para que el equipo pueda ver QUE se aprobo exactamente y
+    con que detalle, no para sacar cifras: esas estan arriba y no cambian al
+    filtrar. Por eso el filtro de fechas solo afecta a esta parte.
+  {% endcomment %}
+  <div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
+    <h5 class="fw-bold mb-0 seccion">Actividades aprobadas</h5>
+    <span class="text-muted" style="font-size:.84rem">
+      {{ total_detalle }} actividad{{ total_detalle|pluralize:"es" }} · {{ horas_detalle|floatformat:1 }} h
+    </span>
+  </div>
+
+  <form method="get" class="card p-3 mb-3">
+    <input type="hidden" name="proyecto" value="{{ proyecto.pk }}">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Desde</label>
+        <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Hasta</label>
+        <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-6 d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-sm btn-dark">Filtrar</button>
+        {% if desde or hasta %}
+        <a href="?proyecto={{ proyecto.pk }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        {% endif %}
+        {% comment %}
+          Descarga lo FILTRADO entero, no la pagina que se este viendo: quien
+          exporta quiere el periodo completo, y darle 25 filas por ir en la
+          primera pagina es justo lo que hace desconfiar del boton.
+        {% endcomment %}
+        <a class="btn btn-sm btn-outline-dark ms-auto"
+           href="?proyecto={{ proyecto.pk }}&desde={{ desde }}&hasta={{ hasta }}&formato=tsv">
+          <i class="bi bi-download me-1"></i>Descargar ({{ total_detalle }})
+        </a>
+      </div>
+    </div>
+  </form>
+
   <div class="card tabla-wrap">
-    {% if ultimas %}
+    {% if pagina.object_list %}
     <table class="tabla">
-      <thead><tr><th>Día</th><th>Persona</th><th>Qué hizo</th><th class="num">Horas</th></tr></thead>
+      <thead>
+        <tr><th>Día</th><th>Persona</th><th>Qué hizo</th><th class="num">Horas</th><th>Aprobó</th></tr>
+      </thead>
       <tbody>
-        {% for r in ultimas %}
+        {% for r in pagina %}
         <tr>
           <td style="white-space:nowrap">{{ r.dia.fecha }}</td>
           <td style="white-space:nowrap">{{ r.dia.recurso.nombre }}</td>
           <td>{{ r.detalle }}</td>
           <td class="num">{{ r.horas }}</td>
+          <td style="white-space:nowrap;font-size:.82rem">
+            {% if r.aprobado_por %}
+              {{ r.aprobado_por.get_full_name|default:r.aprobado_por.username }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    <div class="vacio">Sin horas aprobadas en este proyecto todavía.</div>
+    <div class="vacio">
+      {% if desde or hasta %}Sin actividades aprobadas en ese rango.
+      {% else %}Sin horas aprobadas en este proyecto todavía.{% endif %}
+    </div>
     {% endif %}
   </div>
+
+  {% if pagina.paginator.num_pages > 1 %}
+  <nav class="d-flex flex-wrap align-items-center gap-2 mt-3" aria-label="Páginas">
+    {% if pagina.has_previous %}
+    <a class="btn btn-sm btn-outline-secondary"
+       href="?proyecto={{ proyecto.pk }}&desde={{ desde }}&hasta={{ hasta }}&pagina={{ pagina.previous_page_number }}">
+      <i class="bi bi-chevron-left"></i> Anterior
+    </a>
+    {% endif %}
+    <span class="text-muted" style="font-size:.84rem">
+      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+    </span>
+    {% if pagina.has_next %}
+    <a class="btn btn-sm btn-outline-secondary"
+       href="?proyecto={{ proyecto.pk }}&desde={{ desde }}&hasta={{ hasta }}&pagina={{ pagina.next_page_number }}">
+      Siguiente <i class="bi bi-chevron-right"></i>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
 
   {% endif %}
 </div>

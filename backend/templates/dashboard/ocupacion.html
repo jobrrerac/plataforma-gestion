@@ -192,7 +192,12 @@
         explicar se lee como "ocupadisimo" — justo lo contrario.
       {% endcomment %}
       <span><span class="legend-box" style="background:repeating-linear-gradient(45deg, #7c3aed, #7c3aed 4px, #8b5cf6 4px, #8b5cf6 8px)"></span>Vacaciones o permiso</span>
-      {% if puede_ver_todo %}
+      {% comment %}
+        No basta `puede_ver_todo`: un aprobador delegado suele ser Ingeniero y
+        tambien dirige un proyecto. El enlace sale a quien tenga alguno que ver,
+        y la pantalla acota por dentro lo que cada quien alcanza.
+      {% endcomment %}
+      {% if puede_ver_proyectos %}
       <a href="/dashboard/proyecto/" class="ms-auto" style="color:#d6197f;text-decoration:none;font-weight:600">
         <i class="bi bi-kanban me-1"></i>Ver por proyecto
       </a>

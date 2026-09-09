@@ -7,13 +7,14 @@ from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
 from apps.accounts.roles import (
-    es_admin, es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales,
-    puede_ver_todo,
+    es_admin, es_admin_o_pm, es_visor, puede_ver_costos,
+    puede_ver_datos_personales, puede_ver_todo,
 )
 from apps.core.models import Recurso, Proyecto, Skill, recursos_asignables
 from apps.assignments.models import Asignacion
@@ -64,9 +65,20 @@ class OcupacionDashboardView(LoginRequiredMixin, TemplateView):
         cortas y estables, y una peticion extra solo para rellenar dos selects
         es ruido.
         """
+        from apps.seguimiento.services import _proyectos_que_dirige
+
         ctx = super().get_context_data(**kwargs)
         ctx["proyectos_filtro"] = Proyecto.objects.filter(estado="ACTIVO").order_by("codigo")
         ctx["recursos_filtro"] = recursos_asignables().order_by("nombre")
+        # Si ofrecer el enlace al dashboard por proyecto. No basta
+        # `puede_ver_todo`: un aprobador delegado suele ser Ingeniero y también
+        # dirige uno. Se pregunta por lo mismo que decide el acceso a esa
+        # pantalla, para que el enlace y la puerta no puedan discrepar.
+        ctx["puede_ver_proyectos"] = (
+            es_admin(self.request.user)
+            or es_visor(self.request.user)
+            or _proyectos_que_dirige(self.request.user).exists()
+        )
         return ctx
 
 
@@ -1227,8 +1239,21 @@ class GestionarView(_HubView):
 
     def items(self, request):
         from apps.accounts.context_processors import _puede_aprobar_horas
+        from apps.seguimiento.services import _proyectos_que_dirige
 
         return [
+            {
+                "url": "/dashboard/proyecto/", "icono": "bi-kanban",
+                "titulo": "Ver un proyecto",
+                "texto": "Cómo va: equipo, horas, bloqueos y fechas, en una pantalla.",
+                # Quien dirige alguno, aunque sea por delegación. El alcance de
+                # lo que verá dentro lo pone la propia pantalla.
+                "visible": (
+                    es_admin(request.user)
+                    or es_visor(request.user)
+                    or _proyectos_que_dirige(request.user).exists()
+                ),
+            },
             {
                 "url": "/horas/aprobar/", "icono": "bi-clipboard-check", "titulo": "Aprobar horas",
                 "texto": "La cola de aprobación, ordenada por lo que pide más atención.",
@@ -1276,19 +1301,47 @@ class DashboardProyectoView(View):
     template = "dashboard/proyecto.html"
 
     def get(self, request):
-        if not puede_ver_todo(request.user):
-            raise PermissionDenied(
-                "Esta pantalla resume el trabajo de otras personas."
-            )
-
         from apps.legalizacion.models import RegistroHoras
         from apps.seguimiento.models import Bloqueante, Feedback
+        from apps.seguimiento.services import _proyectos_que_dirige
 
+        # El alcance es por PROYECTO, no por rol.
+        #
+        # Quien dirige uno —su jefe de proyecto o su aprobador delegado— ve ese
+        # proyecto, y solo ese. Es la misma regla con la que ya se firman las
+        # horas: la designación ES la autorización, y alcanza justo hasta donde
+        # alcanza el proyecto designado.
+        #
+        # Importa porque un aprobador delegado suele ser un Ingeniero, y un
+        # Ingeniero no ve a nadie más que a sí mismo. Abrirle la pantalla entera
+        # lo llevaría de «ve su proyecto» a «ve el equipo completo de la
+        # empresa» por una delegación que se creó para otra cosa.
+        #
         # `Proyecto` no tiene `activo`: lo que tiene es `estado`, y el gestor por
         # defecto ya deja fuera lo borrado en blando. Se listan todos porque un
-        # proyecto cerrado tambien se consulta —justo despues de cerrarlo es
-        # cuando se mira como fue.
-        proyectos = Proyecto.objects.all().order_by("codigo")
+        # proyecto cerrado también se consulta —justo después de cerrarlo es
+        # cuando se mira cómo fue.
+        # Ojo: **un PM no entra por «ve todo»**. `puede_ver_todo` incluye al PM
+        # —lo necesita para el buscador de disponibilidad y el heatmap— y usarlo
+        # aquí le abriría el equipo, las horas y los bloqueos de proyectos que no
+        # dirige. Lo que decide es dirigir el proyecto, no el rol.
+        #
+        # El Admin y el Visor sí ven todos: uno responde por el conjunto y el
+        # otro existe precisamente para mirarlo sin tocar nada.
+        if es_admin(request.user) or es_visor(request.user):
+            proyectos = Proyecto.objects.all()
+        else:
+            proyectos = _proyectos_que_dirige(request.user)
+        proyectos = proyectos.order_by("codigo")
+
+        if not proyectos.exists():
+            raise PermissionDenied(
+                "Esta pantalla resume el trabajo de un proyecto. Se abre para "
+                "quien lo dirige."
+            )
+
+        # Se busca DENTRO del alcance: un id de otro proyecto no encuentra nada,
+        # así que no hace falta una comprobación aparte que se pueda olvidar.
         elegido = None
         if request.GET.get("proyecto"):
             elegido = proyectos.filter(pk=request.GET["proyecto"]).first()
@@ -1320,11 +1373,16 @@ class DashboardProyectoView(View):
         fin_asignaciones = max(fines) if fines else None
 
         # ── Lo declarado ─────────────────────────────────────────────────────
+        #
+        # El filtro de fechas se aplica solo al DETALLE, no a las cifras de
+        # cabecera: esas resumen el proyecto entero y cambiarlas al filtrar
+        # convertiria el resumen en otra cosa cada vez que alguien mira una
+        # semana concreta.
         registros = list(
             RegistroHoras.objects
             .filter(proyecto=elegido, estado=RegistroHoras.APROBADO)
-            .select_related("dia__recurso", "tipo_actividad")
-            .order_by("-dia__fecha")
+            .select_related("dia__recurso", "tipo_actividad", "aprobado_por")
+            .order_by("-dia__fecha", "-id")
         )
         horas = sum((r.horas for r in registros), Decimal("0"))
         facturables = sum(
@@ -1388,7 +1446,29 @@ class DashboardProyectoView(View):
                     "cuantos": len(notas),
                 }
 
+        # ── El detalle: filtrado, exportable y paginado ──────────────────────
+        desde, hasta = self._rango(request)
+        detalle = [
+            r for r in registros
+            if (desde is None or r.dia.fecha >= desde)
+            and (hasta is None or r.dia.fecha <= hasta)
+        ]
+
+        # La descarga lleva TODO lo filtrado, no la pagina que se este viendo:
+        # quien exporta quiere el periodo entero, y darle 25 filas porque iba
+        # por la primera pagina es justo el fallo que hace desconfiar del boton.
+        if request.GET.get("formato") == "tsv":
+            return self._tsv(elegido, detalle, desde, hasta)
+
+        paginador = Paginator(detalle, 25)
+        pagina = paginador.get_page(request.GET.get("pagina"))
+
         ctx.update({
+            "desde": desde.isoformat() if desde else "",
+            "hasta": hasta.isoformat() if hasta else "",
+            "pagina": pagina,
+            "total_detalle": len(detalle),
+            "horas_detalle": sum((r.horas for r in detalle), Decimal("0")),
             "asignaciones": asignaciones,
             "activas": activas,
             "fin_asignaciones": fin_asignaciones,
@@ -1396,7 +1476,6 @@ class DashboardProyectoView(View):
             "facturables": facturables,
             "no_facturables": horas - facturables,
             "actividades": len(registros),
-            "ultimas": registros[:15],
             "por_recurso": sorted(
                 por_recurso.values(), key=lambda f: -f["horas"],
             ),
@@ -1408,3 +1487,63 @@ class DashboardProyectoView(View):
             "hoy": hoy,
         })
         return render(request, self.template, ctx)
+
+    # -- detalle ------------------------------------------------------------
+
+    def _rango(self, request):
+        """Fechas del filtro, o None. Una fecha ilegible se ignora.
+
+        Se ignora en vez de reventar: quien teclea mal una fecha en la barra de
+        direcciones espera ver la pantalla, no un 500.
+        """
+        def leer(nombre):
+            valor = request.GET.get(nombre, "").strip()
+            try:
+                return date.fromisoformat(valor) if valor else None
+            except ValueError:
+                return None
+
+        desde, hasta = leer("desde"), leer("hasta")
+        # Invertidas, se enderezan. Es un error de dedo, no una peticion de
+        # ningun resultado.
+        if desde and hasta and desde > hasta:
+            desde, hasta = hasta, desde
+        return desde, hasta
+
+    def _tsv(self, proyecto, registros, desde, hasta):
+        """El detalle en TSV, para pegarlo en una hoja de cálculo.
+
+        TSV y no CSV porque el separador decimal de estas maquinas es la coma:
+        un CSV con "6,5" en la columna de horas se abre partido en dos.
+
+        Sin columnas de dinero a proposito. Esta pantalla la abre un aprobador
+        delegado, que suele ser un Ingeniero, y el Ingeniero no ve costos.
+        """
+        import csv
+
+        from django.http import HttpResponse
+
+        nombre = f"actividades-{proyecto.codigo.replace('/', '-')}"
+        if desde or hasta:
+            nombre += f"-{desde or 'inicio'}_{hasta or 'hoy'}"
+
+        respuesta = HttpResponse(content_type="text/tab-separated-values; charset=utf-8")
+        respuesta["Content-Disposition"] = f'attachment; filename="{nombre}.tsv"'
+        # BOM: sin el, Excel abre los acentos rotos en Windows.
+        respuesta.write("\ufeff")
+
+        escritor = csv.writer(respuesta, delimiter="\t", lineterminator="\n")
+        escritor.writerow(["Dia", "Persona", "Actividad", "Que hizo", "Horas", "Aprobo"])
+        for r in registros:
+            escritor.writerow([
+                r.dia.fecha.isoformat(),
+                r.dia.recurso.nombre,
+                r.tipo_actividad.nombre if r.tipo_actividad_id else "",
+                # El detalle es texto libre: un tabulador o un salto de linea
+                # dentro partiria la fila y correria las columnas del resto.
+                " ".join(r.detalle.split()),
+                str(r.horas),
+                (r.aprobado_por.get_full_name() or r.aprobado_por.username)
+                if r.aprobado_por_id else "",
+            ])
+        return respuesta
