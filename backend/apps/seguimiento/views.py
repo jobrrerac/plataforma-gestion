@@ -334,11 +334,16 @@ class FeedbackView(LoginRequiredMixin, View):
         """Proyectos en los que ha participado cada persona observable.
 
         Se cruza con lo que quien observa alcanza: un PM ve los suyos, el Admin
-        todos. Va como JSON al navegador porque el desplegable tiene que
-        reaccionar al cambiar de persona sin recargar la pagina.
-        """
-        import json
+        todos. Va al navegador porque el desplegable tiene que reaccionar al
+        cambiar de persona sin recargar la pagina.
 
+        Devuelve un **diccionario**, no una cadena. Serializarlo aqui y volver a
+        pasarlo por `|json_script` en la plantilla lo codifica dos veces: el
+        `JSON.parse` del navegador devuelve entonces una cadena en vez de un
+        objeto, `datos[id]` es `undefined` y el desplegable de proyecto se queda
+        vacio sin que salte ningun error. Es exactamente el sintoma que se
+        reporto tres veces.
+        """
         from apps.assignments.models import Asignacion
 
         alcance = None
@@ -363,7 +368,7 @@ class FeedbackView(LoginRequiredMixin, View):
                     "id": a.proyecto_id,
                     "texto": f"{a.proyecto.codigo} · {a.proyecto.nombre}",
                 })
-        return json.dumps(mapa)
+        return mapa
 
     def _posibles_observadores(self, usuario, recursos):
         """A quién se le puede atribuir una observación transcrita.

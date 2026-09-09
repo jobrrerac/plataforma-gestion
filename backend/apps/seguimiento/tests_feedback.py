@@ -432,3 +432,90 @@ class QueSeHizoConEsoTests(BaseFeedback):
             "texto": "escalado a Martin por escrito, citando las fechas",
         })
         self.assertEqual(svc.acciones_de(self.admin, self.recurso).count(), 1)
+
+
+class ElProyectoSigueALaPersonaTests(BaseFeedback):
+    """El desplegable de proyecto se llena con los proyectos de quien se elige.
+
+    Observar a alguien «en» un proyecto donde nunca estuvo produce una
+    observacion que despues no sostiene nadie, asi que la lista se acota. Va al
+    navegador en un `json_script` para que reaccione sin recargar.
+
+    Fallo tres veces seguidas por un motivo que no daba ningun error: la vista
+    serializaba el mapa con `json.dumps` y la plantilla lo volvia a serializar
+    con `|json_script`. Doble codificado, el `JSON.parse` del navegador devuelve
+    una CADENA en vez de un objeto, `datos[id]` es `undefined`, y el desplegable
+    se queda vacio en silencio. Estas pruebas miran lo que de verdad llega al
+    navegador, no lo que la vista cree que manda.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.delegada = User.objects.create_user("del_map", "dm@test.com", "clave-larga-1")
+        self.delegada.groups.add(Group.objects.get_or_create(name="Ingeniero")[0])
+        self.proyecto.aprobador_delegado = self.delegada
+        self.proyecto.save(update_fields=["aprobador_delegado"])
+
+    def _mapa_del_navegador(self, usuario):
+        """Lo que sale del `json_script`, parseado como lo haria el navegador."""
+        import json
+        import re
+
+        self.client.force_login(usuario)
+        html = self.client.get(reverse("feedback")).content.decode()
+        m = re.search(
+            r'<script id="proyectos-por-recurso"[^>]*>(.*?)</script>', html, re.S,
+        )
+        self.assertIsNotNone(m, "el mapa no llego al navegador")
+        return json.loads(m.group(1))
+
+    def test_llega_como_objeto_y_no_como_cadena(self):
+        """La prueba que faltaba. Con doble codificacion esto es un `str`."""
+        mapa = self._mapa_del_navegador(self.pm)
+        self.assertIsInstance(
+            mapa, dict,
+            "el mapa llega doble-codificado: JSON.parse devolvera una cadena y "
+            "el desplegable se quedara vacio sin ningun error",
+        )
+
+    def test_trae_el_proyecto_de_esa_persona(self):
+        mapa = self._mapa_del_navegador(self.pm)
+        entradas = mapa[str(self.recurso.pk)]
+        self.assertEqual(entradas[0]["id"], self.proyecto.pk)
+        self.assertIn(self.proyecto.codigo, entradas[0]["texto"])
+
+    def test_un_delegado_tambien_lo_recibe(self):
+        """El caso que lo destapo: un aprobador delegado, con rol Ingeniero."""
+        mapa = self._mapa_del_navegador(self.delegada)
+        self.assertIn(str(self.recurso.pk), mapa)
+
+    def test_cada_entrada_trae_lo_que_el_navegador_pinta(self):
+        """Sin `texto` el desplegable pinta una opcion en blanco, que es el otro
+        sintoma que se vio en pantalla."""
+        mapa = self._mapa_del_navegador(self.pm)
+        for entradas in mapa.values():
+            for e in entradas:
+                self.assertTrue(e.get("texto"), f"opcion sin etiqueta: {e}")
+                self.assertTrue(e.get("id"))
+
+    def test_no_trae_proyectos_fuera_del_alcance(self):
+        otro_pm = User.objects.create_user("pm5_map", "p5@test.com", "clave-larga-1")
+        otro_pm.groups.add(Group.objects.get(name="PM"))
+        ajeno = Proyecto.objects.create(
+            codigo="MAP-X", nombre="Ajeno", pm=otro_pm,
+            fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 12, 31),
+        )
+        Asignacion.objects.create(
+            recurso=self.recurso, proyecto=ajeno,
+            fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 12, 31),
+            horas_totales=10, intensidad_diaria=2,
+            estado="APROBADA", solicitada_por=otro_pm,
+        )
+        codigos = [
+            e["texto"] for entradas in self._mapa_del_navegador(self.pm).values()
+            for e in entradas
+        ]
+        self.assertFalse(
+            [c for c in codigos if "MAP-X" in c],
+            "un PM no puede observar a alguien en un proyecto que no dirige",
+        )
