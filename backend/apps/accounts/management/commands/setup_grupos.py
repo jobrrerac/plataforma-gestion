@@ -57,6 +57,13 @@ class Command(BaseCommand):
             # desde la que se reclaman dias sin registrar, sin desplegar. Sin
             # `add` ni `delete` porque es una fila unica.
             ("legalizacion", "parametroslegalizacion",  ["change", "view"]),
+            # Seguimiento. El Admin corrige y borra —en blando— porque es quien
+            # limpia un bloqueante mal abierto o una observacion duplicada. Los
+            # dos modelos se operan desde su pantalla, no desde el admin; esto
+            # es para el mantenimiento y para leer el historico.
+            ("seguimiento",  "bloqueante",              ["add", "change", "delete", "view"]),
+            ("seguimiento",  "feedback",                ["add", "change", "delete", "view"]),
+            ("seguimiento",  "acciondeseguimiento",     ["add", "change", "delete", "view"]),
         ])
 
         perms_pm = self._perms([

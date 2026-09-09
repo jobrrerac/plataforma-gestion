@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block page_title %}Dashboard de proyecto{% endblock %}
+{% block active_dashboard %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+
+  /* Cifras de cabecera. Solo las cuatro que se miran de un vistazo en una
+     reunión de seguimiento; el resto vive en las tablas de abajo. */
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+  .tile { background:#fff; border:1px solid #eee; border-radius:12px; padding:14px 16px; }
+  .tile .n { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.6rem; line-height:1.1; color:#191b2e; }
+  .tile .l { font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:#8a8f9c; font-weight:600; }
+  .tile .sub { font-size:.76rem; color:#676d7a; margin-top:.15rem; }
+  .tile.alerta { border-color:#f0c9c7; background:#fdf8f8; }
+  .tile.alerta .n { color:#a52a25; }
+
+  .ficha { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px 22px; }
+  .ficha .k { font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:#8a8f9c; font-weight:600; }
+  .ficha .v { font-size:.9rem; color:#23262f; }
+
+  table.tabla { width:100%; font-size:.86rem; }
+  table.tabla thead th {
+    font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:#8a8f9c;
+    font-weight:700; padding:10px 12px; background:#f7f7fa; border-bottom:1px solid #e8e8ee;
+    white-space:nowrap; text-align:left;
+  }
+  table.tabla tbody td { padding:10px 12px; border-bottom:1px solid #f2f2f6; vertical-align:top; }
+  table.tabla tbody tr:last-child td { border-bottom:0; }
+  .num { font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
+
+  .chip { font-size:.7rem; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .c-ok { background:#d1fae5; color:#065f46; }
+  .c-mal { background:#fee2e2; color:#991b1b; }
+  .c-aviso { background:#fef3c7; color:#92400e; }
+  .c-neutro { background:#eef0f4; color:#4b5563; }
+
+  .vacio { text-align:center; color:#8a8f9c; padding:34px 12px; }
+  .tabla-wrap { overflow-x:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include "componentes/franja_pagina.html" with volver="/dashboard/" icono="bi-kanban" titulo="Dashboard de" resaltado="proyecto" %}
+
+<div class="container py-4" style="max-width:1180px">
+
+  <form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-7">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Proyecto</label>
+        <select name="proyecto" class="form-select" onchange="this.form.submit()">
+          <option value="">— elige un proyecto —</option>
+          {% for p in proyectos %}
+          <option value="{{ p.pk }}"{% if proyecto and proyecto.pk == p.pk %} selected{% endif %}>
+            {{ p.codigo }} · {{ p.nombre }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5 text-muted" style="font-size:.8rem">
+        Una pantalla por proyecto: el plan, lo declarado y lo que lo frena, juntos.
+      </div>
+    </div>
+  </form>
+
+  {% if not proyecto %}
+  <div class="card vacio">
+    <div><i class="bi bi-kanban me-2"></i>Elige un proyecto para ver su resumen.</div>
+  </div>
+  {% else %}
+
+  {# ── Cifras de cabecera ────────────────────────────────────────────── #}
+  <div class="tiles mb-4">
+    <div class="tile">
+      <div class="l">Recursos activos</div>
+      <div class="n">{{ activas|length }}</div>
+      <div class="sub">{{ asignaciones|length }} asignacion{{ asignaciones|length|pluralize:"es" }} en total</div>
+    </div>
+    <div class="tile">
+      <div class="l">Horas aprobadas</div>
+      <div class="n">{{ horas|floatformat:1 }}</div>
+      <div class="sub">{{ facturables|floatformat:1 }} h facturables</div>
+    </div>
+    <div class="tile">
+      <div class="l">Actividades</div>
+      <div class="n">{{ actividades }}</div>
+      <div class="sub">renglones declarados y aprobados</div>
+    </div>
+    <div class="tile {% if vencidos %}alerta{% endif %}">
+      <div class="l">Bloqueantes abiertos</div>
+      <div class="n">{{ bloqueantes_abiertos|length }}</div>
+      <div class="sub">
+        {% if vencidos %}{{ vencidos|length }} por encima de 48 h{% else %}ninguno vencido{% endif %}
+      </div>
+    </div>
+    <div class="tile">
+      <div class="l">Tiempo de desbloqueo</div>
+      <div class="n">
+        {% if media_desbloqueo %}{{ media_desbloqueo|floatformat:0 }} h{% else %}—{% endif %}
+      </div>
+      <div class="sub">media de {{ bloqueantes_resueltos|length }} resuelto{{ bloqueantes_resueltos|length|pluralize }}</div>
+    </div>
+    {% if claridad %}
+    {% comment %}
+      Solo para el Admin. Es el feedback que se pidio con la promesa de que no lo
+      leyera el jefe de proyecto, y esta pantalla la ve tambien un PM.
+    {% endcomment %}
+    <div class="tile {% if claridad.media < 3 %}alerta{% endif %}">
+      <div class="l">Claridad del objetivo</div>
+      <div class="n">{{ claridad.media }}<span style="font-size:.9rem;color:#8a8f9c">/5</span></div>
+      <div class="sub">según {{ claridad.cuantos }} respuesta{{ claridad.cuantos|pluralize }} del equipo</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Ficha ─────────────────────────────────────────────────────────── #}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-3 seccion">{{ proyecto.codigo }} · {{ proyecto.nombre }}</h5>
+    <div class="ficha">
+      <div><div class="k">Cliente</div><div class="v">{{ proyecto.cliente }}</div></div>
+      <div><div class="k">Estado</div><div class="v">{{ proyecto.get_estado_display }}</div></div>
+      <div>
+        <div class="k">Jefe de proyecto</div>
+        <div class="v">{{ proyecto.pm.get_full_name|default:proyecto.pm.username }}</div>
+      </div>
+      <div>
+        <div class="k">Aprobador delegado</div>
+        <div class="v">
+          {% if proyecto.aprobador_delegado %}
+            {{ proyecto.aprobador_delegado.get_full_name|default:proyecto.aprobador_delegado.username }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div><div class="k">Inicio</div><div class="v">{{ proyecto.fecha_inicio }}</div></div>
+      <div>
+        <div class="k">Fin previsto</div>
+        <div class="v">{{ proyecto.fecha_fin|default:"sin fecha" }}</div>
+      </div>
+      <div>
+        <div class="k">Fin de las asignaciones</div>
+        <div class="v">
+          {{ fin_asignaciones|default:"—" }}
+          {% if fin_asignaciones and proyecto.fecha_fin and fin_asignaciones > proyecto.fecha_fin %}
+          {% comment %}
+            Gente asignada mas alla del fin del proyecto. No se corrige solo: o
+            el proyecto se alarga o esas asignaciones sobran, y las dos cosas
+            hay que decidirlas.
+          {% endcomment %}
+          <span class="chip c-aviso ms-1">pasa del fin previsto</span>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <div class="k">Facturable</div>
+        <div class="v">{% if proyecto.facturable %}Sí{% else %}No (interno){% endif %}</div>
+      </div>
+      {% if proyecto.codigo_pep %}
+      <div><div class="k">PEP</div><div class="v">{{ proyecto.codigo_pep }}</div></div>
+      {% endif %}
+      {% if proyecto.grafo %}
+      <div><div class="k">Grafo</div><div class="v">{{ proyecto.grafo }}</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── El equipo ─────────────────────────────────────────────────────── #}
+  <h5 class="fw-bold mb-3 seccion">El equipo</h5>
+  <div class="card mb-4 tabla-wrap">
+    {% if por_recurso %}
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Persona</th><th class="num">Horas</th><th class="num">Actividades</th>
+          <th>Último día declarado</th><th class="num">Bloqueos activos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in por_recurso %}
+        <tr>
+          <td>
+            <a href="{% url 'recurso-detalle' f.recurso.pk %}" style="color:#191b2e;font-weight:600;text-decoration:none">
+              {{ f.recurso.nombre }}
+            </a>
+            <span class="text-muted d-block" style="font-size:.76rem">{{ f.recurso.get_banda_display }}</span>
+          </td>
+          <td class="num">{{ f.horas|floatformat:1 }}</td>
+          <td class="num">{{ f.actividades }}</td>
+          <td>
+            {% if f.ultimo %}{{ f.ultimo }}
+            {% else %}<span class="chip c-aviso">sin declarar nada</span>{% endif %}
+          </td>
+          <td class="num">
+            {% if f.bloqueantes %}<span class="chip c-mal">{{ f.bloqueantes }}</span>
+            {% else %}<span class="chip c-ok">0</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="vacio">Nadie asignado a este proyecto todavía.</div>
+    {% endif %}
+  </div>
+
+  {# ── Lo que lo frena ───────────────────────────────────────────────── #}
+  <h5 class="fw-bold mb-3 seccion">
+    Bloqueantes <span class="text-muted fw-normal">({{ bloqueantes_abiertos|length }} abiertos)</span>
+  </h5>
+  <div class="card mb-4 tabla-wrap">
+    {% if bloqueantes_abiertos or bloqueantes_resueltos %}
+    <table class="tabla">
+      <thead>
+        <tr><th>Qué frena</th><th>A quién</th><th>Espera a</th><th class="num">Tiempo</th></tr>
+      </thead>
+      <tbody>
+        {% for b in bloqueantes_abiertos %}
+        <tr {% if b.vencido %}style="background:#fdf8f8"{% endif %}>
+          <td class="fw-semibold">{{ b.necesito }}</td>
+          <td>{{ b.recurso.nombre }}</td>
+          <td>
+            {{ b.bloqueador }}
+            <span class="text-muted d-block" style="font-size:.74rem">{{ b.get_rol_que_resuelve_display }}</span>
+          </td>
+          <td class="num">
+            <span class="chip {% if b.vencido %}c-mal{% else %}c-neutro{% endif %}">
+              {{ b.horas_abierto|floatformat:0 }} h
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+        {% for b in bloqueantes_resueltos %}
+        <tr style="opacity:.6">
+          <td class="fw-semibold">{{ b.necesito }}</td>
+          <td>{{ b.recurso.nombre }}</td>
+          <td>{{ b.bloqueador }}</td>
+          <td class="num"><span class="chip c-ok">{{ b.horas_abierto|floatformat:0 }} h</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="vacio"><i class="bi bi-check2-circle me-2"></i>Nada registrado como bloqueante.</div>
+    {% endif %}
+  </div>
+
+  {# ── Lo último declarado ───────────────────────────────────────────── #}
+  <h5 class="fw-bold mb-3 seccion">Últimas actividades aprobadas</h5>
+  <div class="card tabla-wrap">
+    {% if ultimas %}
+    <table class="tabla">
+      <thead><tr><th>Día</th><th>Persona</th><th>Qué hizo</th><th class="num">Horas</th></tr></thead>
+      <tbody>
+        {% for r in ultimas %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.dia.fecha }}</td>
+          <td style="white-space:nowrap">{{ r.dia.recurso.nombre }}</td>
+          <td>{{ r.detalle }}</td>
+          <td class="num">{{ r.horas }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="vacio">Sin horas aprobadas en este proyecto todavía.</div>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}

@@ -53,6 +53,21 @@
 {% endblock %}
 
 {% block content %}
+{% comment %}
+  Reabrir un dia deja un mensaje —cuantas actividades devolvio, o por que no se
+  pudo— y esta plantilla no lo pintaba, asi que la accion no daba ninguna senal:
+  ni al salir bien ni al fallar. La persona volvia a la misma pantalla sin saber
+  si habia pasado algo.
+{% endcomment %}
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} py-2 px-3"
+         style="font-size:.85rem;border-radius:6px;margin:0">
+      <i class="bi {% if m.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
 
 <!-- Page strip -->
 <div class="page-strip page-strip-bloque">
@@ -246,6 +261,67 @@
     <p class="empty-state"><i class="bi bi-calendar-check me-2"></i>Sin ausencias aprobadas por delante.</p>
     {% endif %}
   </div>
+
+  <!-- Bloqueantes -->
+  {% comment %}
+    Al lado de las horas: ver lo que alguien declaro junto a lo que lleva dias
+    esperando es lo que distingue una semana floja de una semana bloqueada.
+  {% endcomment %}
+  <div class="mb-4">
+    <p class="section-title mb-3">Bloqueantes</p>
+    {% if bloqueantes_abiertos or bloqueantes_resueltos %}
+    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+      <table class="table asig-table mb-0">
+        <thead>
+          <tr><th>Qué lo bloquea</th><th>Espera a</th><th>Desde</th><th class="text-end">Tiempo</th></tr>
+        </thead>
+        <tbody>
+          {% for b in bloqueantes_abiertos %}
+          <tr {% if b.vencido %}style="background:#fdf8f8"{% endif %}>
+            <td>
+              <span class="fw-semibold">{{ b.necesito }}</span>
+              {% if b.proyecto %}<span class="text-muted d-block" style="font-size:.78rem">{{ b.proyecto.codigo }}</span>{% endif %}
+            </td>
+            <td style="font-size:.82rem">
+              {{ b.bloqueador }}
+              <span class="text-muted d-block" style="font-size:.75rem">{{ b.get_rol_que_resuelve_display }}</span>
+            </td>
+            <td style="white-space:nowrap;font-size:.82rem">{{ b.creado_en|date:"d/m H:i" }}</td>
+            <td class="text-end" style="white-space:nowrap">
+              <span class="badge-bloq {% if b.vencido %}b-vencido{% else %}b-espera{% endif %}">
+                {% if b.vencido %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+                {{ b.horas_abierto|floatformat:0 }} h
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+          {% for b in bloqueantes_resueltos %}
+          <tr style="opacity:.62">
+            <td>
+              <span class="fw-semibold">{{ b.necesito }}</span>
+              {% if b.proyecto %}<span class="text-muted d-block" style="font-size:.78rem">{{ b.proyecto.codigo }}</span>{% endif %}
+            </td>
+            <td style="font-size:.82rem">{{ b.bloqueador }}</td>
+            <td style="white-space:nowrap;font-size:.82rem">{{ b.creado_en|date:"d/m H:i" }}</td>
+            <td class="text-end" style="white-space:nowrap">
+              <span class="badge-bloq b-ok">resuelto en {{ b.horas_abierto|floatformat:0 }} h</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty-state"><i class="bi bi-cone-striped me-2"></i>Sin bloqueantes registrados.</p>
+    {% endif %}
+  </div>
+
+  <style>
+    .badge-bloq { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+    .b-espera { background:#eef0f4; color:#4b5563; }
+    .b-vencido { background:#fee2e2; color:#991b1b; }
+    .b-ok { background:#d1fae5; color:#065f46; }
+  </style>
 
   <style>
     .btn-reabrir { background:#fff; color:#92400e; border:1px solid #fde68a; font-weight:600;

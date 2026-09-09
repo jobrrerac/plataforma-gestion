@@ -388,60 +388,43 @@
 
     <!-- Navegación principal -->
     <nav class="inet-nav">
+      {% comment %}
+        Tres entradas y no once. La barra mezclaba dos cosas distintas —lo que
+        uno reporta sobre si mismo y lo que revisa de otros— en una sola fila,
+        asi que habia que leerla entera para encontrar cualquier cosa. Cada
+        concentrador explica que hace cada opcion, que un desplegable no puede.
+      {% endcomment %}
       <a href="/dashboard/"
          class="inet-nav-link {% block active_dashboard %}{% endblock %}">
         <i class="bi bi-grid-3x3-gap"></i> Dashboard
       </a>
-      {% comment %}
-        Solicitudes, cesiones y liberaciones exigen rol PM o Admin en la vista.
-        Mostrarlas a un ingeniero solo le ofrece cuatro enlaces que devuelven 403.
-      {% endcomment %}
-      {% if puede_ver_todo %}
-      <a href="/solicitud/"
-         class="inet-nav-link {% block active_solicitud %}{% endblock %}">
-        <i class="bi bi-people"></i> Solicitudes
+      <a href="/registrar/"
+         class="inet-nav-link {% block active_registrar %}{% endblock %}">
+        <i class="bi bi-pencil-square"></i> Registrar
       </a>
-      {% endif %}
+      {% comment %}
+        Solicitar y Gestionar solo salen a quien puede usarlas. Un enlace que no
+        lleva a nada ensena a desconfiar del menu entero, y entonces la gente
+        deja de usarlo y pide las URL por chat.
+      {% endcomment %}
       {% if es_admin_o_pm %}
-      <a href="/cesion/"
-         class="inet-nav-link {% block active_cesion %}{% endblock %}">
-        <i class="bi bi-arrow-left-right"></i> Cesiones
+      <a href="/solicitar/"
+         class="inet-nav-link {% block active_solicitar %}{% endblock %}">
+        <i class="bi bi-send"></i> Solicitar
       </a>
-      <a href="/liberacion/"
-         class="inet-nav-link {% block active_liberacion %}{% endblock %}">
-        <i class="bi bi-snow"></i> Liberaciones
+      {% endif %}
+      {% if puede_ver_todo or puede_aprobar_horas %}
+      <a href="/gestionar/"
+         class="inet-nav-link {% block active_gestionar %}{% endblock %}">
+        <i class="bi bi-clipboard-check"></i> Gestionar
       </a>
       {% endif %}
       {% comment %}
-        Registrar horas y Novedades son para todo el mundo: un PM o un Admin
-        también legaliza su tiempo y también tiene vacaciones.
+        Aqui habia un enlace directo a /admin/assignments/asignacion/. Sobra: es
+        un atajo a una parte del admin, y el admin ya esta a la derecha. Un menu
+        que mezcla secciones de la aplicacion con enlaces sueltos al panel de
+        Django deja de tener un criterio que se pueda explicar.
       {% endcomment %}
-      <a href="/horas/"
-         class="inet-nav-link {% block active_horas %}{% endblock %}">
-        <i class="bi bi-clock-history"></i> Registrar horas
-      </a>
-      <a href="/novedades/"
-         class="inet-nav-link {% block active_novedades %}{% endblock %}">
-        <i class="bi bi-calendar-heart"></i> Novedades
-      </a>
-      {% if puede_aprobar_horas %}
-      <a href="/horas/aprobar/"
-         class="inet-nav-link {% block active_horas_aprobar %}{% endblock %}">
-        <i class="bi bi-clipboard-check"></i> Aprobar horas
-      </a>
-      {% endif %}
-      {% if es_admin %}
-      <a href="/novedades/revisar/"
-         class="inet-nav-link {% block active_novedades_revisar %}{% endblock %}">
-        <i class="bi bi-check2-square"></i> Revisar
-      </a>
-      {% endif %}
-      {% if user.is_staff %}
-      <a href="/admin/assignments/asignacion/"
-         class="inet-nav-link {% block active_asignaciones %}{% endblock %}">
-        <i class="bi bi-calendar-check"></i> Asignaciones
-      </a>
-      {% endif %}
     </nav>
 
     <!-- Derecha -->

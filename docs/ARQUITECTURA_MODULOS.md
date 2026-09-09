@@ -1,6 +1,6 @@
 # Módulos, capas y qué hay que reprobar cuando cambia algo
 
-El plan de QA tiene **253 casos**. Repasarlos entero cada vez que se toca una
+El plan de QA tiene **325 casos**. Repasarlos entero cada vez que se toca una
 pantalla no es sostenible: es la diferencia entre poder desplegar un martes y no
 poder.
 
@@ -25,7 +25,8 @@ Cada app solo puede depender de las de arriba. Es lo que hace que un cambio en
 | 4 | `assignments` | Quién está asignado a qué y cuándo. **El plan.** |
 | 5 | `legalizacion` | Qué hizo cada quien con su jornada. **Lo declarado.** |
 | 6 | `revision` | Triaje de la cola de aprobación. Se puede quitar de `INSTALLED_APPS`. |
-| 7 | `dashboard` | Pantallas que componen todo lo anterior. |
+| 7 | `seguimiento` | Qué frena a alguien y qué se le dice. Bloqueantes, feedback y alertas. |
+| 8 | `dashboard` | Pantallas que componen todo lo anterior. |
 
 `legalizacion` puede mirar el plan de `assignments` —para enseñar la tarea
 planificada al lado de lo declarado— pero `assignments` **no** puede depender de
@@ -55,14 +56,15 @@ Los bloques **propios** son los que ejercitan directamente ese módulo. Los
 
 | Si tocas… | Bloques propios | Arrastra | Casos |
 |---|---|---|---|
-| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 195 |
+| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 267 |
 | `core` | MAE, RBAC | SOL, APR, CES, LIB, HOR, HAP, APD, DASH | ~120 |
 | `calendar_engine` | CAL, NOV | SOL, APR, LIB, HOR | ~75 |
 | `assignments` | SOL, APR, CES, LIB, AUD | HAP, APD, DASH (leen el plan) | ~70 |
 | `legalizacion` | HOR, HAP, APD | DASH | ~88 |
 | `revision` | HAP | — | 36 |
-| `dashboard` | DASH | — | 5 |
-| `templates/base.html` | AUT-09, AUT-10, RBAC-03 | — | 3 |
+| `seguimiento` | SEG | DASH (ficha del recurso) | 60 |
+| `dashboard` | DASH, NAV | — | 17 |
+| `templates/base.html` | NAV, AUT-09, AUT-10, RBAC-03 | — | 15 |
 | `config/settings/` | INF, AUT | — | 17 |
 | `terraform/` | INF | — | 6 |
 

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_title %}Mis novedades{% endblock %}
-{% block active_novedades %}active{% endblock %}
+{% block active_registrar %}active{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -22,18 +22,16 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-strip">
-  <a href="/dashboard/" style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
-    <i class="bi bi-arrow-left"></i> Volver
+{% include "componentes/franja_pagina.html" with volver="/registrar/" icono="bi-calendar-heart" titulo="Mis" resaltado="novedades" %}
+
+{% if es_admin and pendientes_por_revisar %}
+{# Atajo para el Admin: si hay novedades esperando, que se vea desde aqui. #}
+<div class="container pt-3" style="max-width:1120px">
+  <a href="/novedades/revisar/" class="badge-estado e-PENDIENTE" style="text-decoration:none">
+    <i class="bi bi-inbox me-1"></i>{{ pendientes_por_revisar }} por revisar
   </a>
-  <div style="width:1px;height:20px;background:#e8e6f0"></div>
-  <h1><i class="bi bi-calendar-heart" style="color:#d6197f"></i> Mis <span>novedades</span></h1>
-  {% if es_admin and pendientes_por_revisar %}
-  <a href="/novedades/revisar/" class="ms-auto badge-estado e-PENDIENTE" style="text-decoration:none">
-    {{ pendientes_por_revisar }} por revisar
-  </a>
-  {% endif %}
 </div>
+{% endif %}
 
 <div class="container py-4" style="max-width:1120px">
 

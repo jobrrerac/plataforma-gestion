@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_title %}Solicitar liberación{% endblock %}
-{% block active_liberacion %}active{% endblock %}
+{% block active_solicitar %}active{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -29,7 +29,7 @@
 {% endblock %}
 
 {% block content %}
-{% include "componentes/franja_pagina.html" with volver="/dashboard/" icono="bi-snow" titulo="Solicitar" resaltado="liberación" %}
+{% include "componentes/franja_pagina.html" with volver="/solicitar/" icono="bi-snow" titulo="Solicitar" resaltado="liberación" %}
 
 <div class="container py-4" style="max-width:1120px">
 

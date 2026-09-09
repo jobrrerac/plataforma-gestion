@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_title %}Aprobar horas{% endblock %}
-{% block active_horas_aprobar %}active{% endblock %}
+{% block active_gestionar %}active{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -124,7 +124,7 @@
 {% endblock %}
 
 {% block content %}
-{% include "componentes/franja_pagina.html" with volver="/dashboard/" icono="bi-clipboard-check" titulo="Aprobar" resaltado="horas" %}
+{% include "componentes/franja_pagina.html" with volver="/gestionar/" icono="bi-clipboard-check" titulo="Aprobar" resaltado="horas" %}
 
 <div class="container py-4" style="max-width:1120px">
 

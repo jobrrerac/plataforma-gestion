@@ -1,0 +1,86 @@
+{% extends "seguimiento/bloqueantes_base.html" %}
+{# La pantalla de quien tiene que actuar: alertas, filtros y todo lo que
+   alcanza a ver. El formulario de alta vive en Registrar. #}
+{% block active_gestionar %}active{% endblock %}
+
+{% block volver %}/gestionar/{% endblock %}
+{% block encabezado %}<i class="bi bi-cone-striped"></i> Bloqueantes del <span>equipo</span>{% endblock %}
+
+{% block alertas %}
+  {% if alertas %}
+  {% comment %}
+    Solo lo ve un Admin: el servicio devuelve lista vacia para todos los demas.
+    Ensenarle a un ingeniero quien esta sin tarea no le sirve y le cuenta cosas
+    de sus companeros que no le corresponden.
+  {% endcomment %}
+  <div class="alertas mb-4">
+    <div class="alertas-cab">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>
+      {{ alertas|length }} situación{{ alertas|length|pluralize:"es" }} que pide{{ alertas|length|pluralize:"n" }} acción
+    </div>
+    {% for a in alertas %}
+    <div class="alerta {{ a.gravedad }}">
+      <span class="tipo">
+        {% if a.tipo == "BLOQUEANTE" %}Bloqueante
+        {% elif a.tipo == "SIN_TAREA" %}Sin tarea
+        {% else %}Sin observar{% endif %}
+      </span>
+      <span class="texto">{{ a.texto }}</span>
+      <span class="accion">{{ a.accion }}</span>
+      {% if a.detalle %}<span class="detalle">{{ a.detalle }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block filtros %}
+  {% if puede_filtrar %}
+  {% comment %}
+    Solo para quien ve los de mas gente. A quien solo ve los suyos, tres
+    desplegables sobre una lista de dos le sobran.
+  {% endcomment %}
+  <form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Proyecto</label>
+        <select name="proyecto" class="form-select form-select-sm">
+          <option value="">— todos —</option>
+          {% for p in proyectos_filtro %}
+          <option value="{{ p.pk }}"{% if f_proyecto == p.pk|stringformat:"s" %} selected{% endif %}>
+            {{ p.codigo }} · {{ p.nombre }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Recurso</label>
+        <select name="recurso" class="form-select form-select-sm">
+          <option value="">— todos —</option>
+          {% for r in recursos_filtro %}
+          <option value="{{ r.pk }}"{% if f_recurso == r.pk|stringformat:"s" %} selected{% endif %}>
+            {{ r.nombre }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="ABIERTOS"{% if f_estado == "ABIERTOS" %} selected{% endif %}>Abiertos</option>
+          <option value="VENCIDOS"{% if f_estado == "VENCIDOS" %} selected{% endif %}>Vencidos</option>
+          <option value="RESUELTOS"{% if f_estado == "RESUELTOS" %} selected{% endif %}>Resueltos</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-dark w-100">Filtrar</button>
+        {% if f_proyecto or f_recurso or f_estado %}
+        <a href="{% url 'bloqueantes' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+  {% endif %}
+
+{% endblock %}

@@ -12,7 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
 from apps.accounts.roles import (
-    es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales, puede_ver_todo,
+    es_admin, es_admin_o_pm, puede_ver_costos, puede_ver_datos_personales,
+    puede_ver_todo,
 )
 from apps.core.models import Recurso, Proyecto, Skill, recursos_asignables
 from apps.assignments.models import Asignacion
@@ -910,6 +911,17 @@ class RecursoDetalleView(View):
             r.renglones_del_dia = mios[r.dia_id]
             visto.add(r.dia_id)
 
+        # Lo que frena a esta persona ahora mismo. Va en su ficha porque es donde
+        # se mira a alguien en concreto: ver sus horas aprobadas al lado de lo
+        # que lleva tres dias esperando es lo que explica una semana floja.
+        from apps.seguimiento import services as seguimiento
+
+        bloqueantes = list(
+            seguimiento.bloqueantes_visibles(request.user)
+            .filter(recurso=recurso)
+            .order_by("resuelto_en", "creado_en")[:12]
+        )
+
         # Ausencias que vienen: quien planifica necesita verlas antes de asignar,
         # no descubrirlas cuando el calendario ya no cuadra.
         from apps.calendar_engine.models import Indisponibilidad
@@ -933,6 +945,8 @@ class RecursoDetalleView(View):
             # hay alguna firma que le toque a quien mira; el boton, dia a dia.
             "puede_reabrir": bool(mios),
             "ausencias": ausencias,
+            "bloqueantes_abiertos": [b for b in bloqueantes if b.abierto],
+            "bloqueantes_resueltos": [b for b in bloqueantes if not b.abierto][:5],
             "hoy": hoy,
         })
 
@@ -1090,4 +1104,307 @@ class CesionSolicitarView(PMOAdminRequiredMixin, View):
 
         ctx = self._base_ctx(request, asignacion)
         ctx["exito"] = cesion
+        return render(request, self.template, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Concentradores de navegación
+# ---------------------------------------------------------------------------
+#
+# La barra superior llegó a once pestañas y dejó de caber. El problema no era el
+# ancho: era que mezclaba dos cosas distintas —lo que uno reporta sobre sí mismo
+# y lo que uno revisa de otros— en una sola fila, así que había que leerla entera
+# para encontrar cualquier cosa.
+#
+# Se agrupan por acción: **Registrar** lo mío, **Gestionar** lo de los demás. Dos
+# páginas y no dos desplegables porque un menú desplegable se abre a ciegas y en
+# el móvil se pelea con el dedo; una página puede explicar qué hace cada cosa.
+
+
+class _HubView(LoginRequiredMixin, View):
+    """Base de las dos páginas de acceso. Solo pinta lo que la persona puede usar."""
+
+    login_url = "/login/"
+    template = ""
+    titulo = ""
+    acento = ""
+    icono = ""
+    entradilla = ""
+
+    def items(self, request):
+        raise NotImplementedError
+
+    def get(self, request):
+        visibles = [i for i in self.items(request) if i.get("visible", True)]
+        return render(request, self.template, {
+            "titulo": self.titulo,
+            "acento": self.acento,
+            "icono": self.icono,
+            "entradilla": self.entradilla,
+            "items": visibles,
+        })
+
+
+class RegistrarView(_HubView):
+    """Lo que cada quien reporta sobre su propio trabajo."""
+
+    titulo = "Qué quieres"
+    acento = "registrar"
+    icono = "bi-pencil-square"
+    template = "dashboard/registrar.html"
+    entradilla = ("Lo que reportas sobre tu propio trabajo. Todo esto es tuyo y "
+                  "lo puedes consultar cuando quieras.")
+
+    def items(self, request):
+        return [
+            {
+                "url": "/horas/", "icono": "bi-clock-history", "titulo": "Registrar horas",
+                "texto": "Declara en qué se te fue el día y ciérralo cuando cuadre.",
+            },
+            {
+                "url": "/novedades/", "icono": "bi-calendar-heart", "titulo": "Registrar novedades",
+                "texto": "Vacaciones y permisos. Quedan pendientes de aprobación.",
+            },
+            {
+                "url": "/bloqueantes/", "icono": "bi-cone-striped", "titulo": "Registrar bloqueantes",
+                "texto": "Algo que te impide avanzar y depende de otra persona.",
+            },
+            {
+                "url": "/feedback/", "icono": "bi-chat-square-text", "titulo": "Registrar feedback",
+                "texto": "Cómo fue tu semana en el proyecto. Solo lo ve tu manager en Colombia.",
+            },
+        ]
+
+
+class SolicitarView(_HubView):
+    """Lo que se pide sobre el equipo: gente, horas y fechas.
+
+    Van juntas y aparte de Registrar porque son otra cosa: registrar es contar
+    lo que ya pasó, solicitar es pedir algo que todavía no existe y que alguien
+    tiene que aprobar. Mezclarlas obliga a leer las siete tarjetas para
+    distinguir cuáles llevan a un formulario propio y cuáles a uno que abre un
+    trámite con otra persona al otro lado.
+    """
+
+    titulo = "Qué quieres"
+    acento = "solicitar"
+    icono = "bi-send"
+    template = "dashboard/solicitar.html"
+    entradilla = ("Peticiones sobre el equipo. Todas quedan pendientes de que "
+                  "alguien las apruebe.")
+
+    def items(self, request):
+        puede = es_admin_o_pm(request.user)
+        return [
+            {
+                "url": "/solicitud/", "icono": "bi-people", "titulo": "Solicitar recurso",
+                "texto": "Pedir gente para un proyecto y ver el estado de lo pedido.",
+                "visible": puede,
+            },
+            {
+                "url": "/cesion/", "icono": "bi-arrow-left-right",
+                "titulo": "Solicitar cesión de horas",
+                "texto": "Pasar horas de un proyecto a otro sin rehacer la asignación.",
+                "visible": puede,
+            },
+            {
+                "url": "/liberacion/", "icono": "bi-snow",
+                "titulo": "Solicitar liberar recurso",
+                "texto": "Soltar a alguien antes de la fecha prevista.",
+                "visible": puede,
+            },
+        ]
+
+
+class GestionarView(_HubView):
+    """Lo que se revisa, aprueba o decide sobre el trabajo de otros."""
+
+    titulo = "Qué quieres"
+    acento = "gestionar"
+    icono = "bi-clipboard-check"
+    template = "dashboard/gestionar.html"
+    entradilla = "Lo que revisas, apruebas o decides sobre el trabajo del equipo."
+
+    def items(self, request):
+        from apps.accounts.context_processors import _puede_aprobar_horas
+
+        return [
+            {
+                "url": "/horas/aprobar/", "icono": "bi-clipboard-check", "titulo": "Aprobar horas",
+                "texto": "La cola de aprobación, ordenada por lo que pide más atención.",
+                "visible": _puede_aprobar_horas(request.user),
+            },
+            {
+                "url": "/novedades/revisar/", "icono": "bi-check2-square", "titulo": "Aprobar novedades",
+                "texto": "Vacaciones y permisos pendientes de revisión.",
+                "visible": es_admin(request.user),
+            },
+            {
+                "url": "/bloqueantes/equipo/", "icono": "bi-cone-striped",
+                "titulo": "Revisar bloqueantes del equipo",
+                "texto": "Quién lleva días esperando, y las alertas que piden acción.",
+                # El Visor entra: su papel es mirar sin escribir, y esto es
+                # justo lo que necesita ver de cada persona.
+                "visible": puede_ver_todo(request.user),
+            },
+            {
+                "url": "/feedback/equipo/", "icono": "bi-chat-square-text",
+                "titulo": "Leer el feedback del equipo",
+                "texto": "Lo que cada persona da y recibe, enfrentado. Registrar va en Registrar.",
+                "visible": puede_ver_todo(request.user),
+            },
+        ]
+
+
+@method_decorator(login_required(login_url="/login/"), name="dispatch")
+class DashboardProyectoView(View):
+    """Un proyecto entero en una pantalla: quién, cuánto, y qué lo frena.
+
+    El dashboard de ocupación responde «quién está libre». Esta responde la otra
+    pregunta, la que se hace en la reunión de seguimiento: **cómo va este
+    proyecto**. Son dos preguntas distintas y no caben en el mismo mapa de calor:
+    una mira a lo ancho, por persona y día; esta mira a lo hondo, un proyecto y
+    todo lo que se sabe de él.
+
+    Lo que junta —plan, declarado, bloqueos y feedback— ya existía repartido en
+    cuatro sitios. El valor está justo en verlo a la vez: un proyecto con las
+    horas al día y cinco bloqueantes abiertos no se parece en nada a otro con las
+    mismas horas y ninguno, y hasta ahora había que abrir cuatro pantallas para
+    notar la diferencia.
+    """
+
+    template = "dashboard/proyecto.html"
+
+    def get(self, request):
+        if not puede_ver_todo(request.user):
+            raise PermissionDenied(
+                "Esta pantalla resume el trabajo de otras personas."
+            )
+
+        from apps.legalizacion.models import RegistroHoras
+        from apps.seguimiento.models import Bloqueante, Feedback
+
+        # `Proyecto` no tiene `activo`: lo que tiene es `estado`, y el gestor por
+        # defecto ya deja fuera lo borrado en blando. Se listan todos porque un
+        # proyecto cerrado tambien se consulta —justo despues de cerrarlo es
+        # cuando se mira como fue.
+        proyectos = Proyecto.objects.all().order_by("codigo")
+        elegido = None
+        if request.GET.get("proyecto"):
+            elegido = proyectos.filter(pk=request.GET["proyecto"]).first()
+
+        ctx = {
+            "proyectos": proyectos,
+            "proyecto": elegido,
+            "puede_ver_costos": puede_ver_costos(request.user),
+        }
+        if elegido is None:
+            return render(request, self.template, ctx)
+
+        hoy = date.today()
+
+        # ── El plan ──────────────────────────────────────────────────────────
+        asignaciones = list(
+            Asignacion.objects
+            .filter(proyecto=elegido, estado__in=["APROBADA", "SOLICITADA"])
+            .select_related("recurso")
+            .order_by("fecha_inicio")
+        )
+        activas = [a for a in asignaciones if a.fecha_inicio <= hoy
+                   and (a.fecha_fin is None or a.fecha_fin >= hoy)]
+
+        # Fin estimado: el del proyecto, o el de la última asignación si se
+        # alarga más allá. Un proyecto que "termina" antes que la gente que
+        # tiene dentro es un dato que conviene ver, no esconder.
+        fines = [a.fecha_fin for a in asignaciones if a.fecha_fin]
+        fin_asignaciones = max(fines) if fines else None
+
+        # ── Lo declarado ─────────────────────────────────────────────────────
+        registros = list(
+            RegistroHoras.objects
+            .filter(proyecto=elegido, estado=RegistroHoras.APROBADO)
+            .select_related("dia__recurso", "tipo_actividad")
+            .order_by("-dia__fecha")
+        )
+        horas = sum((r.horas for r in registros), Decimal("0"))
+        facturables = sum(
+            (r.horas for r in registros if r.facturable), Decimal("0")
+        )
+
+        # Horas y actividades por persona: es lo que permite ver quién está
+        # empujando el proyecto y quién lleva dos semanas sin tocarlo.
+        por_recurso = {}
+        for r in registros:
+            fila = por_recurso.setdefault(r.dia.recurso_id, {
+                "recurso": r.dia.recurso, "horas": Decimal("0"),
+                "actividades": 0, "ultimo": None,
+            })
+            fila["horas"] += r.horas
+            fila["actividades"] += 1
+            if fila["ultimo"] is None or r.dia.fecha > fila["ultimo"]:
+                fila["ultimo"] = r.dia.fecha
+
+        for a in asignaciones:
+            por_recurso.setdefault(a.recurso_id, {
+                "recurso": a.recurso, "horas": Decimal("0"),
+                "actividades": 0, "ultimo": None,
+            })
+
+        # ── Lo que lo frena ──────────────────────────────────────────────────
+        bloqueantes = list(
+            Bloqueante.objects
+            .filter(proyecto=elegido)
+            .select_related("recurso", "bloquea_usuario")
+            .order_by("resuelto_en", "creado_en")
+        )
+        abiertos = [b for b in bloqueantes if b.abierto]
+        resueltos = [b for b in bloqueantes if not b.abierto]
+        # Media de lo que costó desatascar. Solo sobre los cerrados: los
+        # abiertos siguen contando y meterlos bajaría la media justo cuando peor
+        # va la cosa.
+        media_desbloqueo = (
+            round(sum(b.horas_abierto for b in resueltos) / len(resueltos), 1)
+            if resueltos else None
+        )
+        for fila in por_recurso.values():
+            fila["bloqueantes"] = sum(
+                1 for b in abiertos if b.recurso_id == fila["recurso"].pk
+            )
+
+        # ── Las condiciones, según quien trabaja aquí ────────────────────────
+        # Solo para el Admin: es el feedback que se pidió con la promesa de que
+        # no lo leyera el jefe de proyecto.
+        claridad = None
+        if es_admin(request.user):
+            notas = list(
+                Feedback.objects
+                .filter(proyecto=elegido, direccion=Feedback.RECURSO_A_PROYECTO)
+                .exclude(claridad_objetivo=None)
+                .values_list("claridad_objetivo", flat=True)
+            )
+            if notas:
+                claridad = {
+                    "media": round(sum(notas) / len(notas), 1),
+                    "cuantos": len(notas),
+                }
+
+        ctx.update({
+            "asignaciones": asignaciones,
+            "activas": activas,
+            "fin_asignaciones": fin_asignaciones,
+            "horas": horas,
+            "facturables": facturables,
+            "no_facturables": horas - facturables,
+            "actividades": len(registros),
+            "ultimas": registros[:15],
+            "por_recurso": sorted(
+                por_recurso.values(), key=lambda f: -f["horas"],
+            ),
+            "bloqueantes_abiertos": abiertos,
+            "bloqueantes_resueltos": resueltos[-8:],
+            "media_desbloqueo": media_desbloqueo,
+            "vencidos": [b for b in abiertos if b.vencido],
+            "claridad": claridad,
+            "hoy": hoy,
+        })
         return render(request, self.template, ctx)

@@ -1,0 +1,215 @@
+{% extends "seguimiento/feedback_base.html" %}
+{# Lo tuyo: tu parte semanal y tu historial. #}
+{% block active_registrar %}active{% endblock %}
+
+{% block volver %}/registrar/{% endblock %}
+{% block encabezado %}<i class="bi bi-chat-square-text"></i> Mi <span>feedback</span>{% endblock %}
+
+{% block cuerpo %}
+  {% if puede_observar %}
+  {% comment %}
+    Solo para quien dirige un proyecto al que la persona esta asignada, o Admin.
+    Observar a alguien con quien no trabajas produce una calificacion que despues
+    no se puede sostener.
+  {% endcomment %}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1 seccion">Observar a una persona</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Hechos, no adjetivos. Lo va a leer ella: aquí no hay expediente secreto.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="direccion" value="{{ P2R }}">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Sobre quién</label>
+          <select name="recurso" id="fb-recurso" required class="form-select">
+            <option value="">— elige —</option>
+            {% for r in recursos_observables %}
+            <option value="{{ r.pk }}">{{ r.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          {% comment %}
+            Se rellena con JS segun la persona elegida: solo los proyectos en los
+            que ha participado. Observar a alguien "en" un proyecto donde nunca
+            estuvo produce una observacion que despues no sostiene nadie.
+          {% endcomment %}
+          <select name="proyecto" id="fb-proyecto" class="form-select" disabled>
+            <option value="">— elige antes la persona —</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Tipo</label>
+          <select name="tipo" required class="form-select">
+            <option value="FORTALEZA">Fortaleza</option>
+            <option value="A_MEJORAR">A mejorar</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Dimensión <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <select name="dimension" class="form-select">
+            <option value="">— ninguna —</option>
+            {% for valor, etiqueta in dimensiones %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% if posibles_observadores %}
+        {% comment %}
+          Los jefes de proyecto mandan la observacion por chat y dicen que no
+          tienen tiempo de entrar. Si no se puede transcribir, se pierde; y si se
+          copia como propia, el registro miente sobre quien observo. Se guardan
+          las dos personas.
+        {% endcomment %}
+        <div class="col-md-6">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            La observó <span class="text-muted fw-normal">(si te la pasaron por chat)</span>
+          </label>
+          <select name="en_nombre_de" class="form-select">
+            <option value="">Yo mismo</option>
+            {% for u in posibles_observadores %}
+            <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text" style="font-size:.78rem">
+            Queda registrado quién la hizo y quién la escribió.
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Situación</label>
+          <input type="text" name="situacion" maxlength="300" class="form-control"
+                 placeholder="Ej: en la revisión del endpoint del martes">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Conducta observada</label>
+          <textarea name="conducta" required rows="3" class="form-control"
+                    placeholder="Qué hizo o dejó de hacer, en concreto"></textarea>
+          <div class="form-text" style="font-size:.78rem">
+            Sin conducta observada esto es una opinión, no un feedback.
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Impacto</label>
+          <textarea name="impacto" rows="3" class="form-control"
+                    placeholder="Qué consecuencia tuvo"></textarea>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-pencil me-1"></i>Registrar observación
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if mi_recurso %}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1 seccion">Cómo fue tu semana en el proyecto</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Registra aquí, de manera semanal, cómo fue tu experiencia trabajando en el
+      proyecto durante la semana en curso.
+    </p>
+    <div class="privado mb-3">
+      <i class="bi bi-shield-lock me-1"></i>
+      Esta información será accesible <strong>solo por tu manager en Colombia</strong>,
+      no por el jefe de proyecto.
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="direccion" value="{{ R2P }}">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          <select name="proyecto" class="form-select">
+            <option value="">— ninguno en concreto —</option>
+            {% for p in mis_proyectos %}
+            <option value="{{ p.pk }}">{{ p.codigo }} · {{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Claridad del objetivo</label>
+          <select name="claridad_objetivo" required class="form-select">
+            <option value="">— elige —</option>
+            <option value="1">1 · no supe qué se esperaba</option>
+            <option value="2">2 · muy poco claro</option>
+            <option value="3">3 · a medias</option>
+            <option value="4">4 · bastante claro</option>
+            <option value="5">5 · clarísimo desde el principio</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Momento</label>
+          <select name="momento" class="form-select">
+            {% for valor, etiqueta in momentos %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Tuviste que intuir algo?</label>
+          <select name="tuve_que_intuir" class="form-select">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Cambió el alcance?</label>
+          <select name="cambio_alcance" class="form-select">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Cuántas veces cambió <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input type="number" name="veces_cambio_alcance" min="0" max="99" class="form-control">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Tu feedback para el proyecto</label>
+          <textarea name="comentario" rows="3" class="form-control"
+                    placeholder="Escribe tu feedback para el proyecto: qué cosas estuvieron bien y qué cosas pueden mejorar"></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Qué te habría ahorrado tiempo <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <textarea name="que_ahorraria_tiempo" rows="2" class="form-control"
+                    placeholder="Lo más accionable de todo el formulario. Sé concreto."></textarea>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-send me-1"></i>Enviar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <h5 class="fw-bold mb-3 seccion">Tu historial</h5>
+  {% if recibido or dado %}
+    {% for f in recibido %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+    {% for f in dado %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+  {% else %}
+    <div class="card vacio">
+      <div><i class="bi bi-chat-square-text me-2"></i>Todavía no hay observaciones registradas.</div>
+    </div>
+  {% endif %}
+{% endblock %}

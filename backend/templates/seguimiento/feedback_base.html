@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block page_title %}Feedback{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+
+  /* El aviso de privacidad. Es lo que hace que la gente escriba lo que pasó de
+     verdad, así que se ve antes que el formulario, no en letra pequeña. */
+  .privado {
+    background:#eaeff4; border-left:3px solid #2b5674; border-radius:8px;
+    padding:.7rem .9rem; font-size:.84rem; color:#2b5674;
+  }
+
+  .fb-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+  .fb-row.sobre-persona { border-left:3px solid #4c1d95; }
+  .fb-row.sobre-proyecto { border-left:3px solid #0d7a72; }
+  .fb-row .meta { color:#6b7280; font-size:.84rem; }
+  .fb-row .k {
+    font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:#9ca3af; margin-right:.35rem;
+  }
+  .fb-row p { margin:0 0 .2rem; font-size:.88rem; color:#374151; }
+
+  .dir-chip { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .d-persona { background:#ede9fe; color:#4c1d95; }
+  .d-proyecto { background:#d8f0ee; color:#0b5f59; }
+
+  .chip { font-size:.72rem; font-weight:600; border-radius:6px; padding:2px 8px; background:#f0f1f3; color:#4b5563; }
+  .chip.buena { background:#d1fae5; color:#065f46; }
+  .chip.mejora { background:#fef3c7; color:#92400e; }
+
+  .vacio { text-align:center; color:#8a8f9c; padding:36px 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="{% block volver %}/dashboard/{% endblock %}" class="page-strip-volver">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div class="page-strip-sep"></div>
+  <h1>{% block encabezado %}{% endblock %}</h1>
+</div>
+
+<div class="container py-4" style="max-width:1120px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} py-2 px-3"
+         style="font-size:.87rem;border-radius:10px">
+      <i class="bi {% if m.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% block cuerpo %}{% endblock %}
+
+</div>
+
+{% comment %}
+  El desplegable de proyecto sigue a la persona elegida. Los datos van
+  serializados en un `json_script` en vez de construidos a mano en la plantilla:
+  asi Django escapa el contenido y un nombre de proyecto con comillas no rompe el
+  JavaScript ni abre un hueco de inyeccion.
+{% endcomment %}
+{{ proyectos_por_recurso|json_script:"proyectos-por-recurso" }}
+<script>
+  (function () {
+    var datos = JSON.parse(document.getElementById('proyectos-por-recurso').textContent);
+    var persona = document.getElementById('fb-recurso');
+    var proyecto = document.getElementById('fb-proyecto');
+    if (!persona || !proyecto) { return; }
+
+    function sincronizar() {
+      var lista = datos[persona.value] || [];
+      proyecto.innerHTML = '';
+      if (!persona.value) {
+        proyecto.disabled = true;
+        proyecto.add(new Option('— elige antes la persona —', ''));
+        return;
+      }
+      proyecto.disabled = false;
+      if (lista.length === 0) {
+        // Se dice por que esta vacio. Un desplegable sin opciones y sin
+        // explicacion parece un fallo de la pantalla.
+        proyecto.add(new Option('— sin proyectos en comun —', ''));
+        return;
+      }
+      // Con un solo proyecto se elige solo. Dejar «— ninguno en concreto —»
+      // encima cuando no hay nada que decidir se lee como si el desplegable no
+      // se hubiera llenado, y es lo que se reporto dos veces: «elijo a la
+      // persona y no me aparece su proyecto».
+      if (lista.length === 1) {
+        proyecto.add(new Option(lista[0].texto, lista[0].id));
+        proyecto.add(new Option('— ninguno en concreto —', ''));
+        proyecto.value = lista[0].id;
+        return;
+      }
+      proyecto.add(new Option('— ninguno en concreto —', ''));
+      lista.forEach(function (p) { proyecto.add(new Option(p.texto, p.id)); });
+    }
+
+    persona.addEventListener('change', sincronizar);
+    sincronizar();
+
+    // El navegador restaura el valor de los `select` DESPUES de que corre este
+    // script — al recargar, al volver atras o desde la cache de sesion—. Sin
+    // esto, la persona quedaba elegida y el desplegable de proyecto se quedaba
+    // vacio, que es exactamente el sintoma que se reporto: "elijo a alguien y no
+    // me aparece su proyecto".
+    window.addEventListener('pageshow', sincronizar);
+  })();
+</script>
+{% endblock %}
