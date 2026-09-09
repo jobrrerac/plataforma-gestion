@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     # Triaje de la cola de aprobacion. Se puede quitar de aqui: la pantalla
     # vuelve a pintarse sin bandas y nada mas cambia.
     "apps.revision",
+    # Bloqueantes y feedback: las dos senales que no existian cuando hizo falta.
+    "apps.seguimiento",
 ]
 
 MIDDLEWARE = [

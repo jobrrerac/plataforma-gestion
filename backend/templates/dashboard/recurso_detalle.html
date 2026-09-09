@@ -53,6 +53,21 @@
 {% endblock %}
 
 {% block content %}
+{% comment %}
+  Reabrir un dia deja un mensaje —cuantas actividades devolvio, o por que no se
+  pudo— y esta plantilla no lo pintaba, asi que la accion no daba ninguna senal:
+  ni al salir bien ni al fallar. La persona volvia a la misma pantalla sin saber
+  si habia pasado algo.
+{% endcomment %}
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} py-2 px-3"
+         style="font-size:.85rem;border-radius:6px;margin:0">
+      <i class="bi {% if m.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
 
 <!-- Page strip -->
 <div class="page-strip page-strip-bloque">

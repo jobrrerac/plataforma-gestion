@@ -799,9 +799,17 @@ class UnDiaReabiertoSePuedeCorregirTests(TestCase):
         )
         self.tipo = TipoActividad.objects.create(nombre="Estudio viejo", requiere_proyecto=False)
 
-        # Un dia habil bastante mas atras que la ventana.
+        # Un dia HABIL bastante mas atras que la ventana.
+        #
+        # Se pregunta al calendario en vez de mirar solo el dia de la semana. La
+        # primera version saltaba fines de semana y nada mas, asi que el 8 de
+        # septiembre —cuando la resta cae en el 20 de julio, festivo nacional—
+        # el dia no era legalizable por un motivo distinto del que se queria
+        # probar y la prueba fallaba sola. Es la misma trampa que ya hizo fallar
+        # `test_un_dia_futuro_no_ofrece_formulario` los jueves y los viernes:
+        # una fecha calculada a ojo acaba aterrizando donde no debe.
         self.fecha = date.today() - timedelta(days=svc.DIAS_ATRAS_MAX + 20)
-        while self.fecha.weekday() >= 5:
+        while not svc.estado_del_dia(self.recurso, self.fecha)["habil"]:
             self.fecha -= timedelta(days=1)
 
         self.dia = DiaLegalizado.objects.create(

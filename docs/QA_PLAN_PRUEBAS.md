@@ -460,7 +460,51 @@ no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
 
 ---
 
-## 16. AUD — Auditoría y trazabilidad
+## 16. SEG — Bloqueantes y feedback
+
+**Qué es y por qué importa.** Un recurso rindió por debajo de lo esperado durante
+un mes y nadie levantó la mano a tiempo. No fue falta de ganas: no existía nada
+que produjera una señal. Estas dos pantallas son ese registro que envejece y
+molesta cuando algo lleva días parado.
+
+Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
+`qa.admin` (ve las alertas y actúa).
+
+| # | Caso | Cómo | Resultado esperado |
+|---|---|---|---|
+| SEG-01 | **La pantalla se abre para todos** | Como `qa.ingeniero`, entrar a **Bloqueantes** | Carga. El bloqueo lo reporta quien lo sufre, así que no hay rol que filtre |
+| SEG-02 | **Reportar un bloqueante** | Rellenar «qué necesitas» y elegir quién lo resuelve | Aparece en Abiertos, con las horas que lleva esperando |
+| SEG-03 | Sin decir qué necesitas no se guarda | Enviar el campo vacío | No lo permite |
+| SEG-04 | **Sin dueño tampoco** | Rellenar qué necesitas pero no elegir a nadie ni escribir un nombre | Error: un bloqueante sin dueño no lo desatasca nadie |
+| SEG-05 | Vale alguien de fuera | Dejar el desplegable en «otra persona» y escribir un nombre a mano | Se guarda. La mitad de quien desbloquea no tiene cuenta en la plataforma |
+| SEG-06 | **Marcar como resuelto** | Pulsar «Ya está resuelto» | Pasa a Resueltos y queda fijado en cuántas horas se resolvió |
+| SEG-07 | El contador se para | Volver al día siguiente y mirar ese mismo | Sigue diciendo las mismas horas: un resuelto no envejece más |
+| SEG-08 | **No se cierra el de otro** | Como `qa.ingeniero`, intentar cerrar uno ajeno | No se puede. Si lo cerrara cualquiera, el tiempo dejaría de medir nada |
+| SEG-09 | Cada quien ve lo suyo | Como `qa.ingeniero`, mirar la lista | Solo sus bloqueantes, no los de sus compañeros |
+| SEG-10 | El PM ve los de su proyecto | Como `qa.pm` | Ve los de la gente asignada a sus proyectos |
+| SEG-11 | **El panel de alertas es solo del Admin** | Comparar la pantalla como `qa.admin` y como `qa.ingeniero` | La franja roja de arriba solo sale para el Admin |
+| SEG-12 | **Alerta a las 48 h** | Con un bloqueante abierto de más de dos días | Sale en el panel, en rojo, diciendo a quién reclamarle |
+| SEG-13 | Antes de 48 h no molesta | Con uno recién abierto | No aparece en el panel |
+| SEG-14 | **Alerta de recurso sin tarea** | Alguien con asignación viva que lleva 2 días imputando a otro proyecto | Sale «lleva N días sin imputar a …» con la acción a tomar |
+| SEG-15 | Un día suelto no alerta | Repetir con un solo día | No aparece: un día es ruido |
+| SEG-16 | **Alerta de silencio** | Alguien asignado sobre quien nadie ha escrito en 14 días | Sale «nadie ha observado a …». Es el primer síntoma de abandono |
+| SEG-17 | **Cada alerta dice qué hacer** | Mirar la columna derecha del panel | Todas traen la acción esperada, no solo el problema |
+| SEG-18 | **Observar a una persona** | Como `qa.pm`, en **Feedback**, rellenar conducta e impacto | Se registra con fecha y autor |
+| SEG-19 | Sin conducta observada no se guarda | Dejar ese campo vacío | Error. Sin hechos es una opinión, no un feedback |
+| SEG-20 | La dimensión es opcional | Guardar sin elegir dimensión | Se guarda igual |
+| SEG-21 | **Un PM no observa a quien no dirige** | Como `qa.pm`, mirar el desplegable «sobre quién» | Solo sale la gente asignada a sus proyectos |
+| SEG-22 | El ingeniero no observa a nadie | Como `qa.ingeniero`, mirar la pantalla | No aparece el formulario de observar |
+| SEG-23 | **Opinar sobre el propio proyecto** | Como `qa.ingeniero`, rellenar el segundo formulario | Se registra. El mensaje dice que lo lee el equipo de Colombia |
+| SEG-24 | **La persona lee lo que se dijo de ella** | Como `qa.ingeniero`, mirar el historial tras SEG-18 | Ahí está. No hay expediente secreto |
+| SEG-25 | **El PM NO lee lo que se dijo del proyecto** | Como `qa.pm`, buscar en el historial lo de SEG-23 | **No aparece.** Si apareciera, nadie escribiría lo que de verdad pasó |
+| SEG-26 | El Admin ve las dos direcciones | Como `qa.admin` | Ve ambas. Es quien tiene que distinguir un problema de desempeño de uno de entrada |
+| SEG-27 | Un ajeno no ve nada | Como otro ingeniero cualquiera | Historial vacío |
+| SEG-28 | **Se nota si se editó** | Cambiar una observación al día siguiente desde `/admin/` | En el historial sale la etiqueta «Editado después» |
+| SEG-29 | Feedback de cierre | Registrar uno eligiendo «Cierre de asignación» | Sale etiquetado como tal en el historial |
+
+---
+
+## 17. AUD — Auditoría y trazabilidad
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -471,7 +515,7 @@ no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
 
 ---
 
-## 17. INF — Infraestructura y despliegue
+## 18. INF — Infraestructura y despliegue
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -484,7 +528,7 @@ no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
 
 ---
 
-## 18. Matriz rol × acción
+## 19. Matriz rol × acción
 
 | Acción | Ingeniero | PM | Admin |
 |---|:---:|:---:|:---:|
@@ -505,7 +549,7 @@ no un boquete: cualquier otro ingeniero debe seguir exactamente igual que antes.
 
 ---
 
-## 19. Comportamientos conocidos (no reportar como bug)
+## 20. Comportamientos conocidos (no reportar como bug)
 
 1. **Arranque en frío de 10-30 s** tras inactividad. Es el precio de `min-replicas 0`, decidido a propósito.
 2. **Una sola réplica.** Sin autoescalado, por decisión: se espera a ver rendimiento real.

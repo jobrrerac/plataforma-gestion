@@ -52,20 +52,31 @@ esfuerzo–horas con LLM, ayuda al escribir el detalle).
 Están diseñadas y decididas, no descartadas: esperan números del piloto de la
 fase 1.
 
+`docs/SEGUIMIENTO_ENTREGA.md` — seguimiento de la entrega. Las **fases 1
+(bloqueantes y alertas) y 2 (feedback en dos direcciones)** están hechas. Faltan
+la 3 (tareas con estimación y cambios de alcance), la 4 (cierre de asignación con
+acta obligatoria) y la 5 (tablero por proyecto y por jefe de proyecto).
+
+Dos reglas de ese módulo que no son obvias y no se deben "simplificar":
+lo que una persona escribe sobre su proyecto **no lo ve el jefe de proyecto**
+—solo ella y el Admin—, porque si lo viera nadie escribiría lo que de verdad
+pasó; y los indicadores del recurso no evalúan durante el **período de
+calibración**, que se anuncia antes de empezar y no después de ver los datos.
+
 Las novedades van por días completos: **medio día se registra como día entero**.
 Decidido, no pendiente. Ese día no se legaliza, y se acepta a cambio de no meter
 medias jornadas en el modelo, el calendario y la capacidad.
 
 ## Modularidad y alcance de QA
 Las apps están por capas y cada una solo depende de las anteriores:
-`accounts` → `core` → `calendar_engine` → `assignments` → `legalizacion` → `dashboard`.
+`accounts` → `core` → `calendar_engine` → `assignments` → `legalizacion` → `seguimiento` → `dashboard`.
 
 Esto no es una aspiración: `apps/core/tests_arquitectura.py` falla si aparece un
 ciclo estructural o una dependencia hacia arriba. Si hace falta una dependencia
 puntual hacia una capa superior, va **dentro de la función**, no en el cuerpo del
 módulo.
 
-Sirve para que un cambio no obligue a repasar los 253 casos de QA a mano.
+Sirve para que un cambio no obligue a repasar los 282 casos de QA a mano.
 `docs/ARQUITECTURA_MODULOS.md` mapea cada módulo a sus bloques de QA:
 **todo PR dice en su descripción qué bloques hay que reprobar.** Una app nueva
 se sitúa en `CAPAS` y en ese mapa, o el test no pasa.

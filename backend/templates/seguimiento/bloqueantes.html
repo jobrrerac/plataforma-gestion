@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block active_bloqueantes %}active{% endblock %}
+{% block page_title %}Bloqueantes{% endblock %}
+
+{% block extra_head %}
+<style>
+  .blk-wrap { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .blk-intro { font-size: .82rem; color: #6b7280; max-width: 68ch; }
+
+  /* ── panel de alertas: solo Admin ───────────────────────────────────── */
+  .blk-alertas { border: 1px solid #e5c9c9; border-radius: 4px; overflow: hidden; }
+  .blk-alertas-cab {
+    background: #fbf1f1; padding: .6rem .9rem;
+    font-size: .78rem; font-weight: 600; color: #7f2b2b;
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .blk-alerta {
+    display: grid; grid-template-columns: 5.5rem 1fr auto;
+    gap: .2rem .8rem; padding: .7rem .9rem;
+    border-top: 1px solid #f0e0e0; align-items: baseline;
+  }
+  .blk-alerta-tipo {
+    font-size: .62rem; letter-spacing: .07em; text-transform: uppercase;
+    font-weight: 600; color: #9a3d3d;
+  }
+  .blk-alerta-texto { font-size: .86rem; color: #1f2937; font-weight: 500; }
+  .blk-alerta-detalle { grid-column: 2; font-size: .76rem; color: #6b7280; }
+  .blk-alerta-accion {
+    grid-column: 3; grid-row: 1 / span 2;
+    font-size: .74rem; color: #7f2b2b; text-align: right; max-width: 15rem;
+  }
+  .blk-alerta.media .blk-alerta-tipo { color: #8a6410; }
+  .blk-alerta.media .blk-alerta-accion { color: #8a6410; }
+
+  /* ── tarjeta de bloqueante ──────────────────────────────────────────── */
+  .blk-lista { display: flex; flex-direction: column; gap: .55rem; }
+  .blk-item {
+    border: 1px solid #e5e7eb; border-left: 3px solid #9ca3af;
+    border-radius: 3px; background: #fff; padding: .8rem 1rem;
+    display: flex; flex-direction: column; gap: .45rem;
+  }
+  .blk-item.vencido { border-left-color: #b91c1c; background: #fdf8f8; }
+  .blk-item.resuelto { border-left-color: #3f8a52; opacity: .72; }
+
+  .blk-top { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: baseline; }
+  .blk-necesito { font-weight: 600; font-size: .92rem; color: #111827; flex: 1 1 20rem; }
+  .blk-edad {
+    font-size: .72rem; font-variant-numeric: tabular-nums;
+    color: #6b7280; white-space: nowrap;
+  }
+  .blk-item.vencido .blk-edad { color: #b91c1c; font-weight: 600; }
+
+  .blk-meta {
+    display: flex; flex-wrap: wrap; gap: .2rem 1.1rem;
+    font-size: .76rem; color: #6b7280;
+  }
+  .blk-meta b { color: #374151; font-weight: 600; }
+
+  .blk-resolver { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+  .blk-resolver input[type="text"] { flex: 1 1 14rem; }
+
+  /* ── formulario de alta ─────────────────────────────────────────────── */
+  .blk-form {
+    border: 1px solid #e5e7eb; border-radius: 4px;
+    background: #fafafa; padding: 1rem 1.1rem;
+    display: flex; flex-direction: column; gap: .7rem;
+  }
+  .blk-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+    gap: .7rem .9rem;
+  }
+  .blk-campo { display: flex; flex-direction: column; gap: .2rem; }
+  .blk-campo label {
+    font-size: .68rem; letter-spacing: .05em; text-transform: uppercase;
+    color: #6b7280; font-weight: 600;
+  }
+  .blk-campo .ayuda { font-size: .72rem; color: #9ca3af; }
+  .blk-ancho { grid-column: 1 / -1; }
+
+  .btn-blk {
+    background: #4b2e83; color: #fff; border: 0; border-radius: 3px;
+    padding: .4rem .95rem; font-size: .82rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-blk:hover { background: #3b2368; }
+  .btn-blk-ok {
+    background: #fff; color: #3f8a52; border: 1px solid #b9d6c1;
+    border-radius: 3px; padding: .28rem .7rem; font-size: .76rem;
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn-blk-ok:hover { background: #f1f8f3; }
+
+  .blk-vacio {
+    border: 1px dashed #d1d5db; border-radius: 4px; padding: 1.4rem;
+    text-align: center; color: #6b7280; font-size: .85rem;
+  }
+  h2.blk-h { font-size: .95rem; font-weight: 700; color: #111827; margin: 0; }
+  .blk-sec { display: flex; flex-direction: column; gap: .6rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="blk-wrap">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} py-2 px-3"
+         style="font-size:.85rem;border-radius:6px;margin:0">
+      <i class="bi {% if m.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div>
+    <h1 class="h5 mb-1">Bloqueantes</h1>
+    <p class="blk-intro mb-0">
+      Algo que te impide avanzar y que depende de otra persona. Reportarlo es lo
+      correcto, no una queja: es la única forma de que se note que estás esperando.
+      Si sigue abierto pasadas {{ horas_para_escalar }} horas, se avisa solo.
+    </p>
+  </div>
+
+  {% if alertas %}
+  {% comment %}
+    Solo lo ve un Admin: el servicio devuelve lista vacía para todos los demás.
+    Enseñarle a un ingeniero quién está sin tarea no le sirve y le cuenta cosas
+    de sus compañeros que no le corresponden.
+  {% endcomment %}
+  <section class="blk-alertas">
+    <div class="blk-alertas-cab">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      {{ alertas|length }} situación{{ alertas|length|pluralize:"es" }} que pide{{ alertas|length|pluralize:"n" }} acción
+    </div>
+    {% for a in alertas %}
+    <div class="blk-alerta {{ a.gravedad }}">
+      <span class="blk-alerta-tipo">
+        {% if a.tipo == "BLOQUEANTE" %}Bloqueante
+        {% elif a.tipo == "SIN_TAREA" %}Sin tarea
+        {% else %}Sin observar{% endif %}
+      </span>
+      <span class="blk-alerta-texto">{{ a.texto }}</span>
+      <span class="blk-alerta-accion">{{ a.accion }}</span>
+      {% if a.detalle %}<span class="blk-alerta-detalle">{{ a.detalle }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if mi_recurso or es_admin %}
+  <section class="blk-sec">
+    <h2 class="blk-h">Reportar uno nuevo</h2>
+    <form method="post" class="blk-form">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="abrir">
+
+      <div class="blk-grid">
+        {% if es_admin and recursos %}
+        <div class="blk-campo">
+          <label for="blk-recurso">A nombre de</label>
+          <select name="recurso" id="blk-recurso" class="form-select form-select-sm">
+            {% if mi_recurso %}<option value="{{ mi_recurso.pk }}">Yo ({{ mi_recurso.nombre }})</option>{% endif %}
+            {% for r in recursos %}
+            {% if not mi_recurso or r.pk != mi_recurso.pk %}
+            <option value="{{ r.pk }}">{{ r.nombre }}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          <span class="ayuda">Si te lo dijeron en una llamada, regístralo tú.</span>
+        </div>
+        {% endif %}
+
+        <div class="blk-campo blk-ancho">
+          <label for="blk-necesito">Qué necesitas</label>
+          <input type="text" name="necesito" id="blk-necesito" required maxlength="300"
+                 class="form-control form-control-sm"
+                 placeholder="Ej: el esquema de la tabla de demanda que menciona el funcional">
+          <span class="ayuda">En una frase. Lo va a leer alguien que no tiene tu contexto.</span>
+        </div>
+
+        <div class="blk-campo">
+          <label for="blk-bloquea">Quién puede resolverlo</label>
+          <select name="bloquea_usuario" id="blk-bloquea" class="form-select form-select-sm">
+            <option value="">— otra persona —</option>
+            {% for u in posibles_bloqueadores %}
+            <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="blk-campo">
+          <label for="blk-nombre">Si no está en la lista</label>
+          <input type="text" name="bloquea_nombre" id="blk-nombre" maxlength="120"
+                 class="form-control form-control-sm" placeholder="Nombre y apellido">
+        </div>
+
+        <div class="blk-campo">
+          <label for="blk-proyecto">Proyecto</label>
+          <select name="proyecto" id="blk-proyecto" class="form-select form-select-sm">
+            <option value="">— ninguno en concreto —</option>
+            {% for p in mis_proyectos %}
+            <option value="{{ p.pk }}">{{ p.codigo }} · {{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="blk-campo blk-ancho">
+          <label for="blk-mientras">Qué haces mientras <span class="text-muted">(opcional)</span></label>
+          <input type="text" name="mientras_tanto" id="blk-mientras" maxlength="300"
+                 class="form-control form-control-sm"
+                 placeholder="Ej: avanzo con las pruebas del endpoint anterior">
+          <span class="ayuda">Sirve para saber si el bloqueo te dejó parado del todo.</span>
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="btn-blk">
+          <i class="bi bi-plus-lg me-1"></i>Registrar bloqueante
+        </button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="blk-sec">
+    <h2 class="blk-h">Abiertos ({{ abiertos|length }})</h2>
+    {% if abiertos %}
+    <div class="blk-lista">
+      {% for b in abiertos %}
+      <article class="blk-item {% if b.vencido %}vencido{% endif %}">
+        <div class="blk-top">
+          <span class="blk-necesito">{{ b.necesito }}</span>
+          <span class="blk-edad">
+            {% if b.vencido %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+            {{ b.horas_abierto|floatformat:0 }} h esperando
+          </span>
+        </div>
+        <div class="blk-meta">
+          <span><b>{{ b.recurso.nombre }}</b></span>
+          <span>espera a <b>{{ b.bloqueador }}</b></span>
+          {% if b.proyecto %}<span>{{ b.proyecto.codigo }}</span>{% endif %}
+          <span>desde el {{ b.creado_en|date:"d/m H:i" }}</span>
+          {% if b.mientras_tanto %}<span>mientras: {{ b.mientras_tanto }}</span>{% endif %}
+        </div>
+        <form method="post" class="blk-resolver">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="resolver">
+          <input type="hidden" name="bloqueante" value="{{ b.pk }}">
+          <input type="text" name="como_se_resolvio" maxlength="300"
+                 class="form-control form-control-sm"
+                 placeholder="Cómo se resolvió (opcional)">
+          <button type="submit" class="btn-blk-ok">
+            <i class="bi bi-check2 me-1"></i>Ya está resuelto
+          </button>
+        </form>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="blk-vacio">
+      <i class="bi bi-check2-circle me-2"></i>No hay nada bloqueado ahora mismo.
+    </div>
+    {% endif %}
+  </section>
+
+  {% if resueltos %}
+  <section class="blk-sec">
+    <h2 class="blk-h">Resueltos recientemente</h2>
+    <div class="blk-lista">
+      {% for b in resueltos %}
+      <article class="blk-item resuelto">
+        <div class="blk-top">
+          <span class="blk-necesito">{{ b.necesito }}</span>
+          <span class="blk-edad">resuelto en {{ b.horas_abierto|floatformat:0 }} h</span>
+        </div>
+        <div class="blk-meta">
+          <span><b>{{ b.recurso.nombre }}</b></span>
+          <span>esperó a <b>{{ b.bloqueador }}</b></span>
+          <span>cerrado el {{ b.resuelto_en|date:"d/m H:i" }}</span>
+          {% if b.como_se_resolvio %}<span>{{ b.como_se_resolvio }}</span>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}

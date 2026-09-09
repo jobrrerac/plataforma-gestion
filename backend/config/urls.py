@@ -14,6 +14,7 @@ from apps.accounts.views import LoginRateLimitView, CambiarPasswordView, salud, 
 from apps.calendar_engine.views_novedades import NovedadesView, NovedadesRevisarView
 from apps.legalizacion.views import LegalizarDiaView
 from apps.legalizacion.views_aprobacion import AprobarHorasView
+from apps.seguimiento.views import BloqueantesView, FeedbackView
 
 urlpatterns = [
     # Redirige el login del admin a nuestra página personalizada
@@ -42,6 +43,11 @@ urlpatterns = [
     path("horas/", LegalizarDiaView.as_view(), name="horas"),
     path("horas/aprobar/", AprobarHorasView.as_view(), name="horas-aprobar"),
     path("recurso/<int:pk>/", RecursoDetalleView.as_view(), name="recurso-detalle"),
+    # Seguimiento: lo que frena a la gente y lo que se observa de ella. Las dos
+    # pantallas son para cualquier usuario autenticado —el bloqueante lo reporta
+    # quien lo sufre—; el alcance de lo que se ve lo decide el servicio.
+    path("bloqueantes/", BloqueantesView.as_view(), name="bloqueantes"),
+    path("feedback/", FeedbackView.as_view(), name="feedback"),
     # Sondas de la plataforma. Van sin autenticar y sin redirección a HTTPS.
     path("healthz/", salud, name="healthz"),
     path("readyz/", listo, name="readyz"),

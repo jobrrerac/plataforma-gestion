@@ -424,6 +424,19 @@
          class="inet-nav-link {% block active_novedades %}{% endblock %}">
         <i class="bi bi-calendar-heart"></i> Novedades
       </a>
+      {% comment %}
+        Bloqueantes y Feedback son de todo el mundo, igual que Registrar horas:
+        el bloqueo lo reporta quien lo sufre, y la opinión sobre el proyecto la
+        da quien trabaja en él.
+      {% endcomment %}
+      <a href="/bloqueantes/"
+         class="inet-nav-link {% block active_bloqueantes %}{% endblock %}">
+        <i class="bi bi-cone-striped"></i> Bloqueantes
+      </a>
+      <a href="/feedback/"
+         class="inet-nav-link {% block active_feedback %}{% endblock %}">
+        <i class="bi bi-chat-square-text"></i> Feedback
+      </a>
       {% if puede_aprobar_horas %}
       <a href="/horas/aprobar/"
          class="inet-nav-link {% block active_horas_aprobar %}{% endblock %}">

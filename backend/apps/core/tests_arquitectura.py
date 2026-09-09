@@ -37,7 +37,12 @@ RAIZ_APPS = Path(__file__).resolve().parent.parent
 #   assignments      quién está asignado a qué y cuándo (el plan)
 #   legalizacion     qué hizo cada quien con su jornada (lo declarado)
 #   revision         triaje de la cola de aprobación (se puede apagar entero)
+#   seguimiento      qué frena a alguien y qué se le dice (bloqueantes, feedback)
 #   dashboard        pantallas que componen todo lo anterior
+#
+# `seguimiento` va después de `legalizacion` porque una de sus alertas cruza el
+# plan con lo declarado: quién tiene asignación viva y no está imputando a su
+# proyecto. Esa señal solo existe si se pueden mirar las dos cosas a la vez.
 CAPAS = [
     "accounts",
     "core",
@@ -45,6 +50,7 @@ CAPAS = [
     "assignments",
     "legalizacion",
     "revision",
+    "seguimiento",
     "dashboard",
 ]
 
