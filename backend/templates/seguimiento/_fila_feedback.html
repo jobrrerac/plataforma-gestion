@@ -1,0 +1,37 @@
+{# Una observacion, en cualquiera de las dos direcciones. Se comparte entre
+   la pantalla de registrar y la de gestionar para que las dos la pinten
+   igual: si divergen, comparar deja de ser fiable. #}
+    <div class="fb-row {% if f.direccion == P2R %}sobre-persona{% else %}sobre-proyecto{% endif %}">
+      <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+        <span class="dir-chip {% if f.direccion == P2R %}d-persona{% else %}d-proyecto{% endif %}">
+          {% if f.direccion == P2R %}Sobre la persona{% else %}Sobre el proyecto{% endif %}
+        </span>
+        <strong style="font-size:.9rem">{{ f.recurso.nombre }}</strong>
+        {% if f.proyecto %}<span class="meta">· {{ f.proyecto.codigo }}</span>{% endif %}
+        <span class="meta ms-auto">
+          {{ f.fecha_observacion|date:"d/m/Y" }} · {{ f.autor.get_full_name|default:f.autor.username }}
+        </span>
+      </div>
+
+      {% if f.direccion == P2R %}
+        {% if f.situacion %}<p><span class="k">Situación</span>{{ f.situacion }}</p>{% endif %}
+        <p><span class="k">Conducta</span>{{ f.conducta }}</p>
+        {% if f.impacto %}<p><span class="k">Impacto</span>{{ f.impacto }}</p>{% endif %}
+      {% else %}
+        <p><span class="k">Claridad del objetivo</span>{{ f.claridad_objetivo }} de 5</p>
+        {% if f.comentario %}<p><span class="k">Feedback</span>{{ f.comentario }}</p>{% endif %}
+        {% if f.que_ahorraria_tiempo %}<p><span class="k">Habría ahorrado tiempo</span>{{ f.que_ahorraria_tiempo }}</p>{% endif %}
+      {% endif %}
+
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        {% if f.tipo == "FORTALEZA" %}<span class="chip buena">Fortaleza</span>{% endif %}
+        {% if f.tipo == "A_MEJORAR" %}<span class="chip mejora">A mejorar</span>{% endif %}
+        {% if f.dimension %}<span class="chip">{{ f.get_dimension_display }}</span>{% endif %}
+        {% if f.momento == "CIERRE" %}<span class="chip">Cierre de asignación</span>{% endif %}
+        {% if f.tuve_que_intuir %}<span class="chip mejora">Tuvo que intuir</span>{% endif %}
+        {% if f.cambio_alcance %}
+        <span class="chip mejora">Alcance cambió{% if f.veces_cambio_alcance %} ×{{ f.veces_cambio_alcance }}{% endif %}</span>
+        {% endif %}
+        {% if f.editado %}<span class="chip">Editado después</span>{% endif %}
+      </div>
+    </div>

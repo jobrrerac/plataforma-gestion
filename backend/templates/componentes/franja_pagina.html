@@ -5,10 +5,18 @@
   «Volver» salía azul en Cesiones y magenta en Liberaciones, en Solicitud
   recurrente no salía, y el separador aparecía o no según la pantalla.
 
-  Uso:
-    {% include "componentes/franja_pagina.html" with
-       volver="/dashboard/" icono="bi-clock-history"
-       titulo="Registrar" resaltado="horas" %}
+  Uso — TODO EN UNA LINEA:
+    {% include "componentes/franja_pagina.html" with volver="/registrar/" icono="bi-clock-history" titulo="Registrar" resaltado="horas" %}
+
+  El lexer de plantillas de Django NO admite saltos de linea dentro de una
+  etiqueta: partida en dos, el `{% include %}` deja de ser una etiqueta y se
+  imprime tal cual en la pantalla, sin error y sin aviso. Este mismo ejemplo
+  estaba escrito en tres lineas y alguien lo copio: la franja de Novedades se
+  quedo sin cabecera y sin enlace de Volver.
+
+  `volver` apunta al concentrador del que cuelga la pantalla —/registrar/,
+  /solicitar/ o /gestionar/—, no al dashboard: volver es deshacer el ultimo
+  paso, no saltar al principio.
 
   `volver` y `nota` son opcionales; el resto conviene ponerlo siempre.
 {% endcomment %}

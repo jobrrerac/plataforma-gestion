@@ -15,7 +15,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.accounts.roles import es_admin, es_admin_o_pm
+from apps.accounts.roles import es_admin, es_admin_o_pm, es_visor
 from apps.assignments.models import Asignacion
 from apps.core.models import Recurso
 from apps.legalizacion.models import RegistroHoras
@@ -73,29 +73,39 @@ def puede_abrir_bloqueante(usuario, recurso) -> bool:
 
 @transaction.atomic
 def abrir_bloqueante(
-    recurso, usuario, necesito, *, bloquea_usuario=None, bloquea_nombre="",
+    recurso, usuario, necesito, *, rol_que_resuelve="OTRO", bloquea_nombre="",
     proyecto=None, mientras_tanto="",
 ):
     """Registra algo que impide avanzar.
 
-    Se pide poco a propósito: qué necesitas y quién lo resuelve. Un formulario
-    largo para reportar un bloqueo consigue que la gente no reporte bloqueos.
+    Se pide poco a propósito: qué te frena y a qué rol le toca resolverlo. Un
+    formulario largo para reportar un bloqueo consigue que la gente no reporte
+    bloqueos, y pedirle a un junior recién llegado el nombre exacto de quien
+    tiene que desatascarlo es pedirle un dato que muchas veces no tiene.
     """
     if not puede_abrir_bloqueante(usuario, recurso):
         raise PermissionDenied("Solo puedes reportar bloqueantes propios.")
 
     necesito = (necesito or "").strip()
     if not necesito:
-        raise ValidationError("Di qué necesitas para poder avanzar.")
+        raise ValidationError("Di qué te está bloqueando para poder avanzar.")
 
     bloqueante = Bloqueante(
         recurso=recurso,
         proyecto=proyecto,
         necesito=necesito[:300],
-        bloquea_usuario=bloquea_usuario,
+        rol_que_resuelve=rol_que_resuelve or "OTRO",
         bloquea_nombre=(bloquea_nombre or "").strip()[:120],
         mientras_tanto=(mientras_tanto or "").strip()[:300],
         creado_por=usuario,
+        # La persona concreta se DEDUCE, no se pregunta: si el bloqueo es del
+        # jefe de proyecto y el proyecto tiene uno, ya sabemos quién es. Es lo
+        # que permite seguir midiendo el tiempo de desbloqueo por persona en el
+        # caso más frecuente sin añadir una pregunta al formulario.
+        bloquea_usuario=(
+            proyecto.pm if rol_que_resuelve == "PM" and proyecto and proyecto.pm_id
+            else None
+        ),
     )
     bloqueante.full_clean(exclude=["creado_en"])
     bloqueante.save()
@@ -159,6 +169,11 @@ def bloqueantes_visibles(usuario, *, solo_abiertos=False):
         qs = qs.filter(resuelto_en__isnull=True)
 
     if es_admin(usuario):
+        return qs
+    # El Visor mira y no escribe en ninguna parte: ese es su papel. Ve lo que
+    # frena a cada persona porque es justo lo que hace falta para entender una
+    # semana floja sin tener que preguntar.
+    if es_visor(usuario):
         return qs
 
     from django.db.models import Q
@@ -245,6 +260,15 @@ def feedback_visible(usuario, *, recurso=None):
         return qs
 
     from django.db.models import Q
+
+    # El Visor ve lo que se observó **sobre** las personas, y solo eso. Lo que
+    # alguien escribió sobre su proyecto sigue reservado a quien lo escribió y a
+    # su manager: ampliar ese círculo, aunque sea a un rol de solo lectura,
+    # rompe la promesa con la que se pidió.
+    if es_visor(usuario):
+        return qs.filter(
+            Q(direccion=Feedback.PROYECTO_A_RECURSO) | Q(autor=usuario)
+        )
 
     # Lo que se escribió sobre mí, y lo que yo escribí, siempre.
     condiciones = Q(autor=usuario)

@@ -69,8 +69,7 @@ class BaseFeedback(TestCase):
             proyecto=self.proyecto,
             claridad_objetivo=2,
             tuve_que_intuir=True,
-            que_intui="los nombres de las tablas",
-            horas_hasta_respuesta=72,
+            comentario="la comunicacion diaria bien; el alcance escrito, mal",
         )
         datos.update(extra)
         return svc.registrar_feedback(
@@ -122,7 +121,7 @@ class OpinionSobreElProyectoTests(BaseFeedback):
     def test_la_persona_puede_opinar_de_su_proyecto(self):
         f = self._sobre_el_proyecto()
         self.assertEqual(f.claridad_objetivo, 2)
-        self.assertEqual(f.horas_hasta_respuesta, 72)
+        self.assertIn("alcance escrito", f.comentario)
 
     def test_sin_puntuar_la_claridad_no_se_guarda(self):
         with self.assertRaises(ValidationError):
@@ -214,15 +213,15 @@ class LaPantallaDeFeedbackTests(BaseFeedback):
         resp = self.client.get(reverse("feedback"))
         self.assertFalse(resp.context["puede_observar"])
 
-    def test_al_pm_si(self):
+    def test_al_pm_si_en_la_de_gestionar(self):
         self.client.force_login(self.pm)
-        resp = self.client.get(reverse("feedback"))
+        resp = self.client.get(reverse("feedback-equipo"))
         self.assertTrue(resp.context["puede_observar"])
         self.assertIn(self.recurso, resp.context["recursos_observables"])
 
     def test_registrar_una_observacion(self):
         self.client.force_login(self.pm)
-        self.client.post(reverse("feedback"), {
+        self.client.post(reverse("feedback-equipo"), {
             "direccion": Feedback.PROYECTO_A_RECURSO,
             "recurso": self.recurso.pk,
             "proyecto": self.proyecto.pk,
@@ -241,9 +240,47 @@ class LaPantallaDeFeedbackTests(BaseFeedback):
             "proyecto": self.proyecto.pk,
             "claridad_objetivo": "2",
             "tuve_que_intuir": "si",
-            "que_intui": "el nombre de las tablas",
+            "comentario": "bien la disponibilidad; mal el alcance por escrito",
             "que_ahorraria_tiempo": "un ejemplo de la respuesta esperada",
         })
         f = Feedback.objects.get(direccion=Feedback.RECURSO_A_PROYECTO)
         self.assertEqual(f.claridad_objetivo, 2)
         self.assertTrue(f.tuve_que_intuir)
+
+
+class LoQueDaYLoQueRecibeTests(BaseFeedback):
+    """La pantalla de gestion enfrenta las dos direcciones de una persona.
+
+    Es lo que permite distinguir un problema de desempeno de uno de entrada, y
+    obligar a saltar entre pantallas para compararlas es garantizar que nadie
+    las compare.
+    """
+
+    def test_el_admin_ve_las_dos_columnas(self):
+        self._sobre_la_persona()
+        self._sobre_el_proyecto()
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse("feedback-equipo"), {"recurso": self.recurso.pk})
+
+        self.assertEqual(len(resp.context["recibido"]), 1)
+        self.assertEqual(len(resp.context["dado"]), 1)
+        self.assertEqual(resp.context["elegido"], self.recurso)
+
+    def test_el_pm_ve_lo_que_recibe_pero_no_lo_que_da(self):
+        """La promesa con la que se pidio ese feedback fue que solo lo leyera el
+        manager en Colombia. Ampliar el circulo la rompe."""
+        self._sobre_la_persona()
+        self._sobre_el_proyecto()
+        self.client.force_login(self.pm)
+        resp = self.client.get(reverse("feedback-equipo"), {"recurso": self.recurso.pk})
+
+        self.assertEqual(len(resp.context["recibido"]), 1)
+        self.assertEqual(resp.context["dado"], [])
+
+    def test_en_registrar_no_se_puede_mirar_a_otro(self):
+        """El filtro por persona es de la pantalla de gestion. Si funcionara
+        aqui, cualquiera sondearia el expediente de sus companeros."""
+        self._sobre_la_persona()
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("feedback"), {"recurso": self.recurso.pk})
+        self.assertIsNone(resp.context["elegido"])

@@ -58,12 +58,16 @@ Un objeto con dueño y con edad. Se pide poco a propósito: qué necesitas y qui
 lo resuelve. Un formulario largo para reportar un bloqueo consigue que nadie
 reporte bloqueos.
 
-**Quién puede resolverlo son dos campos y no uno.** La mitad de las veces es un
-jefe de proyecto que sí tiene cuenta —`Proyecto.pm` es una clave foránea a
-`User`— y la otra mitad es alguien del equipo cliente que no la tiene. Se guarda
-la FK cuando existe porque es lo único que permite agregar el tiempo de
-desbloqueo por persona sin que «Álvaro», «alvaro» y «Alvaro O.» cuenten como
-tres.
+**Se pregunta por rol, no por persona.** Un junior recién llegado sabe que espera
+«al jefe de proyecto» o «a alguien de accesos», no cómo se llama. Un formulario
+que exige lo que no se sabe consigue que no se rellene. El rol además agrega bien
+—«los jefes de proyecto tardan 60 h de media»— y no se fragmenta como el texto
+libre, donde «Álvaro», «alvaro» y «Alvaro O.» cuentan como tres.
+
+**La persona concreta se deduce, no se pregunta.** Si el rol es «jefe de
+proyecto» y el proyecto tiene PM, ya sabemos quién es. Así se sigue midiendo por
+persona en el caso más frecuente sin añadir una pregunta al formulario. El nombre
+queda como campo opcional, para cuando se conoce.
 
 **`resuelto_en` es lo que hace todo el trabajo.** Sin esa fecha hay una lista de
 quejas; con ella hay una métrica —la diferencia entre las dos fechas es el
@@ -88,11 +92,17 @@ tendría que mezclarlas a mano y tarde o temprano una se quedaría fuera.
 | Dirección | Qué recoge |
 |---|---|
 | **Proyecto → persona** | situación, conducta observada, impacto, tipo, dimensión opcional |
-| **Persona → proyecto** | claridad del objetivo (1-5), qué tuvo que intuir, horas hasta respuesta, cambios de alcance, qué habría ahorrado tiempo |
+| **Persona → proyecto** | claridad del objetivo (1-5), si tuvo que intuir, cambios de alcance, feedback abierto, qué habría ahorrado tiempo |
 
 La segunda es la que hoy no existe en ningún sitio y la que más información nueva
-aporta: es la única que puede decir que el objetivo llegó a medias o que nadie
-contestó en tres días.
+aporta: es la única que puede decir que el objetivo llegó a medias.
+
+**No se pregunta cuántas horas tardaron en responder.** Eso lo mide el bloqueante
+con precisión de reloj y sin depender de la memoria de nadie; volver a pedirlo
+aquí sería recoger a mano un dato peor.
+
+**El campo abierto pide las dos caras** —qué estuvo bien y qué puede mejorar— a
+propósito: un formulario que solo pide quejas recoge quejas, y deja de leerse.
 
 ### La asimetría de visibilidad, que es deliberada
 

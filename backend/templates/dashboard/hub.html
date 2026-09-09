@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ acento|capfirst }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+
+  .hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+
+  /* Cada acción es una tarjeta entera pinchable: el objetivo de esta pantalla es
+     llegar a otro sitio, así que el área de clic es toda la caja y no un enlace
+     de dos palabras. */
+  .hub-item {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: #fff; border: 1px solid #eee; border-radius: 12px;
+    padding: 18px 20px; text-decoration: none; color: inherit;
+    box-shadow: 0 1px 6px rgba(0,0,0,.06);
+    transition: border-color .12s, box-shadow .12s, transform .12s;
+  }
+  .hub-item:hover {
+    border-color: #d6197f; box-shadow: 0 4px 14px rgba(214,25,127,.12);
+    transform: translateY(-1px); color: inherit;
+  }
+  .hub-item:focus-visible { outline: 2px solid #d6197f; outline-offset: 2px; }
+
+  .hub-icono {
+    flex: none; width: 40px; height: 40px; border-radius: 10px;
+    background: #f7f0f7; color: #d6197f;
+    display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+  }
+  .hub-item h2 {
+    font-family: 'Montserrat', sans-serif; font-weight: 700;
+    font-size: .95rem; color: #191b2e; margin: 0 0 .2rem;
+  }
+  .hub-item p { margin: 0; font-size: .84rem; color: #676d7a; }
+
+  .hub-vacio {
+    background: #fff; border: 1px dashed #d8dae2; border-radius: 12px;
+    padding: 34px 16px; text-align: center; color: #8a8f9c; font-size: .88rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hub-item { transition: none; }
+    .hub-item:hover { transform: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="/dashboard/" style="color:#d6197f;text-decoration:none;font-size:.85rem;display:flex;align-items:center;gap:4px">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div style="width:1px;height:20px;background:#e8e6f0"></div>
+  <h1><i class="bi {{ icono }}"></i> {{ titulo }} <span>{{ acento }}</span></h1>
+</div>
+
+<div class="container py-4" style="max-width:1120px">
+
+  <p class="text-muted mb-4" style="font-size:.86rem;max-width:70ch">{{ entradilla }}</p>
+
+  {% if items %}
+  <div class="hub-grid">
+    {% for i in items %}
+    <a class="hub-item" href="{{ i.url }}">
+      <span class="hub-icono"><i class="bi {{ i.icono }}"></i></span>
+      <span>
+        <h2>{{ i.titulo }}</h2>
+        <p>{{ i.texto }}</p>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="hub-vacio">
+    <i class="bi bi-shield-check me-2"></i>
+    Aquí no hay nada para ti todavía. Estas acciones son de quien aprueba o
+    planifica el trabajo del equipo.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

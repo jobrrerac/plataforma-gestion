@@ -475,8 +475,9 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 | SEG-01 | **La pantalla se abre para todos** | Como `qa.ingeniero`, entrar a **Bloqueantes** | Carga. El bloqueo lo reporta quien lo sufre, así que no hay rol que filtre |
 | SEG-02 | **Reportar un bloqueante** | Rellenar «qué necesitas» y elegir quién lo resuelve | Aparece en Abiertos, con las horas que lleva esperando |
 | SEG-03 | Sin decir qué necesitas no se guarda | Enviar el campo vacío | No lo permite |
-| SEG-04 | **Sin dueño tampoco** | Rellenar qué necesitas pero no elegir a nadie ni escribir un nombre | Error: un bloqueante sin dueño no lo desatasca nadie |
-| SEG-05 | Vale alguien de fuera | Dejar el desplegable en «otra persona» y escribir un nombre a mano | Se guarda. La mitad de quien desbloquea no tiene cuenta en la plataforma |
+| SEG-04 | **Se pide el rol, no la persona** | Mirar el formulario | Hay «Rol que debe resolverlo» (jefe de proyecto, líder, compañero, cliente, accesos) y el nombre es **opcional** |
+| SEG-05 | La persona se deduce sola | Elegir un proyecto y el rol «Jefe de proyecto», guardar y mirar la fila | Sale el nombre del PM de ese proyecto, sin haberlo escrito |
+| SEG-05b | Sin poder deducirla, sale el rol | Repetir sin elegir proyecto | Dice «espera a el jefe de proyecto» |
 | SEG-06 | **Marcar como resuelto** | Pulsar «Ya está resuelto» | Pasa a Resueltos y queda fijado en cuántas horas se resolvió |
 | SEG-07 | El contador se para | Volver al día siguiente y mirar ese mismo | Sigue diciendo las mismas horas: un resuelto no envejece más |
 | SEG-08 | **No se cierra el de otro** | Como `qa.ingeniero`, intentar cerrar uno ajeno | No se puede. Si lo cerrara cualquiera, el tiempo dejaría de medir nada |
@@ -494,17 +495,54 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 | SEG-20 | La dimensión es opcional | Guardar sin elegir dimensión | Se guarda igual |
 | SEG-21 | **Un PM no observa a quien no dirige** | Como `qa.pm`, mirar el desplegable «sobre quién» | Solo sale la gente asignada a sus proyectos |
 | SEG-22 | El ingeniero no observa a nadie | Como `qa.ingeniero`, mirar la pantalla | No aparece el formulario de observar |
-| SEG-23 | **Opinar sobre el propio proyecto** | Como `qa.ingeniero`, rellenar el segundo formulario | Se registra. El mensaje dice que lo lee el equipo de Colombia |
+| SEG-23 | **Opinar sobre el propio proyecto** | Como `qa.ingeniero`, rellenar el segundo formulario | Se registra. El mensaje dice que solo lo ve tu manager en Colombia |
+| SEG-23b | **El aviso de privacidad se ve antes de escribir** | Mirar encima del formulario | Franja azul: «accesible solo por tu manager en Colombia, no por el jefe de proyecto» |
+| SEG-23c | El campo abierto pide las dos caras | Leer el marcador de posición | «qué cosas estuvieron bien y qué cosas pueden mejorar» — no solo quejas |
 | SEG-24 | **La persona lee lo que se dijo de ella** | Como `qa.ingeniero`, mirar el historial tras SEG-18 | Ahí está. No hay expediente secreto |
 | SEG-25 | **El PM NO lee lo que se dijo del proyecto** | Como `qa.pm`, buscar en el historial lo de SEG-23 | **No aparece.** Si apareciera, nadie escribiría lo que de verdad pasó |
 | SEG-26 | El Admin ve las dos direcciones | Como `qa.admin` | Ve ambas. Es quien tiene que distinguir un problema de desempeño de uno de entrada |
 | SEG-27 | Un ajeno no ve nada | Como otro ingeniero cualquiera | Historial vacío |
 | SEG-28 | **Se nota si se editó** | Cambiar una observación al día siguiente desde `/admin/` | En el historial sale la etiqueta «Editado después» |
 | SEG-29 | Feedback de cierre | Registrar uno eligiendo «Cierre de asignación» | Sale etiquetado como tal en el historial |
+| SEG-30 | **Los bloqueantes salen en la ficha** | Abrir `/recurso/<id>/` de alguien con bloqueantes | Sección **Bloqueantes** entre Ausencias y Horas aprobadas, con a quién espera y cuánto lleva |
+| SEG-31 | Los vencidos se distinguen ahí también | Con uno de más de 48 h | La fila sale en rojo suave y el tiempo en rojo |
+| SEG-32 | **Misma piel que el resto** | Comparar Bloqueantes y Feedback con Novedades | Franja superior con «← Volver», título con acento rosa, tarjetas y botón rosa iguales |
+| SEG-33 | **Filtro por proyecto** | Como `qa.admin`, en Bloqueantes, elegir un proyecto y Filtrar | Solo salen los de ese proyecto |
+| SEG-34 | Filtro por recurso | Elegir una persona | Solo los suyos |
+| SEG-35 | Filtro por estado | Elegir «Vencidos» | Solo los abiertos de más de 48 h; desaparece el bloque de resueltos |
+| SEG-36 | **Al ingeniero no se le ofrecen** | Como `qa.ingeniero`, mirar la pantalla | No hay barra de filtros: sobre una lista de dos son ruido |
+| SEG-37 | **Ni los puede usar por la URL** | Como `qa.ingeniero`, entrar a `/bloqueantes/?recurso=<otro_id>` | Sigue viendo solo los suyos. Si no, podría sondear quién tiene bloqueantes |
+| SEG-38 | **El Visor ve, no escribe** | Como `qa.visor`, entrar a Bloqueantes | Ve los de todo el equipo. No hay formulario de reportar ni botón de resolver |
+| SEG-39 | Y ve el feedback sobre las personas | Como `qa.visor`, entrar a Feedback | Ve las observaciones **sobre** personas |
+| SEG-40 | **Pero no lo que se dijo del proyecto** | Buscar en ese historial lo de SEG-23 | **No aparece.** Ampliar ese círculo, aunque sea a un rol de solo lectura, rompe la promesa con la que se pidió |
 
 ---
 
-## 17. AUD — Auditoría y trazabilidad
+## 17. NAV — Navegación
+
+**Qué es y por qué importa.** La barra superior llegó a once pestañas y dejó de
+caber. El problema no era el ancho: mezclaba en una fila lo que uno reporta sobre
+sí mismo, lo que pide sobre el equipo y lo que revisa de otros. Ahora son tres
+verbos y cada uno lleva a una página que explica sus opciones.
+
+| # | Caso | Cómo | Resultado esperado |
+|---|---|---|---|
+| NAV-01 | **Cuatro entradas, no once** | Entrar como `qa.admin` y mirar la barra | Dashboard, Registrar, Solicitar, Gestionar. Nada más |
+| NAV-02 | **Registrar es de todos** | Como `qa.ingeniero` | Ve Registrar con horas, novedades, bloqueantes y feedback |
+| NAV-03 | Al ingeniero no se le ofrece lo demás | Mirar su barra | **No** aparecen Solicitar ni Gestionar |
+| NAV-04 | **El PM ve los tres** | Como `qa.pm` | Registrar, Solicitar y Gestionar |
+| NAV-05 | **Solicitar agrupa las peticiones** | Entrar a Solicitar como `qa.pm` | Solicitar recurso, cesión de horas y liberar recurso |
+| NAV-06 | El ingeniero no puede solicitar | Entrar a `/solicitar/` como `qa.ingeniero` | Página vacía explicando que esto es de quien planifica. **No** un 403 seco |
+| NAV-07 | **Gestionar respeta cada rol** | Comparar `qa.pm` y `qa.admin` | El PM no ve «Aprobar novedades»; el Admin sí |
+| NAV-08 | **El aprobador delegado sí ve Aprobar horas** | Como `qa.visor` designada delegada de un proyecto | Le sale el enlace. Antes tenía que saberse la URL |
+| NAV-09 | **El Visor no solicita** | Como `qa.visor`, entrar a Solicitar | Vacío |
+| NAV-10 | Pero sí gestiona lo de mirar | Como `qa.visor`, entrar a Gestionar | Ve Bloqueantes y Feedback; **no** ve las dos de aprobar |
+| NAV-11 | **Sin atajos sueltos al admin** | Mirar la barra como `qa.admin` | Ya no está «Asignaciones»: era un enlace a una parte del admin, y el admin está a la derecha |
+| NAV-12 | Cada pantalla marca su grupo | Entrar a Registrar horas y mirar la barra | **Registrar** aparece resaltado |
+
+---
+
+## 18. AUD — Auditoría y trazabilidad
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -515,7 +553,7 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 
 ---
 
-## 18. INF — Infraestructura y despliegue
+## 19. INF — Infraestructura y despliegue
 
 | ID | Título | Pasos | Resultado esperado |
 |---|---|---|---|
@@ -528,7 +566,7 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 
 ---
 
-## 19. Matriz rol × acción
+## 20. Matriz rol × acción
 
 | Acción | Ingeniero | PM | Admin |
 |---|:---:|:---:|:---:|
@@ -549,7 +587,7 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 
 ---
 
-## 20. Comportamientos conocidos (no reportar como bug)
+## 21. Comportamientos conocidos (no reportar como bug)
 
 1. **Arranque en frío de 10-30 s** tras inactividad. Es el precio de `min-replicas 0`, decidido a propósito.
 2. **Una sola réplica.** Sin autoescalado, por decisión: se espera a ver rendimiento real.

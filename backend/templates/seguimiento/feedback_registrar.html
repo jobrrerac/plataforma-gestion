@@ -1,0 +1,108 @@
+{% extends "seguimiento/feedback_base.html" %}
+{# Lo tuyo: tu parte semanal y tu historial. #}
+{% block active_registrar %}active{% endblock %}
+
+{% block volver %}/registrar/{% endblock %}
+{% block encabezado %}<i class="bi bi-chat-square-text"></i> Mi <span>feedback</span>{% endblock %}
+
+{% block cuerpo %}
+  {% if mi_recurso %}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1 seccion">Cómo fue tu semana en el proyecto</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Registra aquí, de manera semanal, cómo fue tu experiencia trabajando en el
+      proyecto durante la semana en curso.
+    </p>
+    <div class="privado mb-3">
+      <i class="bi bi-shield-lock me-1"></i>
+      Esta información será accesible <strong>solo por tu manager en Colombia</strong>,
+      no por el jefe de proyecto.
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="direccion" value="{{ R2P }}">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          <select name="proyecto" class="form-select">
+            <option value="">— ninguno en concreto —</option>
+            {% for p in mis_proyectos %}
+            <option value="{{ p.pk }}">{{ p.codigo }} · {{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Claridad del objetivo</label>
+          <select name="claridad_objetivo" required class="form-select">
+            <option value="">— elige —</option>
+            <option value="1">1 · no supe qué se esperaba</option>
+            <option value="2">2 · muy poco claro</option>
+            <option value="3">3 · a medias</option>
+            <option value="4">4 · bastante claro</option>
+            <option value="5">5 · clarísimo desde el principio</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Momento</label>
+          <select name="momento" class="form-select">
+            {% for valor, etiqueta in momentos %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Tuviste que intuir algo?</label>
+          <select name="tuve_que_intuir" class="form-select">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Cambió el alcance?</label>
+          <select name="cambio_alcance" class="form-select">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Cuántas veces cambió <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input type="number" name="veces_cambio_alcance" min="0" max="99" class="form-control">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Tu feedback para el proyecto</label>
+          <textarea name="comentario" rows="3" class="form-control"
+                    placeholder="Escribe tu feedback para el proyecto: qué cosas estuvieron bien y qué cosas pueden mejorar"></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Qué te habría ahorrado tiempo <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <textarea name="que_ahorraria_tiempo" rows="2" class="form-control"
+                    placeholder="Lo más accionable de todo el formulario. Sé concreto."></textarea>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-send me-1"></i>Enviar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <h5 class="fw-bold mb-3 seccion">Tu historial</h5>
+  {% if recibido or dado %}
+    {% for f in recibido %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+    {% for f in dado %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+  {% else %}
+    <div class="card vacio">
+      <div><i class="bi bi-chat-square-text me-2"></i>Todavía no hay observaciones registradas.</div>
+    </div>
+  {% endif %}
+{% endblock %}

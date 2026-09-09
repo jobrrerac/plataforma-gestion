@@ -462,10 +462,18 @@ class AprobadorDelegadoTests(BaseAprobacion):
         self.client.force_login(self.delegado)
         self.assertEqual(self.client.get(reverse("horas-aprobar")).status_code, 200)
 
-    def test_al_delegado_le_sale_el_enlace_en_el_menu(self):
+    def test_al_delegado_le_sale_el_camino_en_el_menu(self):
+        """Aprobar horas ya no cuelga de la barra: vive en el concentrador
+        Gestionar. Lo que hay que comprobar es que al delegado le salga ese
+        concentrador —si no, tendria que saberse la URL de memoria— y que dentro
+        encuentre su pantalla."""
         self.client.force_login(self.delegado)
-        html = self.client.get(reverse("dashboard")).content.decode()
-        self.assertIn("/horas/aprobar/", html)
+
+        barra = self.client.get(reverse("dashboard")).content.decode()
+        self.assertIn('href="/gestionar/"', barra)
+
+        hub = self.client.get(reverse("gestionar"))
+        self.assertIn("/horas/aprobar/", {i["url"] for i in hub.context["items"]})
 
     def test_un_ingeniero_sin_delegacion_sigue_fuera(self):
         """La delegación no puede convertirse en una puerta para cualquiera."""

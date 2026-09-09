@@ -73,7 +73,8 @@ class BaseAlertas(TestCase):
 
     def _bloqueante_viejo(self, horas):
         b = svc.abrir_bloqueante(
-            self.recurso, self.ing, "el esquema", bloquea_usuario=self.pm,
+            self.recurso, self.ing, "el esquema",
+            rol_que_resuelve="PM", proyecto=self.proyecto,
         )
         Bloqueante.objects.filter(pk=b.pk).update(
             creado_en=timezone.now() - timedelta(hours=horas)

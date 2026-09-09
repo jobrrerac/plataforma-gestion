@@ -2,7 +2,7 @@
 {% load l10n %}
 
 {% block page_title %}Registrar horas{% endblock %}
-{% block active_horas %}active{% endblock %}
+{% block active_registrar %}active{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -62,7 +62,7 @@
 {% endblock %}
 
 {% block content %}
-{% include "componentes/franja_pagina.html" with volver="/dashboard/" icono="bi-clock-history" titulo="Registrar" resaltado="horas" %}
+{% include "componentes/franja_pagina.html" with volver="/registrar/" icono="bi-clock-history" titulo="Registrar" resaltado="horas" %}
 
 <div class="container py-4" style="max-width:1120px">
 

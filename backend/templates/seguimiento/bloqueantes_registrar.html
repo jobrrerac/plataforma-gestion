@@ -1,0 +1,97 @@
+{% extends "seguimiento/bloqueantes_base.html" %}
+{# Reportar y cerrar lo tuyo. Sin alertas ni filtros: quien viene a decir
+   que lleva dos dias esperando no tiene que atravesar antes los problemas
+   de otras ocho personas. #}
+{% block active_registrar %}active{% endblock %}
+
+{% block volver %}/registrar/{% endblock %}
+{% block encabezado %}<i class="bi bi-cone-striped"></i> Mis <span>bloqueantes</span>{% endblock %}
+
+{% block formulario %}
+  {% if mi_recurso or es_admin %}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1 seccion">Reportar un bloqueante</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Algo que te impide avanzar y que depende de otra persona. Reportarlo es lo
+      correcto, no una queja: es la única forma de que se note que estás
+      esperando. Si sigue abierto pasadas {{ horas_para_escalar }} horas, se
+      avisa solo.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="abrir">
+      <div class="row g-3">
+
+        {% if es_admin and recursos %}
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">A nombre de</label>
+          <select name="recurso" class="form-select">
+            {% if mi_recurso %}<option value="{{ mi_recurso.pk }}">Yo ({{ mi_recurso.nombre }})</option>{% endif %}
+            {% for r in recursos %}
+            {% if not mi_recurso or r.pk != mi_recurso.pk %}
+            <option value="{{ r.pk }}">{{ r.nombre }}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          <div class="form-text" style="font-size:.78rem">Si te lo dijeron en una llamada, regístralo tú.</div>
+        </div>
+        {% endif %}
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">¿Qué te está bloqueando?</label>
+          <input type="text" name="necesito" required maxlength="300" class="form-control"
+                 placeholder="Ej: el esquema de la tabla de demanda que menciona el funcional">
+          <div class="form-text" style="font-size:.78rem">
+            En una frase. Lo va a leer alguien que no tiene tu contexto.
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          <select name="proyecto" class="form-select">
+            <option value="">— ninguno en concreto —</option>
+            {% for p in mis_proyectos %}
+            <option value="{{ p.pk }}">{{ p.codigo }} · {{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Rol que debe resolverlo</label>
+          <select name="rol_que_resuelve" required class="form-select">
+            {% for valor, etiqueta in roles %}
+            <option value="{{ valor }}"{% if valor == "PM" %} selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Nombre <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input type="text" name="bloquea_nombre" maxlength="120" class="form-control"
+                 placeholder="Si sabes quién es en concreto">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Qué haces mientras <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input type="text" name="mientras_tanto" maxlength="300" class="form-control"
+                 placeholder="Ej: avanzo con las pruebas del endpoint anterior">
+          <div class="form-text" style="font-size:.78rem">
+            Sirve para saber si el bloqueo te dejó parado del todo.
+          </div>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-plus-lg me-1"></i>Registrar bloqueante
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "seguimiento/feedback_base.html" %}
+{# Una persona a la vez: lo que recibe y lo que da, enfrentado. Obligar a
+   saltar entre pantallas para compararlo es garantizar que nadie lo compare. #}
+{% block active_gestionar %}active{% endblock %}
+
+{% block volver %}/gestionar/{% endblock %}
+{% block encabezado %}<i class="bi bi-chat-square-text"></i> Feedback del <span>equipo</span>{% endblock %}
+
+{% block cuerpo %}
+  {% if recursos_del_equipo %}
+  <form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label" style="font-size:.78rem;font-weight:600">Ver a una persona</label>
+        <select name="recurso" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">— todo el equipo —</option>
+          {% for r in recursos_del_equipo %}
+          <option value="{{ r.pk }}"{% if elegido and elegido.pk == r.pk %} selected{% endif %}>{{ r.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6 text-muted" style="font-size:.8rem">
+        Elige a alguien para ver enfrentado lo que recibe y lo que dice de su proyecto.
+      </div>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if puede_observar %}
+  {% comment %}
+    Solo para quien dirige un proyecto al que la persona esta asignada, o Admin.
+    Observar a alguien con quien no trabajas produce una calificacion que despues
+    no se puede sostener.
+  {% endcomment %}
+  <div class="card p-4 mb-4">
+    <h5 class="fw-bold mb-1 seccion">Observar a una persona</h5>
+    <p class="text-muted mb-3" style="font-size:.84rem">
+      Hechos, no adjetivos. Lo va a leer ella: aquí no hay expediente secreto.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="direccion" value="{{ P2R }}">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Sobre quién</label>
+          <select name="recurso" id="fb-recurso" required class="form-select">
+            <option value="">— elige —</option>
+            {% for r in recursos_observables %}
+            <option value="{{ r.pk }}">{{ r.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Proyecto</label>
+          {% comment %}
+            Se rellena con JS segun la persona elegida: solo los proyectos en los
+            que ha participado. Observar a alguien "en" un proyecto donde nunca
+            estuvo produce una observacion que despues no la sostiene nadie.
+          {% endcomment %}
+          <select name="proyecto" id="fb-proyecto" class="form-select" disabled>
+            <option value="">— elige antes la persona —</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Tipo</label>
+          <select name="tipo" required class="form-select">
+            <option value="FORTALEZA">Fortaleza</option>
+            <option value="A_MEJORAR">A mejorar</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">
+            Dimensión <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <select name="dimension" class="form-select">
+            <option value="">— ninguna —</option>
+            {% for valor, etiqueta in dimensiones %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Situación</label>
+          <input type="text" name="situacion" maxlength="300" class="form-control"
+                 placeholder="Ej: en la revisión del endpoint del martes">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Conducta observada</label>
+          <textarea name="conducta" required rows="3" class="form-control"
+                    placeholder="Qué hizo o dejó de hacer, en concreto"></textarea>
+          <div class="form-text" style="font-size:.78rem">
+            Sin conducta observada esto es una opinión, no un feedback.
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" style="font-size:.82rem;font-weight:600">Impacto</label>
+          <textarea name="impacto" rows="3" class="form-control"
+                    placeholder="Qué consecuencia tuvo"></textarea>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-pink">
+            <i class="bi bi-pencil me-1"></i>Registrar observación
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <h5 class="fw-bold mb-3 seccion">
+        Lo que ha recibido <span class="text-muted fw-normal">({{ recibido|length }})</span>
+      </h5>
+      {% if recibido %}
+        {% for f in recibido %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+      {% else %}
+        <div class="card vacio"><div>Nadie ha observado a esta persona todavía.</div></div>
+      {% endif %}
+    </div>
+    <div class="col-lg-6">
+      <h5 class="fw-bold mb-3 seccion">
+        Lo que ha dicho de su proyecto <span class="text-muted fw-normal">({{ dado|length }})</span>
+      </h5>
+      {% comment %}
+        Un PM no ve nada aqui, y es a proposito: esto se escribio con la promesa
+        de que solo lo leyera el manager en Colombia.
+      {% endcomment %}
+      {% if dado %}
+        {% for f in dado %}{% include "seguimiento/_fila_feedback.html" %}{% endfor %}
+      {% else %}
+        <div class="card vacio"><div>Sin feedback del proyecto por ahora.</div></div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

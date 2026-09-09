@@ -161,3 +161,63 @@ class ElTextoVisibleVaEnTuteoTests(SimpleTestCase):
             "Verás el resultado en la cola",
         ):
             self.assertIsNone(PATRON.search(bueno), f"falso positivo sobre «{bueno}»")
+
+
+class LasEtiquetasDePlantillaCabenEnUnaLineaTests(SimpleTestCase):
+    """Una etiqueta partida en dos líneas deja de ser una etiqueta.
+
+    El lexer de plantillas de Django no cruza saltos de línea. Un
+    `{% include ... %}` escrito en tres líneas no falla: **se imprime tal cual**
+    en la pantalla, con las llaves y todo, sin error y sin aviso en el log.
+
+    Pasó de verdad, y por el peor camino posible: el ejemplo de uso escrito
+    dentro de `componentes/franja_pagina.html` estaba partido en tres líneas.
+    Alguien lo copió y la cabecera de Novedades se quedó sin título y sin enlace
+    de «Volver» — y nadie lo vio hasta mirar el HTML.
+
+    Los comentarios `{% comment %}` sí pueden ocupar varias líneas: lo que se
+    busca son las etiquetas de apertura, no lo que encierran.
+    """
+
+    # `{% ... %}` con un salto de linea dentro.
+    PARTIDA = re.compile(r"\{%[^%]*?\n.*?%\}", re.DOTALL)
+
+    def _plantillas(self):
+        for f in (BASE / "templates").rglob("*.html"):
+            yield f
+
+    def test_ninguna_etiqueta_cruza_un_salto_de_linea(self):
+        hallazgos = []
+        for fichero in self._plantillas():
+            texto = fichero.read_text(encoding="utf-8")
+            for coincidencia in self.PARTIDA.finditer(texto):
+                etiqueta = coincidencia.group(0)
+                primera = etiqueta.lstrip("{% ").split()
+                # `{% comment %}...{% endcomment %}` encierra varias lineas a
+                # proposito: lo que importa es que la etiqueta de apertura no
+                # este partida, y esa cabe de sobra en una linea.
+                if primera and primera[0] in ("comment", "endcomment"):
+                    continue
+                linea = texto[:coincidencia.start()].count("\n") + 1
+                hallazgos.append(
+                    f"{fichero.relative_to(BASE)}:{linea} — "
+                    f"{' '.join(etiqueta.split())[:70]}"
+                )
+
+        self.assertEqual(
+            hallazgos, [],
+            "Estas etiquetas ocupan varias líneas, así que Django NO las "
+            "interpreta: se imprimen literalmente en la pantalla.\n  "
+            + "\n  ".join(hallazgos),
+        )
+
+    def test_el_detector_detecta(self):
+        self.assertTrue(self.PARTIDA.search('{% include "x.html" with\n  a="b" %}'))
+
+    def test_y_no_se_ceba_con_una_etiqueta_normal(self):
+        self.assertIsNone(self.PARTIDA.search('{% include "x.html" with a="b" %}\n'))
+
+    def test_esta_mirando_algo(self):
+        """La misma trampa que la prueba del tuteo: si `BASE` deja de apuntar
+        donde debe, esto da verde sin haber leído una plantilla."""
+        self.assertGreater(sum(1 for _ in self._plantillas()), 15)

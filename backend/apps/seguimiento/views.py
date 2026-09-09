@@ -7,16 +7,15 @@ con doce campos consigue que se rellene sin leerla.
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
 from django.views import View
 
-from apps.accounts.roles import es_admin, es_admin_o_pm
+from apps.accounts.roles import es_admin, es_admin_o_pm, puede_ver_todo
 from apps.core.models import Proyecto, Recurso
 
 from . import services as svc
-from .models import Feedback
+from .models import Bloqueante, Feedback
 
 
 def _mensaje_de_error(exc):
@@ -24,15 +23,29 @@ def _mensaje_de_error(exc):
 
 
 class BloqueantesView(LoginRequiredMixin, View):
-    """Lo que frena a la gente, y el panel de lo que ya se pasó de plazo.
+    """Lo que frena a la gente. Dos modos, dos propósitos.
+
+    - **registrar**: el formulario y los bloqueantes propios, para poder
+      cerrarlos. Nada más. Quien entra a reportar que lleva dos días esperando
+      no necesita ver primero un panel con los problemas de otras ocho personas.
+    - **gestionar**: el panel de alertas, los filtros y todo lo que la persona
+      alcanza a ver. Es la pantalla de quien tiene que actuar.
 
     Accesible a cualquiera que haya entrado: el bloqueante lo reporta quien lo
     sufre. Lo que cambia según el rol es el alcance de lo que se ve, y eso lo
     decide el servicio, no la plantilla.
     """
 
-    template = "seguimiento/bloqueantes.html"
     login_url = "/login/"
+    modo = "registrar"
+
+    @property
+    def template(self):
+        return f"seguimiento/bloqueantes_{self.modo}.html"
+
+    @property
+    def ruta(self):
+        return "bloqueantes" if self.modo == "registrar" else "bloqueantes-equipo"
 
     def get(self, request):
         return render(request, self.template, self._ctx(request))
@@ -48,7 +61,7 @@ class BloqueantesView(LoginRequiredMixin, View):
                 messages.error(request, "Acción desconocida.")
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, _mensaje_de_error(exc))
-        return redirect("bloqueantes")
+        return redirect(self.ruta)
 
     # -- acciones ----------------------------------------------------------
 
@@ -66,13 +79,9 @@ class BloqueantesView(LoginRequiredMixin, View):
         if request.POST.get("proyecto"):
             proyecto = Proyecto.objects.filter(pk=request.POST["proyecto"]).first()
 
-        bloquea_usuario = None
-        if request.POST.get("bloquea_usuario"):
-            bloquea_usuario = User.objects.filter(pk=request.POST["bloquea_usuario"]).first()
-
         bloqueante = svc.abrir_bloqueante(
             recurso, request.user, request.POST.get("necesito", ""),
-            bloquea_usuario=bloquea_usuario,
+            rol_que_resuelve=request.POST.get("rol_que_resuelve", "OTRO"),
             bloquea_nombre=request.POST.get("bloquea_nombre", ""),
             proyecto=proyecto,
             mientras_tanto=request.POST.get("mientras_tanto", ""),
@@ -103,12 +112,45 @@ class BloqueantesView(LoginRequiredMixin, View):
 
     def _ctx(self, request):
         visibles = svc.bloqueantes_visibles(request.user)
-        abiertos = [b for b in visibles.filter(resuelto_en__isnull=True)]
+
+        # En modo registrar solo se ven los propios, aunque la persona alcance
+        # mas: la pantalla es para reportar y cerrar lo tuyo. Lo del equipo esta
+        # a un clic, en Gestionar.
+        propio_ = svc.recurso_de(request.user)
+        if self.modo == "registrar":
+            visibles = (
+                visibles.filter(recurso=propio_) if propio_
+                else visibles.none()
+            )
+
+        # Filtros. Solo tienen sentido para quien ve los de mas gente: a quien
+        # solo ve los suyos, tres desplegables sobre una lista de dos le sobran.
+        filtra = self.modo == "gestionar" and puede_ver_todo(request.user)
+        f_proyecto = request.GET.get("proyecto", "") if filtra else ""
+        f_recurso = request.GET.get("recurso", "") if filtra else ""
+        f_estado = request.GET.get("estado", "") if filtra else ""
+
+        if f_proyecto:
+            visibles = visibles.filter(proyecto_id=f_proyecto)
+        if f_recurso:
+            visibles = visibles.filter(recurso_id=f_recurso)
+
+        abiertos = list(visibles.filter(resuelto_en__isnull=True))
         # Los resueltos son historia: se muestran pocos y solo para que se vea
-        # que cerrarlos sirve para algo.
+        # que cerrarlos sirve para algo. Con el filtro de estado en "resueltos"
+        # se abre la mano, porque entonces es lo que se ha ido a buscar.
+        tope = 60 if f_estado == "RESUELTOS" else 15
         resueltos = list(
-            visibles.filter(resuelto_en__isnull=False).order_by("-resuelto_en")[:15]
+            visibles.filter(resuelto_en__isnull=False).order_by("-resuelto_en")[:tope]
         )
+
+        if f_estado == "ABIERTOS":
+            resueltos = []
+        elif f_estado == "VENCIDOS":
+            abiertos = [b for b in abiertos if b.vencido]
+            resueltos = []
+        elif f_estado == "RESUELTOS":
+            abiertos = []
 
         propio = svc.recurso_de(request.user)
         return {
@@ -116,17 +158,31 @@ class BloqueantesView(LoginRequiredMixin, View):
             "vencidos": [b for b in abiertos if b.vencido],
             "resueltos": resueltos,
             "horas_para_escalar": svc.HORAS_PARA_ESCALAR,
-            "alertas": svc.alertas(request.user),
+            # Las alertas son de la pantalla de gestion. En la de registrar
+            # sobran: quien viene a reportar su bloqueo no tiene que atravesar
+            # antes los problemas de otras ocho personas.
+            "alertas": svc.alertas(request.user) if self.modo == "gestionar" else [],
             "es_admin": es_admin(request.user),
             "mi_recurso": propio,
-            # Para el selector de a quién le toca desbloquear: los PM y
-            # delegados de los proyectos de esa persona, más los Admin. No se
-            # ofrece la lista entera de usuarios: elegir de 200 nombres es peor
-            # que escribirlo a mano.
-            "posibles_bloqueadores": self._posibles_bloqueadores(request.user, propio),
+            # Se pregunta por ROL, no por persona: un junior recién llegado sabe
+            # que espera «al jefe de proyecto», no cómo se llama. La persona
+            # concreta la deduce el servicio cuando puede.
+            "roles": Bloqueante.ROL_CHOICES,
             "mis_proyectos": self._proyectos_de(propio),
             "recursos": Recurso.objects.filter(activo=True).order_by("nombre")
                         if es_admin(request.user) else [],
+            # Filtros
+            "puede_filtrar": filtra,
+            "f_proyecto": f_proyecto,
+            "f_recurso": f_recurso,
+            "f_estado": f_estado,
+            "recursos_filtro": (
+                Recurso.objects.filter(activo=True).order_by("nombre") if filtra else []
+            ),
+            "proyectos_filtro": (
+                Proyecto.objects.filter(bloqueantes__isnull=False)
+                .distinct().order_by("codigo") if filtra else []
+            ),
         }
 
     def _proyectos_de(self, recurso):
@@ -137,20 +193,6 @@ class BloqueantesView(LoginRequiredMixin, View):
             asignaciones__estado__in=["APROBADA", "SOLICITADA"],
         ).distinct().order_by("codigo")
 
-    def _posibles_bloqueadores(self, usuario, recurso):
-        from django.db.models import Q
-
-        proyectos = self._proyectos_de(recurso)
-        ids = set()
-        for proyecto in proyectos:
-            if proyecto.pm_id:
-                ids.add(proyecto.pm_id)
-            if proyecto.aprobador_delegado_id:
-                ids.add(proyecto.aprobador_delegado_id)
-        return User.objects.filter(
-            Q(pk__in=ids) | Q(groups__name="Admin")
-        ).distinct().order_by("first_name", "username")
-
 
 class FeedbackView(LoginRequiredMixin, View):
     """Observaciones en las dos direcciones, en una sola línea de tiempo.
@@ -159,10 +201,26 @@ class FeedbackView(LoginRequiredMixin, View):
     lo que esa persona dijo de las condiciones en las que trabajaba es lo que
     permite distinguir un problema de desempeño de un problema de entrada — que
     es la distinción que este módulo existe para poder hacer.
+
+    Dos modos:
+
+    - **registrar**: tu propio feedback semanal y tu historial. Lo tuyo.
+    - **gestionar**: se elige una persona y se ve **lo que da y lo que recibe**,
+      con el formulario de observar al lado. Leer las dos cosas de alguien a la
+      vez es lo que hace útil el módulo; obligar a saltar entre pantallas para
+      compararlas es garantizar que nadie las compare.
     """
 
-    template = "seguimiento/feedback.html"
     login_url = "/login/"
+    modo = "registrar"
+
+    @property
+    def template(self):
+        return f"seguimiento/feedback_{self.modo}.html"
+
+    @property
+    def ruta(self):
+        return "feedback" if self.modo == "registrar" else "feedback-equipo"
 
     def get(self, request):
         return render(request, self.template, self._ctx(request))
@@ -178,7 +236,7 @@ class FeedbackView(LoginRequiredMixin, View):
                 messages.error(request, "Dirección de feedback desconocida.")
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, _mensaje_de_error(exc))
-        return redirect("feedback")
+        return redirect(self.ruta)
 
     # -- acciones ----------------------------------------------------------
 
@@ -225,18 +283,52 @@ class FeedbackView(LoginRequiredMixin, View):
             momento=request.POST.get("momento") or Feedback.SEMANAL,
             claridad_objetivo=entero("claridad_objetivo"),
             tuve_que_intuir=request.POST.get("tuve_que_intuir") == "si",
-            que_intui=request.POST.get("que_intui", "").strip(),
-            horas_hasta_respuesta=entero("horas_hasta_respuesta"),
+            comentario=request.POST.get("comentario", "").strip(),
             cambio_alcance=request.POST.get("cambio_alcance") == "si",
             veces_cambio_alcance=entero("veces_cambio_alcance"),
             que_ahorraria_tiempo=request.POST.get("que_ahorraria_tiempo", "").strip(),
         )
         messages.success(
             request,
-            "Gracias. Esto lo lee el equipo de Colombia, no el jefe de proyecto.",
+            "Gracias. Esto solo lo ve tu manager en Colombia, no el jefe de proyecto.",
         )
 
     # -- contexto ----------------------------------------------------------
+
+    def _proyectos_por_recurso(self, usuario, recursos):
+        """Proyectos en los que ha participado cada persona observable.
+
+        Se cruza con lo que quien observa alcanza: un PM ve los suyos, el Admin
+        todos. Va como JSON al navegador porque el desplegable tiene que
+        reaccionar al cambiar de persona sin recargar la pagina.
+        """
+        import json
+
+        from apps.assignments.models import Asignacion
+
+        alcance = None
+        if not es_admin(usuario):
+            alcance = set(
+                svc._proyectos_que_dirige(usuario).values_list("pk", flat=True)
+            )
+
+        mapa = {}
+        asignaciones = (
+            Asignacion.objects
+            .filter(recurso__in=recursos)
+            .select_related("proyecto")
+            .order_by("proyecto__codigo")
+        )
+        for a in asignaciones:
+            if alcance is not None and a.proyecto_id not in alcance:
+                continue
+            entradas = mapa.setdefault(str(a.recurso_id), [])
+            if not any(e["id"] == a.proyecto_id for e in entradas):
+                entradas.append({
+                    "id": a.proyecto_id,
+                    "texto": f"{a.proyecto.codigo} · {a.proyecto.nombre}",
+                })
+        return json.dumps(mapa)
 
     def _ctx(self, request):
         propio = svc.recurso_de(request.user)
@@ -249,12 +341,43 @@ class FeedbackView(LoginRequiredMixin, View):
                 if svc.puede_observar_a(request.user, r)
             ]
 
+        visible = svc.feedback_visible(request.user)
+
+        # En modo gestionar se mira a UNA persona: lo que dio y lo que recibio,
+        # enfrentado. Sin elegir a nadie se ve el historial entero, que sirve
+        # para hacerse una idea pero no para decidir sobre alguien.
+        elegido = None
+        if self.modo == "gestionar" and request.GET.get("recurso"):
+            elegido = Recurso.objects.filter(pk=request.GET["recurso"]).first()
+            if elegido is not None:
+                visible = visible.filter(recurso=elegido)
+
+        recibido = [f for f in visible if f.direccion == Feedback.PROYECTO_A_RECURSO]
+        dado = [f for f in visible if f.direccion == Feedback.RECURSO_A_PROYECTO]
+
         return {
-            "historial": svc.feedback_visible(request.user)[:40],
+            "modo": self.modo,
+            "elegido": elegido,
+            # Separadas y no en un solo listado: la pregunta que se hace quien
+            # entra aqui es «que le dicen» frente a «que dice el», y mezclarlas
+            # en orden cronologico obliga a reconstruir esa division a ojo.
+            "recibido": recibido[:40],
+            "dado": dado[:40],
+            "recursos_del_equipo": (
+                Recurso.objects.filter(activo=True).order_by("nombre")
+                if self.modo == "gestionar" and puede_ver_todo(request.user) else []
+            ),
             "puede_observar": bool(recursos_observables),
             "recursos_observables": recursos_observables,
+            # Para acotar el desplegable de proyecto a los de la persona elegida.
+            # Sin esto se puede observar a alguien "en" un proyecto donde nunca
+            # estuvo, y esa observacion no la puede sostener nadie despues.
+            "proyectos_por_recurso": self._proyectos_por_recurso(
+                request.user, recursos_observables,
+            ),
             "mi_recurso": propio,
             "mis_proyectos": BloqueantesView()._proyectos_de(propio),
+            "proyectos_que_dirijo": svc._proyectos_que_dirige(request.user).order_by("codigo"),
             "dimensiones": Feedback.DIMENSION_CHOICES,
             "momentos": Feedback.MOMENTO_CHOICES,
             "P2R": Feedback.PROYECTO_A_RECURSO,

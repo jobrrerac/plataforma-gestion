@@ -62,25 +62,57 @@ class Bloqueante(SoftDeleteModel):
 
     necesito = models.CharField(
         max_length=300,
-        verbose_name="Qué necesito",
+        verbose_name="Qué te está bloqueando",
         help_text="En una frase. Lo va a leer alguien que no tiene tu contexto.",
     )
 
-    # Quién puede resolverlo. Dos campos y no uno porque la mitad de las veces es
-    # un jefe de proyecto que sí tiene cuenta —`Proyecto.pm` es una FK a User— y
-    # la otra mitad es alguien del equipo cliente que no la tiene.
+    # A quién le toca desbloquear. Se pregunta por ROL y no por persona.
     #
-    # Se guarda la FK cuando existe porque es lo único que permite agregar el
-    # tiempo de desbloqueo por persona sin que "Álvaro", "alvaro" y "Alvaro O."
-    # cuenten como tres.
-    bloquea_usuario = models.ForeignKey(
-        User, on_delete=models.PROTECT, related_name="bloqueantes_a_su_cargo",
-        null=True, blank=True, verbose_name="Quién puede resolverlo",
+    # La primera versión pedía elegir a alguien de una lista, y eso es pedirle a
+    # un junior recién llegado un dato que muchas veces no tiene: sabe que espera
+    # «al jefe de proyecto» o «a alguien de accesos», no cómo se llama. Un
+    # formulario que exige lo que no se sabe consigue que no se rellene.
+    #
+    # El rol además agrega bien —«los jefes de proyecto tardan 60 h de media»— y
+    # no se fragmenta como el texto libre, donde «Álvaro», «alvaro» y «Alvaro O.»
+    # cuentan como tres.
+    ROL_CHOICES = [
+        ("PM", "Jefe de proyecto"),
+        ("LIDER", "Líder de equipo"),
+        ("COMPANERO", "Un compañero del equipo"),
+        ("CLIENTE", "Alguien del cliente"),
+        ("ACCESOS", "Accesos o soporte técnico"),
+        ("OTRO", "Otra persona"),
+    ]
+
+    # Cómo se lee cada rol después de «esperando a». La alerta es el texto más
+    # leído del módulo; que suene a castellano no es un lujo.
+    ROL_FRASE = {
+        "PM": "el jefe de proyecto",
+        "LIDER": "el líder de equipo",
+        "COMPANERO": "un compañero del equipo",
+        "CLIENTE": "alguien del cliente",
+        "ACCESOS": "accesos o soporte técnico",
+        "OTRO": "otra persona",
+    }
+
+    rol_que_resuelve = models.CharField(
+        max_length=12, choices=ROL_CHOICES, default="OTRO",
+        verbose_name="Rol que debe resolverlo",
     )
     bloquea_nombre = models.CharField(
         max_length=120, blank=True,
-        verbose_name="Otra persona",
-        help_text="Solo si quien puede resolverlo no tiene cuenta en la plataforma.",
+        verbose_name="Nombre",
+        help_text="Opcional. Si sabes quién es en concreto, ayuda a reclamarlo.",
+    )
+
+    # Se rellena solo cuando se puede deducir —rol «jefe de proyecto» sobre un
+    # proyecto que tiene PM—, nunca preguntando. Es lo que permite seguir
+    # agregando por persona en el caso más frecuente sin cargarle al recurso una
+    # pregunta más.
+    bloquea_usuario = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="bloqueantes_a_su_cargo",
+        null=True, blank=True, verbose_name="Persona concreta (deducida)",
     )
 
     mientras_tanto = models.CharField(
@@ -117,9 +149,9 @@ class Bloqueante(SoftDeleteModel):
         return f"{self.recurso.nombre}: {self.necesito[:50]} ({estado})"
 
     def clean(self):
-        if not self.bloquea_usuario_id and not self.bloquea_nombre.strip():
+        if not self.rol_que_resuelve:
             raise ValidationError(
-                "Di quién puede resolverlo. Un bloqueante sin dueño no lo "
+                "Di a quién le toca resolverlo. Un bloqueante sin dueño no lo "
                 "desatasca nadie."
             )
 
@@ -129,10 +161,16 @@ class Bloqueante(SoftDeleteModel):
 
     @property
     def bloqueador(self) -> str:
-        """Quién tiene que desbloquear, venga de donde venga."""
+        """A quién se espera, con el mayor detalle que se tenga.
+
+        El nombre cuando se conoce; el rol cuando no. Nunca vacío: siempre hay
+        alguien a quien reclamarle, aunque sea genérico.
+        """
         if self.bloquea_usuario_id:
             return self.bloquea_usuario.get_full_name() or self.bloquea_usuario.username
-        return self.bloquea_nombre
+        if self.bloquea_nombre:
+            return self.bloquea_nombre
+        return self.ROL_FRASE.get(self.rol_que_resuelve, "otra persona")
 
     @property
     def horas_abierto(self) -> float:
@@ -251,11 +289,18 @@ class Feedback(SoftDeleteModel):
         verbose_name="Claridad del objetivo",
         help_text="1 = no supe qué se esperaba · 5 = clarísimo desde el principio.",
     )
+    # No se pregunta cuántas horas tardaron en responder: eso lo mide el
+    # bloqueante con precisión de reloj y sin depender de la memoria de nadie.
+    # Preguntarlo aquí otra vez sería pedir a mano un dato peor.
     tuve_que_intuir = models.BooleanField(null=True, blank=True)
-    que_intui = models.TextField(blank=True, verbose_name="Qué tuve que intuir")
-    horas_hasta_respuesta = models.PositiveIntegerField(
-        null=True, blank=True,
-        verbose_name="Horas hasta que me respondieron",
+    # El campo abierto, y el que más vale. Los desplegables dan la tendencia; esto
+    # da el motivo, que es lo que se puede llevar a una conversación con el
+    # proyecto. Se pregunta por las dos caras a propósito: un formulario que solo
+    # pide quejas recoge quejas, y deja de leerse.
+    comentario = models.TextField(
+        blank=True,
+        verbose_name="Tu feedback para el proyecto",
+        help_text="Qué estuvo bien y qué puede mejorar.",
     )
     cambio_alcance = models.BooleanField(null=True, blank=True)
     veces_cambio_alcance = models.PositiveSmallIntegerField(null=True, blank=True)

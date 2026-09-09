@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block page_title %}Bloqueantes{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #f4f4f8; }
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
+  .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:#c4117a; color:#fff; }
+
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+
+  /* Cada bloqueante es una fila, con el mismo aire que las novedades. */
+  .blk-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+  .blk-row.vencido { border-color:#f0c9c7; background:#fdf8f8; }
+  .blk-row.resuelto { border-color:#d9e8de; background:#fbfdfc; }
+  .blk-row .meta { color:#6b7280; font-size:.84rem; }
+  .blk-row .necesito { font-weight:600; color:#191b2e; }
+
+  .edad { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .edad-espera { background:#eef0f4; color:#4b5563; }
+  .edad-vencida { background:#fee2e2; color:#991b1b; }
+  .edad-ok { background:#d1fae5; color:#065f46; }
+
+  .rol-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
+
+  /* Panel de alertas: solo lo ve el Admin. */
+  .alertas { border:1px solid #f0c9c7; border-radius:12px; background:#fff; overflow:hidden; }
+  .alertas-cab { background:#f8ebea; padding:.7rem 1rem; font-weight:700; font-size:.86rem; color:#a52a25; }
+  .alerta { display:flex; flex-wrap:wrap; gap:.3rem 1rem; align-items:baseline;
+            padding:.75rem 1rem; border-top:1px solid #f5eaea; }
+  .alerta .tipo { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                  color:#a52a25; min-width:6.5rem; }
+  .alerta.media .tipo { color:#97591a; }
+  .alerta .texto { font-size:.88rem; color:#23262f; font-weight:600; flex:1 1 18rem; }
+  .alerta .accion { font-size:.78rem; color:#676d7a; text-align:right; margin-left:auto; }
+  .alerta .detalle { flex-basis:100%; font-size:.78rem; color:#8a8f9c; padding-left:6.5rem; }
+
+  .vacio { text-align:center; color:#8a8f9c; padding:36px 12px; }
+
+  @media (max-width: 576px) {
+    .alerta .detalle { padding-left:0; }
+    .alerta .accion { margin-left:0; text-align:left; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-strip">
+  <a href="{% block volver %}/dashboard/{% endblock %}" class="page-strip-volver">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <div class="page-strip-sep"></div>
+  <h1>{% block encabezado %}{% endblock %}</h1>
+  {% if vencidos %}
+  <span class="ms-auto edad edad-vencida">
+    {{ vencidos|length }} sin resolver hace más de {{ horas_para_escalar }} h
+  </span>
+  {% endif %}
+</div>
+
+<div class="container py-4" style="max-width:1120px">
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} py-2 px-3"
+         style="font-size:.87rem;border-radius:10px">
+      <i class="bi {% if m.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-1"></i>{{ m }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  {% block alertas %}{% endblock %}
+
+  {% block formulario %}{% endblock %}
+
+  {% block filtros %}{% endblock %}
+
+  <h5 class="fw-bold mb-3 seccion">
+    Abiertos <span class="text-muted fw-normal">({{ abiertos|length }})</span>
+  </h5>
+  {% if abiertos %}
+    {% for b in abiertos %}
+    <div class="blk-row {% if b.vencido %}vencido{% endif %}">
+      <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+        <span class="necesito flex-grow-1">{{ b.necesito }}</span>
+        <span class="edad {% if b.vencido %}edad-vencida{% else %}edad-espera{% endif %}">
+          {% if b.vencido %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+          {{ b.horas_abierto|floatformat:0 }} h esperando
+        </span>
+      </div>
+      <div class="meta d-flex flex-wrap align-items-center gap-2 mb-2">
+        <span class="rol-chip">{{ b.get_rol_que_resuelve_display }}</span>
+        <span><strong>{{ b.recurso.nombre }}</strong> espera a <strong>{{ b.bloqueador }}</strong></span>
+        {% if b.proyecto %}<span>· {{ b.proyecto.codigo }}</span>{% endif %}
+        <span>· desde el {{ b.creado_en|date:"d/m H:i" }}</span>
+        {% if b.mientras_tanto %}<span>· mientras: {{ b.mientras_tanto }}</span>{% endif %}
+      </div>
+      <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="resolver">
+        <input type="hidden" name="bloqueante" value="{{ b.pk }}">
+        <input type="text" name="como_se_resolvio" maxlength="300"
+               class="form-control form-control-sm" style="flex:1 1 16rem"
+               placeholder="Cómo se resolvió (opcional)">
+        <button type="submit" class="btn btn-sm btn-outline-success fw-semibold">
+          <i class="bi bi-check2 me-1"></i>Ya está resuelto
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="card vacio mb-4">
+      <div><i class="bi bi-check2-circle me-2"></i>No hay nada bloqueado ahora mismo.</div>
+    </div>
+  {% endif %}
+
+  {% if resueltos %}
+  <h5 class="fw-bold mb-3 mt-4 seccion">Resueltos recientemente</h5>
+    {% for b in resueltos %}
+    <div class="blk-row resuelto">
+      <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+        <span class="necesito flex-grow-1">{{ b.necesito }}</span>
+        <span class="edad edad-ok">resuelto en {{ b.horas_abierto|floatformat:0 }} h</span>
+      </div>
+      <div class="meta d-flex flex-wrap align-items-center gap-2">
+        <span class="rol-chip">{{ b.get_rol_que_resuelve_display }}</span>
+        <span><strong>{{ b.recurso.nombre }}</strong> esperó a <strong>{{ b.bloqueador }}</strong></span>
+        {% if b.proyecto %}<span>· {{ b.proyecto.codigo }}</span>{% endif %}
+        <span>· cerrado el {{ b.resuelto_en|date:"d/m H:i" }}</span>
+        {% if b.como_se_resolvio %}<span>· {{ b.como_se_resolvio }}</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+</div>
+{% endblock %}

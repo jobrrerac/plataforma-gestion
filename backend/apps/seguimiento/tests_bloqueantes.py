@@ -45,7 +45,7 @@ class BaseBloqueantes(TestCase):
         )
 
     def _abrir(self, **extra):
-        datos = {"bloquea_usuario": self.pm}
+        datos = {"rol_que_resuelve": "PM", "proyecto": self.proyecto}
         datos.update(extra)
         return svc.abrir_bloqueante(
             self.recurso, self.ing, "el esquema de la tabla de demanda", **datos
@@ -59,37 +59,54 @@ class ReportarUnBloqueoTests(BaseBloqueantes):
         self.assertTrue(b.abierto)
         self.assertEqual(b.recurso, self.recurso)
         self.assertEqual(b.creado_por, self.ing)
-        self.assertEqual(b.bloqueador, self.pm.get_full_name() or self.pm.username)
 
-    def test_sin_decir_que_necesitas_no_se_guarda(self):
+    def test_sin_decir_que_te_bloquea_no_se_guarda(self):
         with self.assertRaises(ValidationError):
-            svc.abrir_bloqueante(self.recurso, self.ing, "   ", bloquea_usuario=self.pm)
+            svc.abrir_bloqueante(self.recurso, self.ing, "   ", rol_que_resuelve="PM")
 
-    def test_sin_dueno_no_se_guarda(self):
-        """Un bloqueante que no le toca a nadie no lo desatasca nadie, y de paso
-        no produce ningun indicador."""
-        with self.assertRaises(ValidationError):
-            svc.abrir_bloqueante(self.recurso, self.ing, "algo")
-
-    def test_vale_una_persona_de_fuera(self):
-        """La mitad de quienes desbloquean son del equipo cliente y no tienen
-        cuenta. Si solo se aceptara una FK, esos casos no se reportarian."""
+    def test_se_pregunta_por_rol_y_no_por_persona(self):
+        """Pedirle a un junior recien llegado el NOMBRE de quien lo desbloquea es
+        pedirle un dato que muchas veces no tiene: sabe que espera al jefe de
+        proyecto, no como se llama."""
         b = svc.abrir_bloqueante(
-            self.recurso, self.ing, "acceso al Fabric",
-            bloquea_nombre="Alvaro Ordaz",
+            self.recurso, self.ing, "acceso al entorno de Fabric",
+            rol_que_resuelve="ACCESOS",
+        )
+        self.assertEqual(b.rol_que_resuelve, "ACCESOS")
+        self.assertEqual(b.bloqueador, "accesos o soporte técnico")
+
+    def test_el_nombre_es_opcional_y_manda_cuando_esta(self):
+        b = svc.abrir_bloqueante(
+            self.recurso, self.ing, "el fichero de mapeo",
+            rol_que_resuelve="CLIENTE", bloquea_nombre="Alvaro Ordaz",
         )
         self.assertEqual(b.bloqueador, "Alvaro Ordaz")
+
+    def test_la_persona_se_deduce_cuando_se_puede(self):
+        """Rol «jefe de proyecto» sobre un proyecto que tiene PM: ya sabemos
+        quien es. Es lo que permite seguir midiendo por persona sin anadir una
+        pregunta al formulario."""
+        b = self._abrir()
+        self.assertEqual(b.bloquea_usuario, self.pm)
+        self.assertEqual(b.bloqueador, self.pm.get_full_name() or self.pm.username)
+
+    def test_y_no_se_deduce_cuando_no_se_puede(self):
+        b = svc.abrir_bloqueante(
+            self.recurso, self.ing, "sin proyecto", rol_que_resuelve="PM",
+        )
+        self.assertIsNone(b.bloquea_usuario)
+        self.assertEqual(b.bloqueador, "el jefe de proyecto")
 
     def test_nadie_reporta_por_otro(self):
         otro = Recurso.objects.create(nombre="Ajeno", email="aj@test.com", banda="JR")
         with self.assertRaises(PermissionDenied):
-            svc.abrir_bloqueante(otro, self.ing, "algo", bloquea_usuario=self.pm)
+            svc.abrir_bloqueante(otro, self.ing, "algo", rol_que_resuelve="PM")
 
     def test_el_admin_si_puede_registrarlo_por_otro(self):
         """En la practica el bloqueo sale en una llamada. Si registrarlo
         dependiera de que la persona entre a la aplicacion, la mitad no llegaria."""
         b = svc.abrir_bloqueante(
-            self.recurso, self.admin, "lo dijo en la daily", bloquea_usuario=self.pm,
+            self.recurso, self.admin, "lo dijo en la daily", rol_que_resuelve="PM",
         )
         self.assertEqual(b.recurso, self.recurso)
         self.assertEqual(b.creado_por, self.admin, "queda quien lo registro")
@@ -194,10 +211,8 @@ class QuienVeQueTests(BaseBloqueantes):
         self.assertIn(b, svc.bloqueantes_visibles(self.pm))
 
     def test_quien_bloquea_ve_lo_que_le_senalan(self):
-        """Aunque no sea de un proyecto suyo: es su nombre el que aparece."""
-        b = svc.abrir_bloqueante(
-            self.recurso, self.ing, "sin proyecto", bloquea_usuario=self.pm,
-        )
+        """Cuando la persona se dedujo, es su nombre el que aparece y lo ve."""
+        b = self._abrir()
         self.assertIn(b, svc.bloqueantes_visibles(self.pm))
 
     def test_el_admin_lo_ve_todo(self):
@@ -222,7 +237,8 @@ class LaPantallaTests(BaseBloqueantes):
         resp = self.client.post(reverse("bloqueantes"), {
             "accion": "abrir",
             "necesito": "el esquema que menciona el funcional",
-            "bloquea_usuario": self.pm.pk,
+            "rol_que_resuelve": "PM",
+            "proyecto": self.proyecto.pk,
         })
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(Bloqueante.objects.filter(recurso=self.recurso).count(), 1)
@@ -245,7 +261,7 @@ class LaPantallaTests(BaseBloqueantes):
             nombre="Tercero", email="op@test.com", banda="JR", usuario=otro_ing,
         )
         ajeno = svc.abrir_bloqueante(
-            otro_rec, otro_ing, "suyo", bloquea_nombre="X",
+            otro_rec, otro_ing, "suyo", rol_que_resuelve="OTRO",
         )
         self.client.force_login(self.ing)
         self.client.post(reverse("bloqueantes"), {
@@ -253,3 +269,143 @@ class LaPantallaTests(BaseBloqueantes):
         })
         ajeno.refresh_from_db()
         self.assertTrue(ajeno.abierto)
+
+
+class ElVisorLoVeTodoSinTocarNadaTests(BaseBloqueantes):
+    """Su papel es mirar. Lo que frena a cada persona es justo lo que necesita
+    para entender una semana floja sin tener que preguntar."""
+
+    def setUp(self):
+        super().setUp()
+        self.visor = User.objects.create_user("vis_blk", "vb@test.com", "clave-larga-1")
+        self.visor.groups.add(Group.objects.get_or_create(name="Visor")[0])
+
+    def test_ve_los_de_cualquiera(self):
+        b = self._abrir()
+        self.assertIn(b, svc.bloqueantes_visibles(self.visor))
+
+    def test_no_puede_reportar_por_otro(self):
+        with self.assertRaises(PermissionDenied):
+            svc.abrir_bloqueante(
+                self.recurso, self.visor, "algo", rol_que_resuelve="PM",
+            )
+
+    def test_no_puede_cerrar_el_de_otro(self):
+        b = self._abrir()
+        with self.assertRaises(PermissionDenied):
+            svc.resolver_bloqueante(b, self.visor)
+
+
+class FiltrosDeLaPantallaTests(BaseBloqueantes):
+    """Con 27 personas, una lista sin filtros deja de leerse a la tercera semana."""
+
+    def setUp(self):
+        super().setUp()
+        self.otro_rec = Recurso.objects.create(
+            nombre="Otra Persona", email="op2@test.com", banda="JR",
+        )
+        self.mio = self._abrir()
+        self.ajeno = svc.abrir_bloqueante(
+            self.otro_rec, self.admin, "otra cosa", rol_que_resuelve="ACCESOS",
+        )
+        self.client.force_login(self.admin)
+
+    def _pedir(self, **params):
+        resp = self.client.get(reverse("bloqueantes-equipo"), params)
+        self.assertEqual(resp.status_code, 200)
+        return resp
+
+    def test_sin_filtros_salen_todos(self):
+        resp = self._pedir()
+        self.assertEqual(len(resp.context["abiertos"]), 2)
+
+    def test_por_recurso(self):
+        resp = self._pedir(recurso=self.recurso.pk)
+        self.assertEqual([b.pk for b in resp.context["abiertos"]], [self.mio.pk])
+
+    def test_por_proyecto(self):
+        resp = self._pedir(proyecto=self.proyecto.pk)
+        self.assertEqual([b.pk for b in resp.context["abiertos"]], [self.mio.pk])
+
+    def test_por_estado_vencidos(self):
+        Bloqueante.objects.filter(pk=self.mio.pk).update(
+            creado_en=timezone.now() - timedelta(hours=HORAS_PARA_ESCALAR + 3)
+        )
+        resp = self._pedir(estado="VENCIDOS")
+        self.assertEqual([b.pk for b in resp.context["abiertos"]], [self.mio.pk])
+
+    def test_por_estado_resueltos_esconde_los_abiertos(self):
+        svc.resolver_bloqueante(self.mio, self.ing)
+        resp = self._pedir(estado="RESUELTOS")
+        self.assertEqual(resp.context["abiertos"], [])
+        self.assertEqual([b.pk for b in resp.context["resueltos"]], [self.mio.pk])
+
+    def test_a_quien_solo_ve_los_suyos_no_se_le_ofrecen(self):
+        """Tres desplegables sobre una lista de dos son ruido."""
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("bloqueantes-equipo"))
+        self.assertFalse(resp.context["puede_filtrar"])
+
+    def test_y_no_los_puede_usar_por_la_url(self):
+        """Si el filtro se aplicara igual, un ingeniero podria sondear quien
+        tiene bloqueantes en un proyecto ajeno por prueba y error."""
+        self.client.force_login(self.ing)
+        resp = self.client.get(
+            reverse("bloqueantes-equipo"), {"recurso": self.otro_rec.pk},
+        )
+        self.assertEqual(resp.context["f_recurso"], "")
+
+
+class LosDosModosTests(BaseBloqueantes):
+    """Reportar y revisar son dos tareas con dos publicos.
+
+    Quien entra a decir que lleva dos dias esperando no tiene que atravesar
+    antes un panel con los problemas de otras ocho personas; y quien entra a
+    actuar no necesita el formulario de alta ocupando la mitad de la pantalla.
+    """
+
+    def test_registrar_no_ensena_alertas(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse("bloqueantes"))
+        self.assertEqual(resp.context["alertas"], [])
+
+    def test_gestionar_si(self):
+        b = self._abrir()
+        Bloqueante.objects.filter(pk=b.pk).update(
+            creado_en=timezone.now() - timedelta(hours=HORAS_PARA_ESCALAR + 3)
+        )
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse("bloqueantes-equipo"))
+        self.assertTrue(resp.context["alertas"])
+
+    def test_en_registrar_solo_salen_los_propios(self):
+        """Aunque el Admin alcance a ver los de todos: la pantalla es para
+        reportar y cerrar lo tuyo."""
+        otro_rec = Recurso.objects.create(
+            nombre="Ajena Lista", email="al@test.com", banda="JR",
+        )
+        ajeno = svc.abrir_bloqueante(
+            otro_rec, self.admin, "de otra persona", rol_que_resuelve="OTRO",
+        )
+        mio = self._abrir()
+
+        self.client.force_login(self.ing)
+        resp = self.client.get(reverse("bloqueantes"))
+        pks = [b.pk for b in resp.context["abiertos"]]
+        self.assertIn(mio.pk, pks)
+        self.assertNotIn(ajeno.pk, pks)
+
+    def test_reportar_desde_registrar_vuelve_a_registrar(self):
+        self.client.force_login(self.ing)
+        resp = self.client.post(reverse("bloqueantes"), {
+            "accion": "abrir", "necesito": "algo", "rol_que_resuelve": "PM",
+        })
+        self.assertEqual(resp["Location"], reverse("bloqueantes"))
+
+    def test_y_desde_gestionar_vuelve_a_gestionar(self):
+        b = self._abrir()
+        self.client.force_login(self.ing)
+        resp = self.client.post(reverse("bloqueantes-equipo"), {
+            "accion": "resolver", "bloqueante": b.pk,
+        })
+        self.assertEqual(resp["Location"], reverse("bloqueantes-equipo"))

@@ -1,6 +1,6 @@
 # Módulos, capas y qué hay que reprobar cuando cambia algo
 
-El plan de QA tiene **282 casos**. Repasarlos entero cada vez que se toca una
+El plan de QA tiene **308 casos**. Repasarlos entero cada vez que se toca una
 pantalla no es sostenible: es la diferencia entre poder desplegar un martes y no
 poder.
 
@@ -56,15 +56,15 @@ Los bloques **propios** son los que ejercitan directamente ese módulo. Los
 
 | Si tocas… | Bloques propios | Arrastra | Casos |
 |---|---|---|---|
-| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 224 |
+| `accounts` | AUT, SSO, RBAC | **todo** — es la base de quién puede qué | 250 |
 | `core` | MAE, RBAC | SOL, APR, CES, LIB, HOR, HAP, APD, DASH | ~120 |
 | `calendar_engine` | CAL, NOV | SOL, APR, LIB, HOR | ~75 |
 | `assignments` | SOL, APR, CES, LIB, AUD | HAP, APD, DASH (leen el plan) | ~70 |
 | `legalizacion` | HOR, HAP, APD | DASH | ~88 |
 | `revision` | HAP | — | 36 |
-| `seguimiento` | SEG | — | 29 |
-| `dashboard` | DASH | — | 5 |
-| `templates/base.html` | AUT-09, AUT-10, RBAC-03 | — | 3 |
+| `seguimiento` | SEG | DASH (ficha del recurso) | 43 |
+| `dashboard` | DASH, NAV | — | 17 |
+| `templates/base.html` | NAV, AUT-09, AUT-10, RBAC-03 | — | 15 |
 | `config/settings/` | INF, AUT | — | 17 |
 | `terraform/` | INF | — | 6 |
 
