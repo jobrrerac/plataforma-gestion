@@ -9,7 +9,13 @@
         <strong style="font-size:.9rem">{{ f.recurso.nombre }}</strong>
         {% if f.proyecto %}<span class="meta">· {{ f.proyecto.codigo }}</span>{% endif %}
         <span class="meta ms-auto">
-          {{ f.fecha_observacion|date:"d/m/Y" }} · {{ f.autor.get_full_name|default:f.autor.username }}
+          {{ f.fecha_observacion|date:"d/m/Y" }} ·
+          {{ f.observador.get_full_name|default:f.observador.username }}
+          {% if f.transcrito %}
+          {# Transcrita: se dice quien la escribio, para no atribuirle a nadie
+             una firma que no puso. #}
+          <span class="text-muted">(la escribió {{ f.autor.get_full_name|default:f.autor.username }})</span>
+          {% endif %}
         </span>
       </div>
 

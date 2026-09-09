@@ -119,6 +119,22 @@ va a leer con su nombre encima. Lo que sí llega al proyecto es el patrón
 agregado, no la entrada suelta: se protege la observación individual y se publica
 la tendencia.
 
+### Transcribir lo que dijo otro
+
+Los jefes de proyecto dicen «no tengo tiempo de entrar» y mandan la observación
+por chat. Si no se puede transcribir, se pierde; y si el Admin la copia como
+suya, el registro miente sobre quién observó.
+
+Se guardan **las dos personas**: `en_nombre_de` es quien vio la conducta y
+`autor` quien la tecleó. La pantalla muestra las dos. Importa al leer los datos
+después: comparar evaluadores entre sí —que es como se detecta a quien califica
+bajo a todo el mundo— cuenta el juicio de quien observó, no la mano que escribió.
+
+Solo el Admin transcribe, y solo puede atribuir la observación a alguien que
+dirija un proyecto de esa persona: una firma que el atribuido no podría sostener
+no sirve de nada. El feedback **sobre el proyecto** no se transcribe nunca — lo
+escribe quien lo vivió, o se rompe la promesa con la que se pidió.
+
 ### Editar
 
 No es append-only, a diferencia de `LogAuditoria`: una errata en una observación
@@ -126,6 +142,32 @@ tiene que poder corregirse. Lo que sí queda es la huella —`created_at` y
 `updated_at` dejan de coincidir— y la pantalla lo dice con una etiqueta. Que se
 note es lo que evita reescribir una observación en silencio después de que
 alguien la haya leído.
+
+---
+
+## Qué se hizo con eso
+
+La otra mitad. Sin ella el módulo recoge señales y no dice qué pasó después, y
+ese «después» es lo que distingue un problema de la persona de un problema de
+seguimiento: **un recurso con tres observaciones a mejorar y ninguna
+conversación registrada no dice nada malo de quien las recibió**.
+
+`AccionDeSeguimiento` guarda qué se hizo, de qué tipo —conversación, escalado al
+proyecto, formación, cambio de asignación, o revisado sin acción—, cuándo, quién,
+y opcionalmente a raíz de qué observación.
+
+**«Revisado, sin acción por ahora» cuenta como acción.** Obligar a que toda señal
+termine en algo fabrica acciones de mentira; una decisión descartada a conciencia
+es información.
+
+Es además la respuesta a la pregunta incómoda. «¿Por qué no hiciste seguimiento
+uno a uno con los 27?» tiene una mala respuesta, que es intentarlo, y una buena:
+*estas son las situaciones que levantó el sistema, esto hice con cada una, y aquí
+están las fechas.*
+
+Solo lo escribe y lo lee quien lleva el seguimiento. No lo ve la persona
+observada: son notas de gestión, y publicarlas convertiría cada nota en un
+mensaje dirigido, que es otra cosa y se escribe distinto.
 
 ---
 

@@ -20,7 +20,7 @@ from apps.assignments.models import Asignacion
 from apps.core.models import Recurso
 from apps.legalizacion.models import RegistroHoras
 
-from .models import HORAS_PARA_ESCALAR, Bloqueante, Feedback
+from .models import HORAS_PARA_ESCALAR, AccionDeSeguimiento, Bloqueante, Feedback
 
 # Cuántos días naturales se miran hacia atrás para decidir si alguien está sin
 # trabajo real. Siete y no cinco para que un puente o un festivo no borre la
@@ -212,13 +212,35 @@ def puede_observar_a(usuario, recurso) -> bool:
 
 @transaction.atomic
 def registrar_feedback(*, recurso, autor, direccion, **campos):
-    """Guarda una observación en cualquiera de las dos direcciones."""
+    """Guarda una observación en cualquiera de las dos direcciones.
+
+    `en_nombre_de` permite transcribir lo que dijo otra persona. Existe porque
+    los jefes de proyecto mandan la observación por chat y dicen que no tienen
+    tiempo de entrar: si no se puede copiar, se pierde; y si se copia como
+    propia, el registro miente sobre quién observó.
+    """
+    en_nombre_de = campos.get("en_nombre_de")
+
     if direccion == Feedback.PROYECTO_A_RECURSO:
         if not puede_observar_a(autor, recurso):
             raise PermissionDenied(
                 "Solo puede observar a esta persona quien dirige un proyecto al "
                 "que está asignada, o un administrador."
             )
+        if en_nombre_de is not None and not puede_observar_a(en_nombre_de, recurso):
+            # Sin esto se podria atribuir una observacion a alguien que no
+            # trabaja con esa persona, y esa firma no la puede sostener nadie.
+            raise ValidationError({
+                "en_nombre_de": (
+                    "Esa persona no dirige ningún proyecto al que esta esté "
+                    "asignada, así que no puede haberla observado."
+                ),
+            })
+    elif en_nombre_de is not None:
+        raise ValidationError(
+            "El feedback sobre el proyecto lo escribe quien lo vivió; no se "
+            "transcribe en nombre de nadie."
+        )
     elif direccion == Feedback.RECURSO_A_PROYECTO:
         propio = recurso_de(autor)
         if not es_admin(autor) and (propio is None or propio.pk != recurso.pk):
@@ -284,6 +306,50 @@ def feedback_visible(usuario, *, recurso=None):
             proyecto__in=_proyectos_que_dirige(usuario),
         )
     return qs.filter(condiciones).distinct()
+
+
+@transaction.atomic
+def registrar_accion(*, recurso, autor, tipo, texto, feedback=None):
+    """Deja constancia de qué se hizo con lo que se leyó.
+
+    Solo el Admin: es quien lee las dos direcciones del feedback y quien
+    responde por el seguimiento. Un PM registrando aquí lo que hizo con su
+    propia observación convertiría esto en un segundo canal de feedback, y ya
+    hay uno.
+    """
+    if not es_admin(autor):
+        raise PermissionDenied(
+            "El registro de acciones es del seguimiento del equipo."
+        )
+    texto = (texto or "").strip()
+    if not texto:
+        raise ValidationError(
+            "Escribe qué hiciste. Una acción sin contenido no le sirve a quien "
+            "herede este seguimiento."
+        )
+    if feedback is not None and feedback.recurso_id != recurso.pk:
+        raise ValidationError("Esa observación no es de esta persona.")
+
+    return AccionDeSeguimiento.objects.create(
+        recurso=recurso, autor=autor, tipo=tipo or AccionDeSeguimiento.CONVERSACION,
+        texto=texto, feedback=feedback,
+    )
+
+
+def acciones_de(usuario, recurso):
+    """El historial de lo que se hizo. Solo para quien lo lleva.
+
+    No lo ve la persona observada: son notas de gestion —a quien se escalo, que
+    se decidio y por que— y publicarlas convertiria cada nota en un mensaje
+    dirigido, que es otra cosa y se escribe distinto.
+    """
+    if not es_admin(usuario):
+        return AccionDeSeguimiento.objects.none()
+    return (
+        AccionDeSeguimiento.objects
+        .filter(recurso=recurso)
+        .select_related("autor", "feedback")
+    )
 
 
 # ---------------------------------------------------------------------------

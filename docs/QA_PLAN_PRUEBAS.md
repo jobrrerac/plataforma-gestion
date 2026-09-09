@@ -515,6 +515,23 @@ Cuentas: `qa.ingeniero` (reporta y opina), `qa.pm` (observa a su gente),
 | SEG-38 | **El Visor ve, no escribe** | Como `qa.visor`, entrar a Bloqueantes | Ve los de todo el equipo. No hay formulario de reportar ni botón de resolver |
 | SEG-39 | Y ve el feedback sobre las personas | Como `qa.visor`, entrar a Feedback | Ve las observaciones **sobre** personas |
 | SEG-40 | **Pero no lo que se dijo del proyecto** | Buscar en ese historial lo de SEG-23 | **No aparece.** Ampliar ese círculo, aunque sea a un rol de solo lectura, rompe la promesa con la que se pidió |
+| SEG-41 | **Registrar es escribir; gestionar es leer** | Comparar `/feedback/` y `/feedback/equipo/` | Los dos formularios están en Registrar. Gestionar solo muestra lo recibido y lo dicho |
+| SEG-42 | **El proyecto sigue a la persona** | Como `qa.admin`, en Registrar feedback, elegir a alguien en «Sobre quién» | El desplegable de Proyecto se llena con **los proyectos de esa persona** |
+| SEG-43 | Y al recargar sigue bien | Elegir a alguien, recargar la página con F5 | El proyecto sigue correspondiendo a la persona que quedó seleccionada |
+| SEG-44 | Sin proyectos en común lo dice | Elegir a alguien sin asignaciones | «— sin proyectos en común —», no un desplegable vacío sin explicación |
+| SEG-45 | **Transcribir lo que llegó por chat** | Como `qa.admin`, rellenar la observación y elegir a un PM en «La observó» | Se guarda. El mensaje dice que queda constancia de que la escribiste tú |
+| SEG-46 | Se ve quién observó y quién escribió | Mirar esa fila en el historial | Sale el nombre del PM y, en gris, «(la escribió …)» |
+| SEG-47 | **No se atribuye a cualquiera** | Elegir a un PM que no dirige ningún proyecto de esa persona | Error: no puede haberla observado |
+| SEG-48 | Solo el Admin transcribe | Como `qa.pm`, mirar el formulario | **No** aparece el campo «La observó» |
+| SEG-49 | **El feedback del proyecto no se transcribe** | Intentarlo por la vía de código | Lo rechaza: lo escribe quien lo vivió, o se rompe la promesa con la que se pidió |
+| SEG-50 | **Con un solo proyecto se elige solo** | En Registrar feedback, elegir a alguien asignado a un único proyecto | El desplegable queda **con ese proyecto ya seleccionado**, no en «— ninguno en concreto —» |
+| SEG-51 | «La observó» ofrece PM, delegado y Admin | Abrirlo como `qa.pm` | Salen las personas que dirigen proyectos de esa gente. Por defecto, «Yo mismo» |
+| SEG-52 | **Registrar qué se hizo** | Como `qa.admin`, en Gestionar feedback, elegir a alguien y rellenar «Qué hiciste con esto» | Aparece abajo en **Seguimiento**, con tipo, fecha y autor |
+| SEG-53 | Se puede atar a una observación | Elegir algo en «A raíz de» | La entrada del log dice a qué observación responde |
+| SEG-54 | «Revisado, sin acción» cuenta | Registrar una de ese tipo | Se guarda igual. Obligar a que toda señal termine en acción fabrica acciones de mentira |
+| SEG-55 | **El PM no registra acciones** | Como `qa.pm`, entrar a Gestionar feedback | **No** aparece el formulario: sería un segundo canal de feedback |
+| SEG-56 | **La persona no ve el seguimiento** | Como `qa.ingeniero` | No hay forma de leer esas notas: son de gestión, no mensajes dirigidos |
+| SEG-57 | **La columna dice qué cuenta** | En el dashboard de proyecto, mirar la tabla del equipo | La cabecera es «Bloqueos activos», no «Bloqueada» |
 
 ---
 

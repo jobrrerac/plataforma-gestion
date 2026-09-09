@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from apps.core.admin_mixins import SoftDeleteAdminMixin
 
-from .models import Bloqueante, Feedback
+from .models import AccionDeSeguimiento, Bloqueante, Feedback
 
 
 @admin.register(Bloqueante)
@@ -51,10 +51,27 @@ class FeedbackAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
     list_display = [
         "fecha_observacion", "direccion", "recurso", "proyecto",
-        "autor", "tipo", "dimension", "momento",
+        "autor", "en_nombre_de", "tipo", "dimension", "momento",
     ]
-    list_filter = ["direccion", "momento", "tipo", "dimension", "proyecto", "autor"]
+    list_filter = ["direccion", "momento", "tipo", "dimension", "proyecto", "autor", "en_nombre_de"]
     search_fields = ["recurso__nombre", "conducta", "impacto", "que_ahorraria_tiempo"]
     date_hierarchy = "fecha_observacion"
     readonly_fields = ["created_at", "updated_at"]
     exclude = ["deleted_at"]
+
+
+@admin.register(AccionDeSeguimiento)
+class AccionDeSeguimientoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """Qué se hizo con lo que se leyó, y cuándo.
+
+    Es la mitad que faltaba. Un recurso con tres observaciones a mejorar y
+    ninguna acción registrada no es un problema de la persona: es un problema de
+    seguimiento, y sin esta tabla esa distinción no se puede hacer.
+    """
+
+    list_display = ["creado_en", "recurso", "tipo", "autor", "feedback"]
+    list_filter = ["tipo", "creado_en", "autor"]
+    search_fields = ["recurso__nombre", "texto"]
+    date_hierarchy = "creado_en"
+    readonly_fields = ["creado_en"]
+    exclude = ["deleted_at", "created_at", "updated_at"]

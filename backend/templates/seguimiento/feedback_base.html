@@ -94,12 +94,29 @@
         proyecto.add(new Option('— sin proyectos en comun —', ''));
         return;
       }
+      // Con un solo proyecto se elige solo. Dejar «— ninguno en concreto —»
+      // encima cuando no hay nada que decidir se lee como si el desplegable no
+      // se hubiera llenado, y es lo que se reporto dos veces: «elijo a la
+      // persona y no me aparece su proyecto».
+      if (lista.length === 1) {
+        proyecto.add(new Option(lista[0].texto, lista[0].id));
+        proyecto.add(new Option('— ninguno en concreto —', ''));
+        proyecto.value = lista[0].id;
+        return;
+      }
       proyecto.add(new Option('— ninguno en concreto —', ''));
       lista.forEach(function (p) { proyecto.add(new Option(p.texto, p.id)); });
     }
 
     persona.addEventListener('change', sincronizar);
     sincronizar();
+
+    // El navegador restaura el valor de los `select` DESPUES de que corre este
+    // script — al recargar, al volver atras o desde la cache de sesion—. Sin
+    // esto, la persona quedaba elegida y el desplegable de proyecto se quedaba
+    // vacio, que es exactamente el sintoma que se reporto: "elijo a alguien y no
+    // me aparece su proyecto".
+    window.addEventListener('pageshow', sincronizar);
   })();
 </script>
 {% endblock %}

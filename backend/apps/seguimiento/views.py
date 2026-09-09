@@ -7,15 +7,17 @@ con doce campos consigue que se rellene sin leerla.
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views import View
 
 from apps.accounts.roles import es_admin, es_admin_o_pm, puede_ver_todo
 from apps.core.models import Proyecto, Recurso
 
 from . import services as svc
-from .models import Bloqueante, Feedback
+from .models import AccionDeSeguimiento, Bloqueante, Feedback
 
 
 def _mensaje_de_error(exc):
@@ -227,6 +229,11 @@ class FeedbackView(LoginRequiredMixin, View):
 
     def post(self, request):
         try:
+            if request.POST.get("accion") == "seguimiento":
+                self._accion(request)
+                return redirect(
+                    f"{reverse('feedback-equipo')}?recurso={request.POST.get('recurso', '')}"
+                )
             direccion = request.POST.get("direccion")
             if direccion == Feedback.PROYECTO_A_RECURSO:
                 self._sobre_la_persona(request)
@@ -245,15 +252,35 @@ class FeedbackView(LoginRequiredMixin, View):
             return Proyecto.objects.filter(pk=request.POST["proyecto"]).first()
         return None
 
+    def _accion(self, request):
+        recurso = Recurso.objects.filter(pk=request.POST.get("recurso")).first()
+        if recurso is None:
+            raise ValidationError("Elige sobre quién es la acción.")
+        feedback = None
+        if request.POST.get("feedback"):
+            feedback = Feedback.objects.filter(pk=request.POST["feedback"]).first()
+        svc.registrar_accion(
+            recurso=recurso, autor=request.user,
+            tipo=request.POST.get("tipo", ""),
+            texto=request.POST.get("texto", ""),
+            feedback=feedback,
+        )
+        messages.success(request, "Acción registrada en el seguimiento.")
+
     def _sobre_la_persona(self, request):
         recurso = Recurso.objects.filter(pk=request.POST.get("recurso")).first()
         if recurso is None:
             raise ValidationError("Elige sobre quién es la observación.")
 
-        svc.registrar_feedback(
+        en_nombre_de = None
+        if request.POST.get("en_nombre_de"):
+            en_nombre_de = User.objects.filter(pk=request.POST["en_nombre_de"]).first()
+
+        f = svc.registrar_feedback(
             recurso=recurso,
             autor=request.user,
             direccion=Feedback.PROYECTO_A_RECURSO,
+            en_nombre_de=en_nombre_de,
             proyecto=self._proyecto_de(request),
             momento=request.POST.get("momento") or Feedback.SEMANAL,
             situacion=request.POST.get("situacion", "").strip(),
@@ -262,7 +289,15 @@ class FeedbackView(LoginRequiredMixin, View):
             tipo=request.POST.get("tipo", ""),
             dimension=request.POST.get("dimension", ""),
         )
-        messages.success(request, "Observación registrada. La persona puede leerla.")
+        if f.transcrito:
+            messages.success(
+                request,
+                f"Observación registrada en nombre de "
+                f"{f.en_nombre_de.get_full_name() or f.en_nombre_de.username}. "
+                f"Queda constancia de que la escribiste tú.",
+            )
+        else:
+            messages.success(request, "Observación registrada. La persona puede leerla.")
 
     def _sobre_el_proyecto(self, request):
         recurso = svc.recurso_de(request.user)
@@ -330,6 +365,34 @@ class FeedbackView(LoginRequiredMixin, View):
                 })
         return json.dumps(mapa)
 
+    def _posibles_observadores(self, usuario, recursos):
+        """A quién se le puede atribuir una observación transcrita.
+
+        Los jefes de proyecto, sus aprobadores delegados y los Admin: las tres
+        figuras que trabajan con estas personas y pueden haber visto la conducta.
+        Se ofrece a **cualquiera que ya pueda observar**, no solo al Admin: un
+        delegado también recibe por chat lo que el PM no entra a escribir, y
+        obligarle a pedírselo al Admin es añadir un salto para nada.
+
+        Se acota a quien dirige alguno de los proyectos de la gente observable.
+        Ofrecer la lista entera invitaría a atribuir una observación a alguien
+        que no trabaja con esa persona, y esa firma no la sostiene nadie.
+        """
+        from django.db.models import Q
+
+        from apps.core.models import Proyecto
+
+        proyectos = Proyecto.objects.filter(asignaciones__recurso__in=recursos).distinct()
+        ids = set()
+        for proyecto in proyectos:
+            ids.add(proyecto.pm_id)
+            if proyecto.aprobador_delegado_id:
+                ids.add(proyecto.aprobador_delegado_id)
+        return list(
+            User.objects.filter(Q(pk__in=ids) | Q(groups__name="Admin"))
+            .distinct().order_by("first_name", "username")
+        )
+
     def _ctx(self, request):
         propio = svc.recurso_de(request.user)
         recursos_observables = []
@@ -363,6 +426,16 @@ class FeedbackView(LoginRequiredMixin, View):
             # en orden cronologico obliga a reconstruir esa division a ojo.
             "recibido": recibido[:40],
             "dado": dado[:40],
+            # Para transcribir: quien podria haber hecho la observacion.
+            "posibles_observadores": (
+                self._posibles_observadores(request.user, recursos_observables)
+                if recursos_observables else []
+            ),
+            "acciones": (
+                svc.acciones_de(request.user, elegido)[:30] if elegido else []
+            ),
+            "tipos_accion": AccionDeSeguimiento.TIPO_CHOICES,
+            "puede_registrar_acciones": es_admin(request.user),
             "recursos_del_equipo": (
                 Recurso.objects.filter(activo=True).order_by("nombre")
                 if self.modo == "gestionar" and puede_ver_todo(request.user) else []

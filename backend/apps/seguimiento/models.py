@@ -254,6 +254,21 @@ class Feedback(SoftDeleteModel):
     )
     autor = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name="feedbacks_escritos",
+        help_text="Quien lo escribió en la aplicación.",
+    )
+    # Quien hizo la observación, cuando no es quien la teclea.
+    #
+    # Los jefes de proyecto dicen «no tengo tiempo de entrar» y mandan la
+    # observación por chat. Si el Admin la copia como suya, el registro miente
+    # sobre quién observó; y si no se copia, se pierde. Se guardan las dos
+    # personas: quien lo vio y quien lo transcribió.
+    #
+    # Importa para leer los datos después: al comparar evaluadores entre sí
+    # —que es como se detecta a quien califica bajo a todo el mundo— cuenta el
+    # juicio de quien observó, no la mano que lo escribió.
+    en_nombre_de = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="feedbacks_transcritos",
+        null=True, blank=True, verbose_name="Observado por",
     )
     direccion = models.CharField(max_length=3, choices=DIRECCION_CHOICES)
     momento = models.CharField(max_length=10, choices=MOMENTO_CHOICES, default=SEMANAL)
@@ -322,6 +337,15 @@ class Feedback(SoftDeleteModel):
         return f"{self.get_direccion_display()} · {self.recurso.nombre} · {self.fecha_observacion:%d/%m/%Y}"
 
     @property
+    def observador(self):
+        """Quien hizo la observación, transcrita o no."""
+        return self.en_nombre_de or self.autor
+
+    @property
+    def transcrito(self) -> bool:
+        return bool(self.en_nombre_de_id and self.en_nombre_de_id != self.autor_id)
+
+    @property
     def editado(self) -> bool:
         """Si se tocó después de escribirlo. La pantalla lo dice.
 
@@ -349,3 +373,65 @@ class Feedback(SoftDeleteModel):
                 })
             if not (1 <= self.claridad_objetivo <= 5):
                 raise ValidationError({"claridad_objetivo": "Del 1 al 5."})
+
+
+class AccionDeSeguimiento(SoftDeleteModel):
+    """Qué hizo el manager con lo que leyó. Fechado.
+
+    Sin esto, el módulo recoge señales y no dice qué pasó después. Y ese
+    "después" es la mitad que importa: un recurso con tres observaciones a
+    mejorar y ninguna conversación registrada no es un problema de la persona,
+    es un problema de seguimiento — y hasta ahora esa distinción no se podía
+    hacer porque solo se guardaba una de las dos mitades.
+
+    Es además la respuesta a la pregunta incómoda. «¿Por qué no hiciste
+    seguimiento uno a uno con los 27?» tiene una mala respuesta, que es
+    intentarlo, y una buena: *estas son las situaciones que levantó el sistema,
+    esto hice con cada una, y aquí están las fechas.* Un registro de excepciones
+    atendidas es más defendible que una agenda llena.
+
+    Se guarda también «no hice nada, y por esto»: una acción descartada a
+    conciencia es información, y obligar a que toda señal termine en una acción
+    fabrica acciones de mentira.
+    """
+
+    CONVERSACION = "CONVERSACION"
+    ESCALADO = "ESCALADO"
+    FORMACION = "FORMACION"
+    CAMBIO = "CAMBIO"
+    SIN_ACCION = "SIN_ACCION"
+    TIPO_CHOICES = [
+        (CONVERSACION, "Conversación con la persona"),
+        (ESCALADO, "Escalado al proyecto"),
+        (FORMACION, "Formación o acompañamiento"),
+        (CAMBIO, "Cambio de asignación o de alcance"),
+        (SIN_ACCION, "Revisado, sin acción por ahora"),
+    ]
+
+    recurso = models.ForeignKey(
+        Recurso, on_delete=models.PROTECT, related_name="acciones_seguimiento",
+    )
+    autor = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="acciones_de_seguimiento",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    tipo = models.CharField(max_length=14, choices=TIPO_CHOICES, default=CONVERSACION)
+    texto = models.TextField(
+        verbose_name="Qué hiciste",
+        help_text="Qué decidiste y por qué. Lo va a leer quien herede este seguimiento.",
+    )
+    # A qué observación responde, si responde a una concreta. Opcional porque la
+    # mayoría de las decisiones salen de leer varias juntas, no de una sola.
+    feedback = models.ForeignKey(
+        Feedback, on_delete=models.PROTECT, related_name="acciones",
+        null=True, blank=True, verbose_name="A raíz de",
+    )
+
+    class Meta:
+        ordering = ["-creado_en"]
+        verbose_name = "Acción de seguimiento"
+        verbose_name_plural = "Acciones de seguimiento"
+        indexes = [models.Index(fields=["recurso", "-creado_en"])]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} · {self.recurso.nombre} · {self.creado_en:%d/%m/%Y}"

@@ -284,3 +284,151 @@ class LoQueDaYLoQueRecibeTests(BaseFeedback):
         self.client.force_login(self.ing)
         resp = self.client.get(reverse("feedback"), {"recurso": self.recurso.pk})
         self.assertIsNone(resp.context["elegido"])
+
+
+class TranscribirLoQueDijoOtroTests(BaseFeedback):
+    """El Admin copia lo que el jefe de proyecto mandó por chat.
+
+    Los jefes de proyecto dicen «no tengo tiempo de entrar» y mandan la
+    observación por Teams. Si no se puede transcribir, se pierde; y si el Admin
+    la copia como suya, el registro miente sobre quién observó — y eso importa,
+    porque al comparar evaluadores entre sí cuenta el juicio de quien vio la
+    conducta, no la mano que la tecleó.
+    """
+
+    def test_el_admin_puede_transcribir(self):
+        f = self._sobre_la_persona(autor=self.admin, en_nombre_de=self.pm)
+        self.assertEqual(f.autor, self.admin)
+        self.assertEqual(f.en_nombre_de, self.pm)
+        self.assertEqual(f.observador, self.pm)
+        self.assertTrue(f.transcrito)
+
+    def test_sin_transcribir_el_observador_es_el_autor(self):
+        f = self._sobre_la_persona()
+        self.assertEqual(f.observador, self.pm)
+        self.assertFalse(f.transcrito)
+
+    def test_no_se_atribuye_a_quien_no_trabaja_con_esa_persona(self):
+        """Una firma que esa persona no podria sostener no sirve de nada."""
+        ajeno = User.objects.create_user("pm3_fb", "p3@test.com", "clave-larga-1")
+        ajeno.groups.add(Group.objects.get(name="PM"))
+        with self.assertRaises(ValidationError):
+            self._sobre_la_persona(autor=self.admin, en_nombre_de=ajeno)
+
+    def test_el_feedback_sobre_el_proyecto_no_se_transcribe(self):
+        """Lo escribe quien lo vivio. Transcribirlo romperia justo la promesa
+        con la que se pidio."""
+        with self.assertRaises(ValidationError):
+            self._sobre_el_proyecto(autor=self.admin, en_nombre_de=self.pm)
+
+    def test_lo_ve_cualquiera_que_pueda_observar(self):
+        """Un delegado tambien recibe por chat lo que el PM no entra a escribir;
+        obligarle a pedirselo al Admin es anadir un salto para nada."""
+        for usuario in (self.admin, self.pm):
+            self.client.force_login(usuario)
+            self.assertTrue(
+                self.client.get(reverse("feedback")).context["posibles_observadores"],
+                f"{usuario.username} deberia poder atribuir la observacion",
+            )
+
+    def test_solo_se_ofrece_a_quien_trabaja_con_esa_gente(self):
+        """Ofrecer la lista entera invitaria a atribuir una observacion a alguien
+        que no trabaja con esa persona, y esa firma no la sostiene nadie."""
+        ajeno = User.objects.create_user("pm4_fb", "p4@test.com", "clave-larga-1")
+        ajeno.groups.add(Group.objects.get(name="PM"))
+        self.client.force_login(self.admin)
+        ofrecidos = self.client.get(reverse("feedback")).context["posibles_observadores"]
+        self.assertIn(self.pm, ofrecidos)
+        self.assertNotIn(ajeno, ofrecidos)
+
+    def test_al_ingeniero_no_se_le_ofrece_nada(self):
+        """No puede observar, asi que tampoco transcribir."""
+        self.client.force_login(self.ing)
+        self.assertEqual(
+            self.client.get(reverse("feedback")).context["posibles_observadores"], [],
+        )
+
+    def test_desde_la_pantalla(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("feedback"), {
+            "direccion": Feedback.PROYECTO_A_RECURSO,
+            "recurso": self.recurso.pk,
+            "proyecto": self.proyecto.pk,
+            "en_nombre_de": self.pm.pk,
+            "conducta": "lo dijo Martin por Teams",
+            "impacto": "se perdio medio dia",
+            "tipo": Feedback.A_MEJORAR,
+        })
+        f = Feedback.objects.get(direccion=Feedback.PROYECTO_A_RECURSO)
+        self.assertEqual(f.en_nombre_de, self.pm)
+        self.assertEqual(f.autor, self.admin)
+
+
+class QueSeHizoConEsoTests(BaseFeedback):
+    """La mitad que faltaba: que paso DESPUES de leer las senales.
+
+    Un recurso con tres observaciones a mejorar y ninguna conversacion
+    registrada no es un problema de la persona: es un problema de seguimiento.
+    Sin esta tabla esa distincion no se puede hacer, porque solo se guardaba una
+    de las dos mitades.
+    """
+
+    def _accion(self, autor=None, **extra):
+        datos = dict(tipo="CONVERSACION", texto="hablamos el martes, se compromete a avisar antes")
+        datos.update(extra)
+        return svc.registrar_accion(
+            recurso=self.recurso, autor=autor or self.admin, **datos
+        )
+
+    def test_el_admin_registra_lo_que_hizo(self):
+        a = self._accion()
+        self.assertEqual(a.recurso, self.recurso)
+        self.assertEqual(a.autor, self.admin)
+
+    def test_sin_texto_no_se_guarda(self):
+        """Una accion sin contenido no le sirve a quien herede el seguimiento."""
+        with self.assertRaises(ValidationError):
+            self._accion(texto="   ")
+
+    def test_revisado_sin_accion_tambien_cuenta(self):
+        """Obligar a que toda senal termine en una accion fabrica acciones de
+        mentira. Una decision descartada a conciencia es informacion."""
+        a = self._accion(tipo="SIN_ACCION", texto="esta semana esta en formacion, es normal")
+        self.assertEqual(a.tipo, "SIN_ACCION")
+
+    def test_se_puede_atar_a_una_observacion(self):
+        f = self._sobre_la_persona()
+        a = self._accion(feedback=f)
+        self.assertEqual(a.feedback, f)
+
+    def test_pero_no_a_la_de_otra_persona(self):
+        otro = Recurso.objects.create(nombre="Ajena", email="aja@test.com", banda="JR")
+        f = svc.registrar_feedback(
+            recurso=otro, autor=self.admin, direccion=Feedback.PROYECTO_A_RECURSO,
+            conducta="algo", impacto="algo", tipo=Feedback.FORTALEZA,
+        )
+        with self.assertRaises(ValidationError):
+            self._accion(feedback=f)
+
+    def test_un_pm_no_registra_acciones(self):
+        """Seria un segundo canal de feedback, y ya hay uno."""
+        with self.assertRaises(PermissionDenied):
+            self._accion(autor=self.pm)
+
+    def test_el_historial_es_solo_de_quien_lleva_el_seguimiento(self):
+        """Son notas de gestion. Publicarlas convertiria cada nota en un mensaje
+        dirigido, que es otra cosa y se escribe distinto."""
+        self._accion()
+        self.assertEqual(svc.acciones_de(self.admin, self.recurso).count(), 1)
+        self.assertEqual(svc.acciones_de(self.ing, self.recurso).count(), 0)
+        self.assertEqual(svc.acciones_de(self.pm, self.recurso).count(), 0)
+
+    def test_desde_la_pantalla(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("feedback-equipo"), {
+            "accion": "seguimiento",
+            "recurso": self.recurso.pk,
+            "tipo": "ESCALADO",
+            "texto": "escalado a Martin por escrito, citando las fechas",
+        })
+        self.assertEqual(svc.acciones_de(self.admin, self.recurso).count(), 1)

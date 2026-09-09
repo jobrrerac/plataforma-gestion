@@ -63,6 +63,7 @@ class Command(BaseCommand):
             # es para el mantenimiento y para leer el historico.
             ("seguimiento",  "bloqueante",              ["add", "change", "delete", "view"]),
             ("seguimiento",  "feedback",                ["add", "change", "delete", "view"]),
+            ("seguimiento",  "acciondeseguimiento",     ["add", "change", "delete", "view"]),
         ])
 
         perms_pm = self._perms([

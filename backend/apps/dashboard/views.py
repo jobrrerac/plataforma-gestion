@@ -1249,8 +1249,8 @@ class GestionarView(_HubView):
             },
             {
                 "url": "/feedback/equipo/", "icono": "bi-chat-square-text",
-                "titulo": "Gestionar feedback",
-                "texto": "Lo que cada persona da y recibe, y añadir tu observación.",
+                "titulo": "Leer el feedback del equipo",
+                "texto": "Lo que cada persona da y recibe, enfrentado. Registrar va en Registrar.",
                 "visible": puede_ver_todo(request.user),
             },
         ]
