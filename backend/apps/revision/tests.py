@@ -1074,8 +1074,8 @@ class ElPlanQueLlenaElDiaEsElDeClienteTests(BaseTriaje):
         proyecto interno con plan sigue teniendo plan."""
         self._plan(self.interno, "4.0")
         dia = self._dia()
-        r = self._renglon(dia, "8.5", "Reunion de bench y definicion de roles",
-                          proyecto=self.interno)
+        self._renglon(dia, "8.5", "Reunion de bench y definicion de roles",
+                      proyecto=self.interno)
         ctx = Contexto([dia])
         self.assertEqual(ctx.horas_planificadas(dia.recurso_id, self.interno.pk, dia.fecha), 4.0)
         self.assertEqual(ctx.plan_del_dia(dia.recurso_id, dia.fecha), 0.0)
