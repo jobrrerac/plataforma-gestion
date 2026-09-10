@@ -68,6 +68,30 @@
   .c-revisar  { --franja:#97591a; }
   .c-rutina   { --franja:#1f6b45; }
 
+  /* El carril es un boton que filtra. Se nota que se puede pulsar antes de
+     pulsarlo, y se nota cual esta puesto: sin las dos cosas, el filtro se
+     descubre por accidente y luego no se sabe como quitarlo. */
+  button.carril { text-align:left; font:inherit; cursor:pointer; transition:box-shadow .12s, transform .12s; }
+  button.carril:hover { box-shadow:0 2px 10px rgba(25,27,46,.13); transform:translateY(-1px); }
+  button.carril[aria-pressed="true"] { border-color:var(--franja); box-shadow:0 0 0 2px var(--franja) inset; }
+
+  .filtro-puesto { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                   flex-wrap:wrap; margin:-8px 0 18px; padding:9px 14px; border-radius:8px;
+                   background:#eef0f4; color:#4b5563; font-size:.82rem; }
+  .filtro-puesto[hidden] { display:none; }
+  .filtro-puesto button { background:none; border:none; color:#4b5563; font-size:.8rem;
+                          text-decoration:underline; padding:0; }
+  .filtro-puesto button:hover { color:#191b2e; }
+  .vacio-filtro { text-align:center; color:#8a8f9c; padding:34px 12px; font-size:.88rem; }
+  .vacio-filtro[hidden] { display:none; }
+
+  /* Firmar de un golpe lo interno sin avisos. Verde como el resto de aprobar,
+     y separado de los carriles para que no se lea como parte del recuento. */
+  .rutinarios { display:flex; align-items:center; justify-content:space-between; gap:14px;
+                flex-wrap:wrap; margin-bottom:18px; padding:12px 16px; border-radius:10px;
+                background:#e8f2ec; border:1px solid #1f6b45; }
+  .rutinarios-txt { font-size:.83rem; color:#125033; line-height:1.45; flex:1; min-width:260px; }
+
   .banda { display:inline-block; font-size:.62rem; font-weight:800; letter-spacing:.07em;
            text-transform:uppercase; padding:2px 7px; border-radius:3px; vertical-align:.15em; margin-left:8px; }
   .b-atencion { background:#f8ebea; color:#a52a25; border:1px solid #a52a25; }
@@ -163,27 +187,62 @@
 
   {% if hay_triaje %}
   {% comment %}
-    El recuento reordena la cola, no la filtra: los tres carriles llevan los
-    mismos botones y nada queda oculto. Que la banda ordene y no decida es lo
-    que impide que esto se convierta en una aprobacion automatica de hecho.
+    Cada carril filtra la cola por su banda. Es un filtro de la vista, no del
+    contenido: se pinta todo y el navegador esconde lo que sobra, asi que no
+    hay estado que guardar ni recarga que esperar. Volver a pulsarlo lo quita,
+    y mientras haya uno puesto la pantalla lo dice en voz alta — una lista
+    filtrada que parece completa es peor que no poder filtrar.
+
+    Lo que sigue sin cambiar: la banda ordena y filtra, pero no decide. Los
+    tres carriles llevan los mismos botones y nada queda oculto para siempre.
   {% endcomment %}
-  <div class="carriles" role="status">
-    <div class="carril c-atencion">
+  <div class="carriles">
+    <button type="button" class="carril c-atencion" data-banda="atencion" aria-pressed="false">
       <span class="carril-n">{{ recuento.ATENCION|default:"0" }}</span>
       <span class="carril-t">Atención</span>
       <span class="carril-d">Empieza por aquí</span>
-    </div>
-    <div class="carril c-revisar">
+    </button>
+    <button type="button" class="carril c-revisar" data-banda="revisar" aria-pressed="false">
       <span class="carril-n">{{ recuento.REVISAR|default:"0" }}</span>
       <span class="carril-t">Revisar</span>
       <span class="carril-d">Con un motivo concreto</span>
-    </div>
-    <div class="carril c-rutina">
+    </button>
+    <button type="button" class="carril c-rutina" data-banda="rutina" aria-pressed="false">
       <span class="carril-n">{{ recuento.RUTINA|default:"0" }}</span>
       <span class="carril-t">Rutina</span>
       <span class="carril-d">Dentro del plan</span>
-    </div>
+    </button>
   </div>
+
+  <div class="filtro-puesto" id="filtro-puesto" hidden role="status">
+    <span><i class="bi bi-funnel-fill me-1"></i>Estás viendo solo <strong id="filtro-cual"></strong>.</span>
+    <button type="button" id="filtro-quitar">Ver toda la cola</button>
+  </div>
+
+  {% if n_rutinarios %}
+  {% comment %}
+    Firmar de un golpe lo interno sin avisos. Es el volumen que no aporta nada
+    revisar de a uno —bench, estudio, formacion, departamentales— y el que hace
+    que la cola se vea imposible y se acabe firmando todo sin mirar.
+
+    Lo que NO entra, y por eso el boton es honesto: nada facturable, nada con
+    un aviso accionable, y nada que esta persona no pueda firmar. La lista se
+    vuelve a calcular en el servidor al pulsar, no se manda desde aqui.
+  {% endcomment %}
+  <form method="post" class="rutinarios"
+        onsubmit="return confirm('¿Aprobar las {{ n_rutinarios }} actividades internas sin avisos?')">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="aprobar_rutinarios">
+    <div class="rutinarios-txt">
+      <strong>{{ n_rutinarios }} actividad{{ n_rutinarios|pluralize:"es" }} interna{{ n_rutinarios|pluralize:"s" }} sin ningún aviso.</strong>
+      Internas, estudio o formación, dentro del plan y con su detalle escrito.
+      Las horas de cliente nunca entran aquí.
+    </div>
+    <button type="submit" class="btn-aprobar">
+      <i class="bi bi-check2-all me-1"></i>Aprobar los rutinarios ({{ n_rutinarios }})
+    </button>
+  </form>
+  {% endif %}
   {% endif %}
 
   {% for dia in dias %}
@@ -431,6 +490,18 @@
   </div>
   {% endfor %}
 
+  {% comment %}
+    El filtro puede dejar la lista en nada —los tres carriles cuentan
+    actividades y las tarjetas son dias, asi que un carril con numero puede no
+    tener ninguna tarjeta propia si esas actividades viven en dias que otra
+    señal peor se llevo a otra banda—. Decirlo evita leerlo como «no hay nada
+    pendiente», que es justo lo contrario de lo que pasa.
+  {% endcomment %}
+  <div class="vacio-filtro" id="vacio-filtro" hidden>
+    <i class="bi bi-funnel" style="font-size:1.4rem"></i>
+    <div class="mt-2">Ningún día de la cola queda en esa banda.</div>
+  </div>
+
   {% if dias %}
   {% comment %}
     Firmar lo marcado, de los dias que sean. Marcar una casilla es un acto por
@@ -510,6 +581,54 @@
   });
 
   pintar();
+
+  // ── Filtrar la cola por banda ───────────────────────────────────────────
+  //
+  // Al esconder una tarjeta se **desmarcan** sus casillas. Si no, la barra de
+  // abajo seguiria contando renglones que ya no estan a la vista y se firmaria
+  // lo que nadie esta mirando, que es exactamente lo que este modulo evita.
+  const carriles = Array.from(document.querySelectorAll('button.carril'));
+  const aviso = document.getElementById('filtro-puesto');
+  const cual = document.getElementById('filtro-cual');
+  const nada = document.getElementById('vacio-filtro');
+  const tarjetas = Array.from(document.querySelectorAll('.dia-card'));
+  let puesto = null;
+
+  function filtrar() {
+    let visibles = 0;
+    tarjetas.forEach(tarjeta => {
+      const suya = puesto === null || tarjeta.classList.contains('d-' + puesto);
+      tarjeta.hidden = !suya;
+      if (suya) {
+        visibles += 1;
+      } else {
+        tarjeta.querySelectorAll('.marca').forEach(c => {
+          c.checked = false;
+          c.indeterminate = false;
+        });
+      }
+    });
+    carriles.forEach(c => c.setAttribute('aria-pressed', String(c.dataset.banda === puesto)));
+    if (aviso) {
+      aviso.hidden = puesto === null;
+      if (puesto !== null) {
+        const boton = carriles.find(c => c.dataset.banda === puesto);
+        cual.textContent = boton.querySelector('.carril-t').textContent.trim();
+      }
+    }
+    if (nada) nada.hidden = !(puesto !== null && visibles === 0);
+    pintar();
+  }
+
+  carriles.forEach(boton => {
+    boton.addEventListener('click', () => {
+      puesto = puesto === boton.dataset.banda ? null : boton.dataset.banda;
+      filtrar();
+    });
+  });
+
+  const quitar = document.getElementById('filtro-quitar');
+  if (quitar) quitar.addEventListener('click', () => { puesto = null; filtrar(); });
 })();
 </script>
 {% endblock %}

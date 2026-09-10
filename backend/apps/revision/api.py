@@ -25,7 +25,7 @@ class Contexto:
     def __init__(self, dias):
         self.dias = dias
         self._plan = defaultdict(float)          # (recurso, proyecto, fecha) -> h/día
-        self._plan_dia = defaultdict(float)      # (recurso, fecha) -> h/día en proyectos
+        self._plan_dia = defaultdict(float)      # (recurso, fecha) -> h/día de cliente
         self._detalles = defaultdict(set)        # (recurso, texto) -> {fechas}
         self._devoluciones = defaultdict(int)    # recurso -> nº devueltos recientes
         if dias:
@@ -50,9 +50,12 @@ class Contexto:
             fecha_inicio__lte=hasta, fecha_fin__gte=desde,
         ).values_list(
             "recurso_id", "proyecto_id", "fecha_inicio", "fecha_fin",
-            "intensidad_diaria", "jornada_completa",
+            "intensidad_diaria", "jornada_completa", "proyecto__facturable",
         )
-        for recurso_id, proyecto_id, inicio, fin, intensidad, jornada_completa in asignaciones:
+        for (
+            recurso_id, proyecto_id, inicio, fin, intensidad, jornada_completa,
+            facturable,
+        ) in asignaciones:
             for fecha in fechas:
                 if not (inicio <= fecha <= fin):
                     continue
@@ -65,7 +68,11 @@ class Contexto:
                 else:
                     horas = float(intensidad or 0)
                 self._plan[(recurso_id, proyecto_id, fecha)] += horas
-                self._plan_dia[(recurso_id, fecha)] += horas
+                # `_plan_dia` responde a «¿estaba el día lleno de cliente?», y
+                # por eso solo suma lo facturable. `_plan` sigue completo: lo
+                # usan SIN_PLAN y SOBRE_PLAN, que ya miran el proyecto.
+                if facturable:
+                    self._plan_dia[(recurso_id, fecha)] += horas
 
         # 2. Detalles de otros días, para detectar el copiar y pegar.
         desde_rep, hasta_rep = sn.ventana_repeticion(desde)
@@ -93,7 +100,7 @@ class Contexto:
         return self._plan.get((recurso_id, proyecto_id, fecha))
 
     def plan_del_dia(self, recurso_id, fecha):
-        """Total de horas planificadas en proyectos ese día."""
+        """Total de horas planificadas ese día en proyectos **facturables**."""
         return self._plan_dia.get((recurso_id, fecha), 0.0)
 
     def dias_con_ese_detalle(self, recurso_id, texto_normalizado, excepto):
@@ -109,19 +116,24 @@ def bloque_del_dia(dia, usuario, pendientes=None) -> str:
     """Qué firma en bloque admite este día: ninguna, limpia o forzada.
 
     Devuelve `""`, `"LIMPIO"` o `"FORZADO"`. Tres condiciones estructurales
-    valen para las dos formas —Admin, todo interno, más de un renglón— y lo
-    único que las separa es si queda algún aviso encima de la mesa.
+    valen para las dos formas —firmarlo todo, todo interno, más de un renglón—
+    y lo único que las separa es si queda algún aviso encima de la mesa.
+
+    **Quien firma el día tiene que poder firmar el día entero.** Antes esto
+    pedía ser Admin, que era un atajo para lo mismo: el Admin es quien puede
+    con cualquier renglón. Pero un día repartido entre un proyecto interno con
+    jefe y unas horas de formación tampoco lo firma él si mira el rol; y al
+    revés, el PM de un proyecto interno que cubre todo el día sí puede firmarlo
+    y se quedaba sin botón. Se pregunta por la capacidad sobre cada renglón,
+    que es la condición real, y de paso vale igual para el delegado.
 
     Que el forzado exista no vacía el triaje: solo se ofrece donde ya se
     ofrecía el limpio, sigue sin tocar horas de cliente, y pide un motivo que
     se guarda con los códigos anulados. La diferencia con marcar las casillas
     una a una es real: allí se mira cada renglón, aquí no.
     """
-    from apps.accounts.roles import es_admin
     from apps.legalizacion.models import RegistroHoras
-
-    if not es_admin(usuario):
-        return ""
+    from apps.legalizacion.services import puede_aprobar_registro
 
     # `pendientes` se recibe ya evaluado cuando quien llama tiene los objetos en
     # la mano. Releerlos de la base traeria instancias distintas, sin la
@@ -132,26 +144,30 @@ def bloque_del_dia(dia, usuario, pendientes=None) -> str:
         return ""
     if any(r.facturable for r in pendientes):
         return ""
+    if not all(puede_aprobar_registro(usuario, r) for r in pendientes):
+        return ""
 
     evaluados = [getattr(r, "evaluacion", None) for r in pendientes]
     if any(e is None for e in evaluados):
         return ""
 
-    # Tres estados, y el del medio es el que sostiene todo esto:
+    # Dos estados, y los separa si queda algo que pida una decisión:
     #
-    # - sin ninguna señal          -> LIMPIO,  botón verde de un clic;
-    # - con alguna accionable      -> FORZADO, botón ámbar que pide motivo;
-    # - solo con informativas      -> "",      ningún botón de día.
+    # - con alguna accionable  -> FORZADO, botón ámbar que pide motivo;
+    # - sin ninguna            -> LIMPIO,  botón verde de un clic.
     #
-    # Ese caso del medio es media jornada o más en algo no facturable. Ya no
-    # sube la banda ni pide motivo —era la mitad de todas las forzadas— pero
-    # tampoco puede firmarse de un clic: una jornada entera de estudio descrita
-    # a medias es exactamente lo que este módulo vino a que alguien mirase.
-    # Se aprueba marcando las casillas, que son dos clics y ningún motivo.
+    # **Una informativa ya no quita el botón.** Lo quitaba, y dejaba sin firma
+    # en bloque justo a los días internos partidos en tareas concretas —media
+    # jornada en algo no facturable es informativa, y en un día de bench eso es
+    # lo normal—. El resultado era que la pantalla no ofrecía nada donde más
+    # sentido tenía ofrecerlo.
+    #
+    # Lo que protege el caso que preocupaba —la jornada entera de estudio
+    # descrita a medias— no es esta condición sino DETALLE_POBRE, que sí es
+    # accionable y manda el día al botón ámbar con su motivo. Un día interno
+    # bien descrito se firma de un clic; uno mal descrito, no.
     if any(e.accionables for e in evaluados):
         return "FORZADO"
-    if any(e.senales for e in evaluados):
-        return ""
     return "LIMPIO"
 
 
@@ -160,19 +176,18 @@ def aprobable_en_bloque(dia, usuario, pendientes=None) -> bool:
 
     Cuatro condiciones, y hacen falta las cuatro:
 
-    1. **Solo Admin.** Un PM responde por su proyecto; firmar un día entero de
-       otra persona no es lo mismo que firmar lo suyo.
-    2. **Todo lo pendiente del día no es facturable.** Si queda un renglón de
-       cliente sin firmar, esto no es «el día»: es una parte, y la otra la debe
-       ver su PM.
-    3. **Todos en Rutina.** Es la versión comprobable de «los comentarios son
-       atómicos, se ajustan a la tarea y son descriptivos»: ningún detalle pobre,
-       ningún texto copiado de otro día, ningún plan que ya ocupaba la jornada.
+    1. **Puede firmar todos los renglones del día.** El Admin siempre; el PM o
+       el delegado, cuando el día entero cuelga de proyectos suyos. Si queda
+       uno que no le corresponde, esto no es «el día».
+    2. **Todo lo pendiente del día no es facturable.** Un renglón de cliente
+       sin firmar lo debe ver su PM, uno a uno.
+    3. **Ninguna señal accionable.** Es la versión comprobable de «los
+       comentarios son atómicos, se ajustan a la tarea y son descriptivos»:
+       ningún detalle pobre, ningún texto copiado de otro día, ningún plan de
+       cliente que ya ocupaba la jornada.
     4. **Más de un renglón.** Con uno solo, el botón de siempre hace lo mismo.
 
-    Un día interno de un solo renglón gordo no califica —`NO_FACTURABLE_MEDIA_
-    JORNADA` lo saca de Rutina— y así debe ser: ahí hay algo que mirar. Lo que
-    califica es el día partido en tareas concretas y descritas, que es
+    Lo que califica es el día partido en tareas concretas y descritas, que es
     precisamente cuando revisarlo de a una no aporta nada.
 
     Esto decide si el botón se ofrece. Que se pueda pulsar no autoriza nada: el

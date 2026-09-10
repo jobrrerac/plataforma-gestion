@@ -139,7 +139,7 @@ sobre lo que ya existe:
 | Código | Qué mira | Banda |
 |---|---|---|
 | `SIN_PLAN` | Horas a un proyecto de cliente sin asignación aprobada que cubra el día | Atención |
-| `NO_FACTURABLE_CON_PLAN_LLENO` | Horas no facturables cuando el plan ya ocupaba la jornada entera | Atención |
+| `NO_FACTURABLE_CON_PLAN_LLENO` | Horas no facturables cuando el plan **de cliente** ya ocupaba la jornada entera | Atención |
 | `SOBRE_PLAN` | Declaró más de lo previsto ese día en ese proyecto, con medio punto de margen | Revisar |
 | **`NO_FACTURABLE_MEDIA_JORNADA`** | No facturable ≥ 50 % de la jornada | Revisar |
 | `DETALLE_POBRE` | Menos de 25 caracteres o de 3 palabras | Revisar |
@@ -156,31 +156,59 @@ embeddings: una división. El de `INT-DEPART` dispara además `DETALLE_POBRE`.
 - **«Racha de devoluciones» no cambia la banda.** Se calcula y se muestra como
   contexto del día, pero marcar todos los renglones de alguien porque el mes
   pasado le devolvieron dos es ruidoso y se lee como un reproche.
-- **`NO_FACTURABLE_CON_PLAN_LLENO` es nueva.** Si el plan decía jornada entera en
-  proyectos y aun así hay horas internas, o el plan se corrió o desplazaron
-  trabajo de cliente. Cualquiera de las dos merece una pregunta.
+- **`NO_FACTURABLE_CON_PLAN_LLENO` solo cuenta el plan facturable.** Si el plan
+  decía jornada entera **de cliente** y aun así hay horas internas, o el plan se
+  corrió o desplazaron trabajo que se factura. Al principio sumaba cualquier
+  asignación, y entonces a quien estaba planificado a jornada completa en un
+  proyecto interno se le marcaban todos sus renglones: el plan interno llenaba
+  el día y luego acusaba a las horas internas de llenarlo. Un aviso que se
+  dispara solo, sobre lo único que esa persona podía imputar, y que además ni
+  siquiera era el caso que la regla vino a cazar.
 - **La repetición se detecta por coincidencia exacta**, normalizando tildes y
   espacios, no con trigramas. No hace falta habilitar `pg_trgm` para cazar el
   copiar y pegar, que es el caso real. La similitud parcial se añade el día que
   haga falta.
+- **Las ceremonias cortas quedan exentas de las dos reglas del texto.** Un
+  renglón que dice «daily» o «standup» y dura una hora o menos no salta ni por
+  detalle pobre ni por repetido. Se llama igual todos los días y dura media
+  hora: no hay forma honesta de describirlo distinto cada mañana, y pedirlo solo
+  consigue que se invente texto para esquivar el aviso. Era el ruido más visible
+  de la cola real, y por partida doble.
+
+  El tope de una hora es lo que sostiene la exención: sin él, escribir «daily»
+  delante de cualquier cosa sería la forma de esquivar el triaje entero. Y solo
+  toca esas dos reglas — media hora imputada a un cliente sin asignación sigue
+  disparando `SIN_PLAN`, se llame como se llame.
 #### Aprobar el día entero
 
 Hay un botón para firmar de una vez un día interno completo. Aparece cuando se
 cumplen **las cuatro**:
 
-1. **Quien mira es Admin.** Un PM responde por su proyecto; firmar la jornada
-   entera de otra persona no es lo mismo que firmar lo suyo.
+1. **Quien mira puede firmar el día entero.** El Admin siempre; el PM o su
+   delegado, cuando toda la jornada cuelga de proyectos suyos. Al principio
+   pedía ser Admin, que era un atajo para lo mismo y resultó más estrecho que
+   la regla que representaba: el PM de un proyecto interno que cubre el día
+   completo se quedaba sin botón sobre horas que sí podía firmar una a una.
+   Basta un renglón sin proyecto —formación, estudio— para que el día deje de
+   ser suyo y el botón desaparezca entero.
 2. **Nada pendiente del día es facturable.** Si queda un renglón de cliente sin
    firmar, esto no es «el día»: es una parte, y la otra la debe ver su PM.
-3. **Todos los renglones en Rutina.** Es la versión comprobable de «los
-   comentarios son atómicos, se ajustan a la tarea y son descriptivos».
+3. **Ninguna señal accionable.** Es la versión comprobable de «los comentarios
+   son atómicos, se ajustan a la tarea y son descriptivos».
 4. **Más de un renglón.** Con uno solo, el botón de siempre hace lo mismo.
 
 El corte que hace útil el botón está en la condición 3, y conviene entenderlo:
-como `NO_FACTURABLE_MEDIA_JORNADA` saca de Rutina cualquier renglón que se lleve
-media jornada, **un día solo califica si ninguna tarea interna ocupa más de la
-mitad**. Un día de bench repartido en tres tareas de tres horas califica; el
-renglón de estudio de 7,5 h no, y así debe ser: ahí hay algo que mirar.
+lo que decide es **el texto, no la duración**. Una señal informativa —media
+jornada o más en algo no facturable— ya no quita el botón. Lo quitaba, y dejaba
+sin firma en bloque justo a los días internos partidos en tareas concretas,
+porque en un equipo en bench eso es todos los días: la pantalla no ofrecía nada
+donde más sentido tenía ofrecerlo.
+
+Lo que protege el caso que preocupaba —la jornada entera de estudio descrita a
+medias— no es esa condición sino `DETALLE_POBRE`, que sí es accionable y manda
+el día al botón ámbar con su motivo por escrito. Un día interno bien descrito se
+firma de un clic; uno mal descrito, no. Las dos pruebas van emparejadas a
+propósito, para que aflojar la segunda se vea.
 
 Aprobar en bloque es **una sola interacción, no una excepción a las reglas**.
 Cada renglón se firma con `aprobar_registro`, uno a uno, conservando el bloqueo,
@@ -189,10 +217,45 @@ elegibilidad al recibir el POST**: que el botón se haya pintado no autoriza
 nada, porque entre la carga de la pantalla y el envío alguien pudo editar un
 renglón o revocar una asignación.
 
-Lo que sigue sin existir es la firma en bloque del carril de Rutina completo,
-con horas de cliente incluidas. Esa espera a tener números sobre cuánto acierta
-la clasificación: si falla, firmar en bloque multiplica el error en vez de
-contenerlo.
+#### Aprobar los rutinarios de toda la cola
+
+Un botón en la cabecera firma de una vez **todo lo interno sin avisos** de la
+cola entera, no de un día. Es el volumen que no aporta nada revisar de a uno
+—bench, estudio, formación, departamentales— y el que hace que la cola se vea
+imposible y se acabe firmando todo sin mirar, que es exactamente el fallo que
+este módulo existe para evitar.
+
+Tres filtros, y los tres importan: **en Rutina** (sin ninguna señal accionable),
+**no facturable**, y **de los renglones que esa persona puede firmar**. Las
+horas de cliente no entran aquí ni con motivo, por lo mismo de siempre: la
+atención se conserva donde se factura.
+
+**La lista se recalcula en el servidor al pulsar, no viaja en el formulario.**
+Es la diferencia entre un botón y una promesa: entre que se pintó la pantalla y
+llega el envío alguien pudo empeorar un detalle, y lo que era rutina puede haber
+dejado de serlo. Con los ids del formulario, este botón firmaría a ciegas lo que
+el triaje marcó hace diez minutos. Luego delega en `aprobar_seleccion`, que
+firma renglón a renglón con su bloqueo y su firma.
+
+Sigue sin existir la firma en bloque del carril de Rutina **con horas de
+cliente**. Esa espera a tener números sobre cuánto acierta la clasificación: si
+falla, firmar en bloque multiplica el error en vez de contenerlo.
+
+#### Filtrar la cola por carril
+
+Los tres carriles del recuento son botones: pulsar uno deja a la vista solo los
+días de esa banda, y volver a pulsarlo lo quita. Es un filtro de la vista —se
+pinta todo y el navegador esconde lo que sobra—, así que no hay estado que
+guardar ni recarga que esperar.
+
+Dos detalles que no son cosméticos. Mientras haya un filtro puesto **la pantalla
+lo dice en voz alta**, con su enlace para quitarlo: una lista filtrada que
+parece completa es peor que no poder filtrar. Y al esconder una tarjeta **se
+desmarcan sus casillas**, porque si no la barra de abajo seguiría contando
+renglones que nadie tiene a la vista y se firmaría lo que no se está mirando.
+
+La banda sigue ordenando y ahora también filtra, pero no decide: los tres
+carriles llevan los mismos botones y nada queda oculto de forma permanente.
 
 #### Aprobar de todos modos, y aprobar lo marcado
 
@@ -203,8 +266,8 @@ regla marcó de más, y una herramienta que castiga sus propios falsos positivos
 acaba ignorada. Hay dos salidas, deliberadamente distintas.
 
 **Aprobar de todos modos** ocupa el mismo sitio que el botón limpio y aparece
-exactamente donde aquel no llega: se cumplen las condiciones 1, 2 y 4 —Admin,
-todo interno, más de un renglón— y falla solo la 3. Los dos botones **nunca
+exactamente donde aquel no llega: se cumplen las condiciones 1, 2 y 4 —poder
+firmarlo todo, todo interno, más de un renglón— y falla solo la 3. Los dos botones **nunca
 salen a la vez**; serían dos botones que hacen lo mismo y uno pediría un motivo
 de más.
 
@@ -240,8 +303,9 @@ positivos, y es la entrada natural de la fase 3: si `DETALLE_POBRE` se anula
 cuarenta veces con el mismo motivo, el problema es el umbral de 25 caracteres,
 no la gente.
 
-Sigue sin existir la firma en bloque del carril de Rutina completo con horas de
-cliente incluidas, por lo dicho arriba.
+Sigue sin existir la firma en bloque del carril de Rutina **con horas de
+cliente**, por lo dicho arriba. Lo interno sin avisos sí, y es el botón de
+«aprobar los rutinarios».
 
 
 #### Reabrir un día ya firmado
