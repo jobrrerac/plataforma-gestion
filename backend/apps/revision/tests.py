@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -112,19 +112,26 @@ class LosDosCasosRealesTests(BaseTriaje):
         self.assertIn("7.5 h de 8.5", texto)
         self.assertIn("88%", texto)
 
-    def test_ese_mismo_dia_no_se_puede_firmar_de_un_clic(self):
-        """La contrapartida de haberla vuelto informativa, y lo que impide que
-        el cambio abra un agujero.
-
-        Si al dejar de subir la banda esos renglones cayeran en Rutina sin mas,
-        una jornada entera de estudio descrita a medias seria aprobable con un
-        boton. Es exactamente lo que este modulo vino a que alguien mirase.
-        """
+    def _admin(self, nombre):
         from django.contrib.auth.models import Group
 
-        admin = User.objects.create_user("admin_info", "ai@test.com", "x")
+        admin = User.objects.create_user(nombre, f"{nombre}@test.com", "x")
         admin.groups.add(Group.objects.get_or_create(name="Admin")[0])
+        return admin
 
+    def test_ese_mismo_dia_bien_descrito_si_se_firma_de_un_clic(self):
+        """Una informativa ya no quita el boton del dia.
+
+        Lo quitaba, y dejaba sin firma en bloque justo a los dias internos:
+        media jornada en algo no facturable es informativa, y en un equipo en
+        bench eso es todos los dias. La pantalla acababa sin ofrecer nada donde
+        mas sentido tenia ofrecerlo.
+
+        Lo que protege el caso que preocupaba no es esta condicion, sino
+        DETALLE_POBRE — ver la prueba de abajo, que es su pareja y va roja si
+        alguien afloja tambien esa.
+        """
+        admin = self._admin("admin_info")
         dia = self._dia()
         self._renglon(
             dia, "7.5",
@@ -137,11 +144,30 @@ class LosDosCasosRealesTests(BaseTriaje):
         clasificar(dias, admin)
         d = dias[0]
 
-        # Ni verde ni ambar: ningun boton de dia. Se aprueba marcando casillas.
-        self.assertEqual(d.bloque, "")
-        self.assertFalse(d.aprobable_en_bloque)
-        self.assertFalse(d.forzable_en_bloque)
+        self.assertEqual(d.bloque, "LIMPIO")
+        self.assertTrue(d.aprobable_en_bloque)
         self.assertEqual(d.banda, sn.RUTINA, "una informativa no sube la banda")
+
+    def test_pero_mal_descrito_pide_motivo(self):
+        """La pareja de la anterior, y la que sostiene todo el cambio.
+
+        La jornada entera de estudio descrita a medias sigue sin poder firmarse
+        de un clic: DETALLE_POBRE es accionable y manda el dia al boton ambar,
+        que pide por escrito por que se firma igual. Si esta se pone verde, el
+        boton limpio se convierte en una aprobacion automatica.
+        """
+        admin = self._admin("admin_pobre")
+        dia = self._dia()
+        self._renglon(dia, "7.5", "muchas tareas", tipo=self.estudio)
+        self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
+
+        dias = svc.dias_por_aprobar(admin)
+        clasificar(dias, admin)
+        d = dias[0]
+
+        self.assertEqual(d.bloque, "FORZADO")
+        self.assertFalse(d.aprobable_en_bloque)
+        self.assertTrue(d.forzable_en_bloque)
 
     def test_aprobar_una_informativa_no_cuenta_como_forzada(self):
         """El registro de firmas forzadas solo sirve si dice que regla se salta
@@ -445,16 +471,48 @@ class AprobarElDiaEnteroTests(BaseTriaje):
 
     # ── cuándo no ───────────────────────────────────────────────────────────
 
-    def test_no_se_ofrece_a_un_pm(self):
-        """Un PM responde por su proyecto, no por la jornada de otro."""
+    def test_se_ofrece_al_pm_del_proyecto_interno(self):
+        """Lo que decide es poder firmar el dia entero, no tener rol de Admin.
+
+        Antes esto pedia `es_admin`, y el PM de INT-DEPART —el proyecto interno
+        del que cuelga la jornada entera— se quedaba sin boton sobre horas que
+        si podia firmar una a una. El atajo era mas estrecho que la regla que
+        pretendia representar.
+        """
         self._dia_interno_limpio()
         dia = self._cola(self.pm)[0]
-        self.assertFalse(dia.aprobable_en_bloque)
+        self.assertTrue(dia.aprobable_en_bloque)
+        self.assertEqual(svc.aprobar_dia_completo(dia, self.pm), 3)
 
-    def test_un_pm_no_puede_aunque_lo_intente(self):
+    def test_pero_no_si_queda_un_renglon_que_ese_pm_no_puede_firmar(self):
+        """La condicion real, y la que no se puede aflojar.
+
+        Basta un renglon sin proyecto —formacion, estudio— para que el dia deje
+        de ser suyo: eso solo lo firma el Admin. El boton desaparece entero, no
+        se queda firmando la parte que si.
+        """
         dia = self._dia_interno_limpio()
+        self._renglon(dia, "1", "Curso de fundamentos de Databricks", tipo=self.estudio)
+
+        self.assertFalse(self._cola(self.pm)[0].aprobable_en_bloque)
         with self.assertRaises(ValidationError):
             svc.aprobar_dia_completo(dia, self.pm)
+        self.assertEqual(
+            dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0,
+        )
+
+    def test_ni_a_un_pm_ajeno_al_proyecto(self):
+        """Un PM responde por su proyecto, no por la jornada de otro."""
+        otro = User.objects.create_user("pm_ajeno", "ajeno@test.com", "x")
+        Proyecto.objects.create(
+            codigo="OTRO-1", nombre="Otro", cliente="X",
+            fecha_inicio=date(2026, 1, 1), estado="ACTIVO", pm=otro, facturable=True,
+        )
+        dia = self._dia_interno_limpio()
+
+        self.assertEqual(self._cola(otro), [], "no deberia ni ver la cola")
+        with self.assertRaises((ValidationError, PermissionDenied)):
+            svc.aprobar_dia_completo(dia, otro)
         self.assertEqual(
             dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0,
         )
@@ -510,11 +568,12 @@ class AprobarElDiaEnteroTests(BaseTriaje):
             with self.assertRaises(ValidationError):
                 svc.aprobar_dia_completo(dia, self.admin)
 
-    def test_una_tarea_interna_de_media_jornada_bloquea_el_boton(self):
-        """El renglon de estudio de 7,5 h no puede colarse por aqui.
+    def test_una_tarea_interna_de_media_jornada_ya_no_bloquea_el_boton(self):
+        """Media jornada en algo interno es informativa, y ya no quita el boton.
 
-        Es el corte que hace util el boton: un dia repartido en tareas acotadas
-        se firma de una vez; uno donde una sola cosa se lleva medio dia se mira.
+        Lo que decide es el texto, no la duracion: descrita, se firma de una
+        vez; sin describir, DETALLE_POBRE la manda al boton ambar. Ver la
+        pareja de pruebas en `LosDosCasosRealesTests`.
         """
         dia = self._dia()
         self._renglon(
@@ -524,7 +583,7 @@ class AprobarElDiaEnteroTests(BaseTriaje):
         )
         self._renglon(dia, "1", "Reunion de seguimiento del area", proyecto=self.interno)
 
-        self.assertFalse(self._cola(self.admin)[0].aprobable_en_bloque)
+        self.assertTrue(self._cola(self.admin)[0].aprobable_en_bloque)
 
 
 class RevisarHistoricoTests(BaseTriaje):
@@ -702,12 +761,16 @@ class ForzarElDiaEnteroTests(BaseTriaje):
 
     # ── lo que forzar NO relaja ─────────────────────────────────────────────
 
-    def test_no_se_ofrece_a_un_pm(self):
+    def test_se_ofrece_al_pm_del_proyecto_interno(self):
+        """Lo mismo que en el limpio: decide poder firmar el dia entero."""
         self._dia_interno_con_aviso()
-        self.assertFalse(self._cola(self.pm)[0].forzable_en_bloque)
+        self.assertTrue(self._cola(self.pm)[0].forzable_en_bloque)
 
-    def test_un_pm_no_puede_forzar_aunque_lo_intente(self):
+    def test_pero_no_si_queda_algo_que_ese_pm_no_puede_firmar(self):
         dia = self._dia_interno_con_aviso()
+        self._renglon(dia, "1", "Curso de fundamentos de Databricks", tipo=self.estudio)
+
+        self.assertFalse(self._cola(self.pm)[0].forzable_en_bloque)
         with self.assertRaises(ValidationError):
             svc.aprobar_dia_completo(dia, self.pm, forzado=True, motivo="es normal")
         self.assertEqual(dia.registros.filter(estado=RegistroHoras.APROBADO).count(), 0)
@@ -901,3 +964,118 @@ class AprobarLoMarcadoTests(BaseTriaje):
         renglon.refresh_from_db()
         self.assertEqual(renglon.estado, RegistroHoras.APROBADO)
         self.assertFalse(renglon.aprobacion_forzada)
+
+
+class LaCeremoniaCortaNoSeMarcaTests(BaseTriaje):
+    """Una daily de media hora deja de levantar avisos.
+
+    Es el ruido que mas se veia en la cola real: el mismo renglon, todos los
+    dias, con el mismo texto corto — y las dos reglas del texto marcandolo por
+    partida doble. Un aviso que sale cada mañana sobre lo que se espera que
+    salga cada mañana enseña a saltarse tambien los que aciertan.
+    """
+
+    def test_una_daily_corta_no_se_marca_por_texto_pobre(self):
+        dia = self._dia()
+        r = self._renglon(dia, "0.5", "Daily", proyecto=self.interno)
+        self.assertNotIn("DETALLE_POBRE", self._codigos(r, dia))
+
+    def test_ni_por_repetir_el_mismo_texto_de_otros_dias(self):
+        """Repetirse **es** lo que hace a una daily una daily."""
+        for dias_antes in (1, 2, 3):
+            anterior = self._dia(fecha=LUNES - timedelta(days=dias_antes))
+            self._renglon(anterior, "0.5", "Daily del equipo", proyecto=self.interno)
+
+        dia = self._dia()
+        r = self._renglon(dia, "0.5", "Daily del equipo", proyecto=self.interno)
+        self.assertEqual(self._codigos(r, dia), set())
+
+    def test_una_hora_justa_entra(self):
+        dia = self._dia()
+        r = self._renglon(dia, "1", "Daily", proyecto=self.interno)
+        self.assertEqual(self._codigos(r, dia), set())
+
+    def test_pero_una_jornada_entera_bajo_ese_rotulo_no(self):
+        """El tope de una hora es lo que sostiene la exencion.
+
+        Sin el, escribir «daily» delante de cualquier cosa seria la forma de
+        esquivar el triaje entero, y esa es justo la unica manera de que una
+        regla asi haga daño.
+        """
+        dia = self._dia()
+        r = self._renglon(dia, "8.5", "Daily", proyecto=self.interno)
+        self.assertIn("DETALLE_POBRE", self._codigos(r, dia))
+
+    def test_y_un_texto_corto_cualquiera_se_sigue_marcando(self):
+        """La exencion es para la ceremonia, no para lo corto."""
+        dia = self._dia()
+        r = self._renglon(dia, "0.5", "varias cosas", proyecto=self.interno)
+        self.assertIn("DETALLE_POBRE", self._codigos(r, dia))
+
+    def test_reconoce_las_variantes_que_escribe_la_gente(self):
+        dia = self._dia()
+        for texto in ("daily", "DAILY con el equipo", "Stand-up", "standup diario",
+                      "Dailys de seguimiento"):
+            with self.subTest(texto=texto):
+                r = self._renglon(dia, "0.5", texto, proyecto=self.interno)
+                self.assertTrue(sn.es_ceremonia_corta(r), texto)
+
+    def test_lo_facturable_no_se_libra_de_las_demas_reglas(self):
+        """Que no se marque el texto no la exime de tener plan.
+
+        La exencion toca las dos reglas del texto y nada mas: media hora
+        imputada a un cliente al que esa persona no estaba asignada sigue
+        siendo una pregunta, se llame como se llame.
+        """
+        dia = self._dia()
+        r = self._renglon(dia, "0.5", "Daily", proyecto=self.cliente)
+        self.assertIn("SIN_PLAN", self._codigos(r, dia))
+
+
+class ElPlanQueLlenaElDiaEsElDeClienteTests(BaseTriaje):
+    """`NO_FACTURABLE_CON_PLAN_LLENO` solo cuenta el plan facturable.
+
+    Antes sumaba cualquier asignacion, asi que a quien estaba planificado a
+    jornada completa en un proyecto interno se le marcaban todos sus renglones:
+    el plan interno llenaba el dia y luego acusaba a las horas internas de
+    llenarlo. Un aviso que se dispara solo, sobre lo unico que esa persona
+    podia imputar.
+    """
+
+    def test_un_plan_interno_lleno_ya_no_marca_las_horas_internas(self):
+        self._plan(self.interno, "8.5")
+        dia = self._dia()
+        r = self._renglon(dia, "8.5", "Reunion de bench y definicion de roles",
+                          proyecto=self.interno)
+        self.assertNotIn("NO_FACTURABLE_CON_PLAN_LLENO", self._codigos(r, dia))
+
+    def test_pero_un_plan_de_cliente_lleno_si(self):
+        """Lo que la regla vino a cazar sigue en pie: si el plan decia jornada
+        entera de cliente y aparecen horas internas, o el plan se corrio o
+        desplazaron trabajo facturable."""
+        self._plan(self.cliente, "8.5")
+        dia = self._dia()
+        r = self._renglon(dia, "4", "Reunion de bench y definicion de roles",
+                          proyecto=self.interno)
+        self.assertIn("NO_FACTURABLE_CON_PLAN_LLENO", self._codigos(r, dia))
+
+    def test_el_texto_dice_que_es_plan_de_cliente(self):
+        """Quien firma lee el motivo sin abrir nada mas, y antes decia solo
+        «en proyectos», que es justo lo que confundia."""
+        self._plan(self.cliente, "8.5")
+        dia = self._dia()
+        r = self._renglon(dia, "4", "Curso de fundamentos de Databricks", tipo=self.estudio)
+        senal = next(s for s in self._evaluar(r, dia).senales
+                     if s.codigo == "NO_FACTURABLE_CON_PLAN_LLENO")
+        self.assertIn("de cliente", senal.texto)
+
+    def test_el_plan_completo_sigue_intacto_para_las_otras_reglas(self):
+        """`_plan` no se toco: SOBRE_PLAN mira el proyecto concreto, y un
+        proyecto interno con plan sigue teniendo plan."""
+        self._plan(self.interno, "4.0")
+        dia = self._dia()
+        r = self._renglon(dia, "8.5", "Reunion de bench y definicion de roles",
+                          proyecto=self.interno)
+        ctx = Contexto([dia])
+        self.assertEqual(ctx.horas_planificadas(dia.recurso_id, self.interno.pk, dia.fecha), 4.0)
+        self.assertEqual(ctx.plan_del_dia(dia.recurso_id, dia.fecha), 0.0)

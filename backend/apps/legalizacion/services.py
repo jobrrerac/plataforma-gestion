@@ -556,6 +556,42 @@ def triar(dias, usuario=None) -> dict:
     return clasificar(dias, usuario)
 
 
+def rutinarios_de(dias):
+    """Los renglones internos que el triaje dejó en Rutina, de toda la cola.
+
+    Es lo que alimenta el botón de firmarlos todos de una vez. Tres filtros, y
+    los tres importan:
+
+    - **En Rutina**, o sea sin ninguna señal accionable. Una informativa no lo
+      saca: es media jornada en algo interno, que en un equipo en bench es lo
+      normal y no es una alerta. Un detalle pobre o copiado sí lo saca, porque
+      esas señales sí son accionables.
+    - **No facturable.** Las horas de cliente no se firman en bloque nunca:
+      quien responde por un proyecto las mira una a una.
+    - **De `pendientes_mios`**, que ya viene filtrado por lo que esta persona
+      puede firmar.
+
+    Se calcula sobre la cola ya triada, no consultando de nuevo: la evaluación
+    ya está puesta en cada renglón y repetirla costaría las mismas consultas
+    otra vez.
+    """
+    from django.apps import apps as registro_de_apps
+
+    # Sin triaje no hay bandas, así que no hay «rutinario» que valga: la
+    # pantalla no ofrece el botón y esto devuelve nada, igual que `triar`.
+    if not registro_de_apps.is_installed("apps.revision"):
+        return []
+    from apps.revision.senales import RUTINA
+
+    return [
+        r
+        for dia in dias
+        for r in dia.pendientes_mios
+        if not r.facturable and getattr(r, "evaluacion", None) is not None
+        and r.evaluacion.banda == RUTINA
+    ]
+
+
 def dias_por_aprobar(usuario):
     """La misma cola, agrupada por día para poder pintarla.
 

@@ -886,3 +886,182 @@ class UnDiaReabiertoSePuedeCorregirTests(TestCase):
         cerrada."""
         texto = svc.motivo_no_legalizable(self.recurso, self.fecha)
         self.assertIn("reabra", texto)
+
+
+class AprobarLosRutinariosTests(BaseAprobacion):
+    """Firmar de un golpe lo interno sin avisos.
+
+    Es el volumen que no aporta nada revisar de a uno —bench, estudio,
+    formacion, departamentales— y el que hace que la cola se vea imposible y
+    se acabe firmando todo sin mirar, que es el fallo que este modulo existe
+    para evitar.
+
+    Casi todas estas pruebas comprueban **que no entra** lo que no debe. Un
+    boton de firma masiva que arrastra un renglon de mas es peor que no
+    tenerlo.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # El `_proyecto` de la base deja a esta persona planificada a jornada
+        # completa en dos proyectos de cliente. Con el dia lleno de cliente,
+        # cualquier renglon interno salta NO_FACTURABLE_CON_PLAN_LLENO —que es
+        # correcto y esta probado aparte— y aqui lo que se mide es otra cosa:
+        # alguien en bench, sin plan de cliente, imputando a lo interno.
+        Asignacion.objects.update(estado="SOLICITADA")
+
+        self.interno = Proyecto.objects.create(
+            codigo="INT-DEPART", nombre="Actividades Departamentales",
+            cliente="Inetum", fecha_inicio=date(2026, 1, 1), pm=self.pm,
+            facturable=False,
+        )
+
+    def _dia_interno(self, *renglones):
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        for horas, detalle in renglones:
+            svc.agregar_renglon(dia, self.t_estudio, horas, detalle)
+        return svc.registrar_dia(dia, self.ing)
+
+    def _rutinarios(self, usuario):
+        dias = svc.dias_por_aprobar(usuario)
+        svc.triar(dias, usuario)
+        return svc.rutinarios_de(dias)
+
+    def test_recoge_los_internos_sin_avisos(self):
+        self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "Documentacion del procedimiento de altas de personal"),
+        )
+        self.assertEqual(len(self._rutinarios(self.admin)), 2)
+
+    def test_no_recoge_nada_facturable(self):
+        """Las horas de cliente no se firman en bloque nunca.
+
+        El renglon de cliente de esta prueba esta **dentro de su plan y bien
+        descrito**: sin ninguna señal, o sea en Rutina. Es lo unico que prueba
+        de verdad el filtro — con un renglon que ya trae aviso, quedaria fuera
+        por el otro motivo y el filtro podria no existir.
+        """
+        Asignacion.objects.filter(proyecto=self.proyecto).update(
+            estado="APROBADA", intensidad_diaria=Decimal("4.0"),
+        )
+        dia = svc.obtener_o_crear_dia(self.recurso, self.fecha)
+        svc.agregar_renglon(dia, self.t_proyecto, 4, "Ajustes al conector de Oracle y pruebas",
+                            proyecto=self.proyecto)
+        svc.agregar_renglon(dia, self.t_estudio, 4.5,
+                            "Documentacion del procedimiento de altas de personal")
+        svc.registrar_dia(dia, self.ing)
+
+        recogidos = self._rutinarios(self.admin)
+        self.assertEqual(len(recogidos), 1, "solo la interna")
+        self.assertFalse(recogidos[0].facturable)
+
+    def test_no_recoge_lo_que_trae_un_aviso(self):
+        self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "muchas tareas"),
+        )
+        recogidos = self._rutinarios(self.admin)
+        self.assertEqual(len(recogidos), 1)
+        self.assertNotIn("muchas tareas", [r.detalle for r in recogidos])
+
+    def test_un_pm_no_recoge_lo_que_no_puede_firmar(self):
+        """`pendientes_mios` ya lo filtra, y esto lo deja escrito: los
+        renglones sin proyecto son del Admin, y un PM no los ve aqui."""
+        self._dia_interno((8.5, "Ruta de aprendizaje de Databricks, modulos 1 a 4"))
+        self.assertEqual(self._rutinarios(self.pm), [])
+
+    def test_el_boton_firma_y_lo_dice(self):
+        self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "Documentacion del procedimiento de altas de personal"),
+        )
+        self.client.force_login(self.admin)
+        resp = self.client.post(reverse("horas-aprobar"), {"accion": "aprobar_rutinarios"})
+
+        self.assertRedirects(resp, reverse("horas-aprobar"), fetch_redirect_response=False)
+        self.assertEqual(
+            RegistroHoras.objects.filter(estado=RegistroHoras.PENDIENTE).count(), 0,
+        )
+        for r in RegistroHoras.objects.all():
+            self.assertEqual(r.aprobado_por, self.admin)
+            self.assertFalse(r.aprobacion_forzada, "esto no es una firma forzada")
+
+    def test_la_lista_se_recalcula_al_pulsar_no_llega_en_el_post(self):
+        """La diferencia entre un boton y una promesa.
+
+        Entre que se pinto la pantalla y llega el envio, alguien pudo empeorar
+        un detalle. Si los ids viajaran en el formulario, este boton firmaria a
+        ciegas lo que el triaje marco hace diez minutos.
+        """
+        dia = self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "Documentacion del procedimiento de altas de personal"),
+        )
+        estropeado = dia.registros.first()
+        estropeado.detalle = "varias cosas"
+        estropeado.save(update_fields=["detalle"])
+
+        self.client.force_login(self.admin)
+        self.client.post(reverse("horas-aprobar"), {"accion": "aprobar_rutinarios"})
+
+        estropeado.refresh_from_db()
+        self.assertEqual(estropeado.estado, RegistroHoras.PENDIENTE)
+        self.assertEqual(
+            RegistroHoras.objects.filter(estado=RegistroHoras.APROBADO).count(), 1,
+        )
+
+    def test_sin_nada_rutinario_no_se_pinta_el_boton(self):
+        self._dia_interno((8.5, "muchas tareas"))
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("horas-aprobar")).content.decode()
+        self.assertNotIn("aprobar_rutinarios", html)
+
+    def test_con_algo_rutinario_si(self):
+        self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "Documentacion del procedimiento de altas de personal"),
+        )
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("horas-aprobar")).content.decode()
+        self.assertIn("aprobar_rutinarios", html)
+        self.assertIn("Aprobar los rutinarios (2)", html)
+
+    def test_pulsarlo_dos_veces_no_rompe_nada(self):
+        """El segundo envio llega cuando ya no queda nada, y lo dice."""
+        self._dia_interno(
+            (4, "Ruta de aprendizaje de Databricks, modulos 1 a 4"),
+            (4.5, "Documentacion del procedimiento de altas de personal"),
+        )
+        self.client.force_login(self.admin)
+        self.client.post(reverse("horas-aprobar"), {"accion": "aprobar_rutinarios"})
+        resp = self.client.post(reverse("horas-aprobar"), {"accion": "aprobar_rutinarios"})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Ya no queda ninguna", resp.content.decode())
+
+
+class LosCarrilesFiltranTests(BaseAprobacion):
+    """Picar un carril deja a la vista solo los dias de esa banda.
+
+    Es un filtro de la vista: se pinta todo y el navegador esconde lo que
+    sobra. Aqui solo se comprueba que la pantalla trae lo que ese filtro
+    necesita — la banda en cada tarjeta y el carril pulsable—, porque lo demas
+    ocurre en el navegador y no hay como ejecutarlo desde aqui.
+    """
+
+    def test_los_carriles_son_botones_con_su_banda(self):
+        self._dia_repartido()
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("horas-aprobar")).content.decode()
+
+        for banda in ("atencion", "revisar", "rutina"):
+            self.assertIn(f'data-banda="{banda}"', html)
+        self.assertIn('aria-pressed="false"', html)
+
+    def test_cada_tarjeta_lleva_la_clase_de_su_banda(self):
+        """Es lo que el filtro mira. Sin esto no esconde nada y el boton miente."""
+        self._dia_repartido()
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse("horas-aprobar")).content.decode()
+        self.assertRegex(html, r'class="dia-card d-(atencion|revisar|rutina)"')

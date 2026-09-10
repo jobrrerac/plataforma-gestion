@@ -51,6 +51,10 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
             "recuento": recuento,
             "hay_triaje": bool(recuento),
             "es_admin": es_admin(request.user),
+            # Cuántos internos sin avisos hay en toda la cola: es lo que se
+            # firmaría de un clic, y la cifra va en el propio botón para que
+            # nadie lo pulse sin saber sobre cuántas actividades cae.
+            "n_rutinarios": len(svc.rutinarios_de(dias)),
         }
         ctx.update(extra)
         return ctx
@@ -63,6 +67,8 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
             return self._aprobar_dia(request)
         if request.POST.get("accion") == "aprobar_seleccion":
             return self._aprobar_seleccion(request)
+        if request.POST.get("accion") == "aprobar_rutinarios":
+            return self._aprobar_rutinarios(request)
 
         registro = (
             RegistroHoras.objects
@@ -138,6 +144,28 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
             )
         return redirect("horas-aprobar")
 
+    def _aprobar_rutinarios(self, request):
+        """Firma de una vez los internos que el triaje dejó en Rutina.
+
+        **La lista se recalcula aquí, no llega en el POST.** Es la diferencia
+        entre un botón y una promesa: entre que se pintó la pantalla y llega
+        este envío alguien pudo editar un renglón, y lo que era rutina puede
+        haber dejado de serlo. Si se confiaran los ids del formulario, este
+        botón firmaría a ciegas exactamente lo que el triaje acababa de marcar.
+
+        Lo demás no se relaja: se delega en `aprobar_seleccion`, que firma
+        renglón a renglón con su bloqueo y su firma, y cuenta lo que falle.
+        """
+        dias = svc.dias_por_aprobar(request.user)
+        svc.triar(dias, request.user)
+        registros = svc.rutinarios_de(dias)
+        if not registros:
+            return render(
+                request, self.template,
+                self._ctx(request, error="Ya no queda ninguna actividad rutinaria por firmar."),
+            )
+        return self._firmar([r.pk for r in registros], request)
+
     def _aprobar_seleccion(self, request):
         """Firma las actividades marcadas a mano, de los días que sean.
 
@@ -151,7 +179,15 @@ class AprobarHorasView(LoginRequiredMixin, UserPassesTestMixin, View):
                 request, self.template,
                 self._ctx(request, error="No marcaste ninguna actividad."),
             )
+        return self._firmar(ids, request)
 
+    def _firmar(self, ids, request):
+        """Firma un conjunto de renglones y cuenta el resultado.
+
+        Compartido por las casillas marcadas a mano y por el botón de los
+        rutinarios: lo que cambia entre los dos es de dónde sale la lista, no
+        qué se hace con ella ni cómo se informa de lo que falló.
+        """
         aprobados, fallos = svc.aprobar_seleccion(ids, request.user)
 
         if aprobados:

@@ -62,6 +62,19 @@ MINIMO_DEVOLUCIONES = 2
 # mínima de registro, así que por debajo no hay nada que discutir.
 MARGEN_HORAS = 0.5
 
+# Ceremonias cortas de equipo. Una daily se llama igual todos los días y dura
+# media hora: no hay forma honesta de describirla distinta cada mañana, y
+# pedirlo solo consigue que la gente invente texto para esquivar el aviso.
+#
+# Las dos reglas que miran el texto —«no dice qué se hizo» y «el mismo texto
+# que otro día»— la marcaban siempre, y por partida doble. Es ruido puro: son
+# exactamente las dos cosas que se esperan de una ceremonia recurrente.
+#
+# El tope de una hora es lo que sostiene la exención. Sin él, «daily» pegado a
+# una jornada entera se libraría de todo, y ahí sí hay algo que preguntar.
+CEREMONIAS = ("daily", "dailys", "dailies", "standup", "stand up")
+MAXIMO_HORAS_CEREMONIA = 1.0
+
 
 @dataclass
 class Senal:
@@ -106,6 +119,20 @@ def normalizar(texto: str) -> str:
     sin_tildes = unicodedata.normalize("NFKD", texto or "")
     sin_tildes = "".join(c for c in sin_tildes if not unicodedata.combining(c))
     return " ".join(sin_tildes.lower().split())
+
+
+def es_ceremonia_corta(registro) -> bool:
+    """Una daily, un standup: nombre fijo, media hora y todos los días.
+
+    Las dos condiciones van juntas a propósito. La palabra sola no basta —una
+    jornada entera bajo el rótulo «daily» es justo lo que hay que mirar— y la
+    duración sola tampoco, porque media hora sin decir de qué sigue sin
+    legalizar nada.
+    """
+    texto = normalizar(registro.detalle).replace("-", " ")
+    if not any(palabra in texto for palabra in CEREMONIAS):
+        return False
+    return float(registro.horas) <= MAXIMO_HORAS_CEREMONIA
 
 
 # ── Las reglas ──────────────────────────────────────────────────────────────
@@ -209,9 +236,17 @@ def no_facturable_media_jornada(registro, dia, ctx):
 def no_facturable_con_plan_lleno(registro, dia, ctx):
     """Horas no facturables cuando el día ya estaba planificado al completo.
 
-    Si el plan decía jornada entera en proyectos y aun así aparecen horas de
-    formación o internas, o el plan se corrió o desplazaron trabajo de cliente.
+    Si el plan decía jornada entera **de cliente** y aun así aparecen horas de
+    formación o internas, o el plan se corrió o desplazaron trabajo facturable.
     Cualquiera de las dos merece una pregunta antes de firmar.
+
+    **Solo cuenta el plan facturable**, y esa palabra es toda la regla. Antes
+    sumaba cualquier asignación, así que a quien estaba planificado a jornada
+    completa en un proyecto interno se le marcaban todos sus renglones: el plan
+    interno llenaba el día y luego acusaba a las horas internas de llenarlo.
+    Un aviso que se dispara solo, sobre la única cosa que la persona podía
+    imputar, y que además ni siquiera era el caso que la regla vino a cazar —
+    no hay trabajo de cliente desplazado si nunca hubo trabajo de cliente.
     """
     if registro.facturable:
         return None
@@ -221,13 +256,15 @@ def no_facturable_con_plan_lleno(registro, dia, ctx):
         return None
     return Senal(
         "NO_FACTURABLE_CON_PLAN_LLENO", ATENCION,
-        f"El plan ya ocupaba la jornada completa ({plan_total:g} h en proyectos) "
-        f"y estas horas no son facturables.",
+        f"El plan ya ocupaba la jornada completa ({plan_total:g} h en proyectos "
+        f"de cliente) y estas horas no son facturables.",
     )
 
 
 def detalle_pobre(registro, dia, ctx):
     """El texto no alcanza para legalizar las horas que respalda."""
+    if es_ceremonia_corta(registro):
+        return None
     texto = (registro.detalle or "").strip()
     palabras = len(texto.split())
     if len(texto) >= MINIMO_CARACTERES and palabras >= MINIMO_PALABRAS:
@@ -245,7 +282,13 @@ def detalle_repetido(registro, dia, ctx):
     No es necesariamente un problema —hay trabajo que se parece de un día a
     otro— pero copiar el renglón anterior es la forma más común de rellenar sin
     describir, y quien firma debería verlo.
+
+    La ceremonia corta queda fuera: repetirse **es** lo que hace a una daily
+    una daily, y marcarla por eso convierte la regla en un aviso diario que se
+    aprende a saltar.
     """
+    if es_ceremonia_corta(registro):
+        return None
     texto = normalizar(registro.detalle)
     if not texto:
         return None
