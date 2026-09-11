@@ -6,13 +6,13 @@
 {% block extra_head %}
   <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
   <style>
-    body { background: #f4f4f8; }
+    body { background: var(--inet-fondo); }
 
     /* Heatmap */
     .heatmap-wrap { overflow-x: auto; }
     .heatmap { font-size: 0.72rem; border-collapse: collapse; min-width: 700px; }
-    .heatmap th, .heatmap td { border: 1px solid #dee2e6; padding: 0; }
-    .heatmap thead th { background: #1a1033; color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
+    .heatmap th, .heatmap td { border: 1px solid var(--inet-linea); padding: 0; }
+    .heatmap thead th { background: var(--inet-dark); color: #fff; text-align: center; padding: 4px 3px; white-space: nowrap; }
     .heatmap .col-recurso { min-width: 180px; max-width: 220px; padding: 6px 10px; background: #fff; font-weight: 500; }
     .heatmap .col-recurso small { display: block; color: #6c757d; font-weight: 400; }
     .heatmap .col-recurso a:hover { color: #d6197f !important; text-decoration: underline !important; }

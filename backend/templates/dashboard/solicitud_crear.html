@@ -5,13 +5,12 @@
 
 {% block extra_head %}
   <style>
-    body { background: #f4f4f8; }
-    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-    .skill-tag { display:inline-block; background:#ede8f5; color:#4a1f7a; border-radius:5px; padding:1px 7px; font-size:.78rem; margin:1px; }
-    .skill-stars { font-size:.65rem; color:#d6197f; margin-left:3px; letter-spacing:0; }
-    .form-control:focus, .form-select:focus { border-color: #d6197f; box-shadow: 0 0 0 .2rem rgba(224,23,138,.12); }
+    body { background: var(--inet-fondo); }
+    .skill-tag { display:inline-block; background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; border-radius:4px; padding:1px 7px; font-size:.78rem; margin:1px; font-weight:600; }
+    .skill-stars { font-size:.65rem; color:var(--inet-pink); margin-left:3px; letter-spacing:0; }
+    .form-control:focus, .form-select:focus { border-color: var(--inet-pink); box-shadow: 0 0 0 .2rem rgba(214,25,127,.12); }
     .btn-crear { font-size: 1rem; padding: .55rem 2.5rem; }
-    .resumen-item { display:flex; justify-content:space-between; border-bottom:1px solid #f0f0f0; padding:6px 0; }
+    .resumen-item { display:flex; justify-content:space-between; border-bottom:1px solid var(--inet-linea); padding:6px 0; }
     .resumen-item:last-child { border-bottom: none; }
 
     /* Page strip */
@@ -20,7 +19,7 @@
     .dia-cell:hover { opacity: 1 !important; transform: scale(1.12); transition: transform .1s; }
 
     /* Jornada completa switch — accent color */
-    .form-check-input:checked { background-color: #d6197f; border-color: #d6197f; }
+    .form-check-input:checked { background-color: var(--inet-pink); border-color: var(--inet-pink); }
   </style>
 {% endblock %}
 

@@ -15,38 +15,36 @@
      el color del triaje se lee sin buscar la etiqueta. */
   .dia-card {
     --franja: #c9cdd8;                 /* gris, si el triaje esta apagado */
-    border: 1px solid #d5d8e0;
+    border: 1px solid var(--inet-linea);
     border-left: 5px solid var(--franja);
-    border-radius: 12px;
+    border-radius: 6px;
     padding: 18px;
     margin-bottom: 20px;
     background: #fff;
-    box-shadow: 0 1px 4px rgba(25,27,46,.07);
   }
-  .dia-card.d-atencion { --franja: #a52a25; }
-  .dia-card.d-revisar  { --franja: #97591a; }
-  .dia-card.d-rutina   { --franja: #1f6b45; }
-  .dia-card .meta { color:#6b7280; font-size:.84rem; }
-  .persona { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; color:#191b2e; }
-  .total { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:#191b2e; white-space:nowrap; }
-  .total small { font-weight:600; color:#6b7280; font-size:.76rem; }
+  .dia-card.d-atencion { --franja: var(--inet-alerta); }
+  .dia-card.d-revisar  { --franja: var(--inet-aviso); }
+  .dia-card.d-rutina   { --franja: var(--inet-ok); }
+  .dia-card .meta { color:var(--inet-tenue); font-size:.84rem; }
+  .persona { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1rem; color:var(--inet-dark); }
+  .total { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.15rem; color:var(--inet-dark); white-space:nowrap; }
+  .total small { font-weight:600; color:var(--inet-tenue); font-size:.76rem; }
 
-  .lineas { margin-top:12px; border-top:1px solid #f0eef5; padding-top:10px; }
+  .lineas { margin-top:12px; border-top:1px solid var(--inet-linea); padding-top:10px; }
   .linea { display:grid; grid-template-columns:auto 1fr auto; gap:12px; padding:6px 0; font-size:.88rem; }
   .linea.sin-marca { grid-template-columns:1fr auto; }
-  .linea .det { color:#6b7280; font-size:.82rem; }
+  .linea .det { color:var(--inet-tenue); font-size:.82rem; }
 
   /* Marcar varias y firmarlas de una vez. La casilla vive fuera de cualquier
      formulario y se engancha al de la barra con el atributo `form`: envolver
      toda la cola en un <form> anidaria los que ya tiene cada renglon, que es
      HTML invalido y rompe los botones de Aprobar y Devolver. */
-  .marca { width:17px; height:17px; margin-top:3px; accent-color:#1f6b45; cursor:pointer; }
-  .marca-dia { font-size:.76rem; color:#4b5563; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
-  .linea:has(.marca:checked) { background:#f0f7f3; border-radius:6px; }
+  .marca { width:17px; height:17px; margin-top:3px; accent-color:var(--inet-ok); cursor:pointer; }
+  .marca-dia { font-size:.76rem; color:var(--inet-tenue); display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .linea:has(.marca:checked) { background:var(--inet-ok-fondo); border-radius:4px; }
 
   .barra-sel { position:sticky; bottom:0; z-index:20; margin:0 -12px; padding:12px 18px;
-               background:#191b2e; color:#fff; border-radius:12px 12px 0 0;
-               box-shadow:0 -3px 14px rgba(25,27,46,.28);
+               background:var(--inet-dark); color:#fff; border-radius:6px 6px 0 0;
                display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
   .barra-sel[hidden] { display:none; }
   .barra-sel .cuenta { font-family:'Montserrat',sans-serif; font-weight:800; font-size:.95rem;
@@ -59,91 +57,91 @@
      Los colores de estado salen de la paleta del proyecto y son distintos del
      magenta de marca a proposito: aqui codifican gravedad, no identidad. */
   .carriles { display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr)); gap:10px; margin-bottom:18px; }
-  .carril { background:#fff; border:1px solid #e2e4ea; border-top:4px solid var(--franja);
-            border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
+  .carril { background:#fff; border:1px solid var(--inet-linea); border-top:4px solid var(--franja);
+            border-radius:6px; padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
   .carril-n { font-size:1.9rem; font-weight:800; line-height:1; color:var(--franja); font-variant-numeric:tabular-nums; }
-  .carril-t { font-weight:700; font-size:.9rem; color:#23262f; }
-  .carril-d { font-size:.76rem; color:#676d7a; }
-  .c-atencion { --franja:#a52a25; }
-  .c-revisar  { --franja:#97591a; }
-  .c-rutina   { --franja:#1f6b45; }
+  .carril-t { font-weight:700; font-size:.9rem; color:var(--inet-tinta); }
+  .carril-d { font-size:.76rem; color:var(--inet-tenue); }
+  .c-atencion { --franja:var(--inet-alerta); }
+  .c-revisar  { --franja:var(--inet-aviso); }
+  .c-rutina   { --franja:var(--inet-ok); }
 
   /* El carril es un boton que filtra. Se nota que se puede pulsar antes de
      pulsarlo, y se nota cual esta puesto: sin las dos cosas, el filtro se
      descubre por accidente y luego no se sabe como quitarlo. */
   button.carril { text-align:left; font:inherit; cursor:pointer; transition:box-shadow .12s, transform .12s; }
-  button.carril:hover { box-shadow:0 2px 10px rgba(25,27,46,.13); transform:translateY(-1px); }
+  button.carril:hover { border-color:var(--franja); }
   button.carril[aria-pressed="true"] { border-color:var(--franja); box-shadow:0 0 0 2px var(--franja) inset; }
 
   .filtro-puesto { display:flex; align-items:center; justify-content:space-between; gap:12px;
-                   flex-wrap:wrap; margin:-8px 0 18px; padding:9px 14px; border-radius:8px;
+                   flex-wrap:wrap; margin:-8px 0 18px; padding:9px 14px; border-radius:4px;
                    background:#eef0f4; color:#4b5563; font-size:.82rem; }
   .filtro-puesto[hidden] { display:none; }
   .filtro-puesto button { background:none; border:none; color:#4b5563; font-size:.8rem;
                           text-decoration:underline; padding:0; }
-  .filtro-puesto button:hover { color:#191b2e; }
-  .vacio-filtro { text-align:center; color:#8a8f9c; padding:34px 12px; font-size:.88rem; }
+  .filtro-puesto button:hover { color:var(--inet-dark); }
+  .vacio-filtro { text-align:center; color:var(--inet-tenue); padding:34px 12px; font-size:.88rem; }
   .vacio-filtro[hidden] { display:none; }
 
   /* Firmar de un golpe lo interno sin avisos. Verde como el resto de aprobar,
      y separado de los carriles para que no se lea como parte del recuento. */
   .rutinarios { display:flex; align-items:center; justify-content:space-between; gap:14px;
-                flex-wrap:wrap; margin-bottom:18px; padding:12px 16px; border-radius:10px;
-                background:#e8f2ec; border:1px solid #1f6b45; }
-  .rutinarios-txt { font-size:.83rem; color:#125033; line-height:1.45; flex:1; min-width:260px; }
+                flex-wrap:wrap; margin-bottom:18px; padding:12px 16px; border-radius:6px;
+                background:var(--inet-ok-fondo); border:1px solid #c2e0d1; }
+  .rutinarios-txt { font-size:.83rem; color:var(--inet-ok); line-height:1.45; flex:1; min-width:260px; }
 
   .banda { display:inline-block; font-size:.62rem; font-weight:800; letter-spacing:.07em;
            text-transform:uppercase; padding:2px 7px; border-radius:3px; vertical-align:.15em; margin-left:8px; }
-  .b-atencion { background:#f8ebea; color:#a52a25; border:1px solid #a52a25; }
-  .b-revisar  { background:#fbf1e3; color:#97591a; border:1px solid #97591a; }
+  .b-atencion { background:var(--inet-alerta-fondo); color:var(--inet-alerta); border:1px solid #ecc9c7; }
+  .b-revisar  { background:var(--inet-aviso-fondo); color:var(--inet-aviso); border:1px solid #f3deb9; }
 
-  .senal { font-size:.79rem; line-height:1.45; padding:5px 9px; border-radius:6px; }
-  .s-atencion { background:#f8ebea; color:#8f231f; }
-  .s-revisar  { background:#fbf1e3; color:#7d4915; }
-  .contexto { font-size:.78rem; color:#97591a; }
+  .senal { font-size:.79rem; line-height:1.45; padding:5px 9px; border-radius:4px; }
+  .s-atencion { background:var(--inet-alerta-fondo); color:var(--inet-alerta); }
+  .s-revisar  { background:var(--inet-aviso-fondo); color:var(--inet-aviso); }
+  .contexto { font-size:.78rem; color:var(--inet-aviso); }
   .s-info { background:#eef0f4; color:#4b5563; }
 
   /* Precedentes: lo que ya paso, para poder comparar. Deliberadamente discreto
      —no es un aviso, es contexto— salvo lo devuelto, que si pesa. */
-  .precedentes { font-size:.77rem; color:#4b5563; padding:6px 0 6px 9px;
-                 border-left:2px solid #e2e4ea; margin-bottom:10px; }
+  .precedentes { font-size:.77rem; color:var(--inet-tenue); padding:6px 0 6px 9px;
+                 border-left:2px solid var(--inet-linea); margin-bottom:10px; }
   .precedentes-et { font-size:.63rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-                    color:#676d7a; display:block; margin-bottom:2px; }
+                    color:var(--inet-tenue); display:block; margin-bottom:2px; }
   .prec { line-height:1.5; }
-  .prec-devuelto { color:#97591a; }
+  .prec-devuelto { color:var(--inet-aviso); }
 
   .bloque-dia { display:flex; align-items:center; justify-content:space-between; gap:14px;
-                flex-wrap:wrap; margin-top:14px; padding:12px 14px; border-radius:8px;
-                background:#e8f2ec; border:1px solid #1f6b45; }
-  .bloque-txt { font-size:.83rem; color:#125033; line-height:1.45; }
+                flex-wrap:wrap; margin-top:14px; padding:12px 14px; border-radius:6px;
+                background:var(--inet-ok-fondo); border:1px solid #c2e0d1; }
+  .bloque-txt { font-size:.83rem; color:var(--inet-ok); line-height:1.45; }
 
   /* El mismo sitio, el otro caso: el dia cumple todo salvo que trae avisos.
      Se firma igual, pero diciendo por que — y por eso es ambar y no verde. */
-  .bloque-dia.forzado { background:#fbf1e3; border-color:#97591a; align-items:flex-start; }
-  .bloque-dia.forzado .bloque-txt { color:#7d4915; }
-  .btn-forzar { background:#97591a; color:#fff; border:none; font-weight:700; border-radius:8px;
+  .bloque-dia.forzado { background:var(--inet-aviso-fondo); border-color:#f3deb9; align-items:flex-start; }
+  .bloque-dia.forzado .bloque-txt { color:var(--inet-aviso); }
+  .btn-forzar { background:var(--inet-aviso); color:#fff; border:none; font-weight:700; border-radius:4px;
                 padding:.45rem 1.2rem; font-size:.85rem; white-space:nowrap; }
   .btn-forzar:hover { background:#7d4915; color:#fff; }
 
   /* Lo que decia el cronograma, para poder contrastarlo con lo declarado. */
-  .planificado { color:#4b5563; font-size:.78rem; }
+  .planificado { color:var(--inet-tenue); font-size:.78rem; }
   .planificado-et { font-size:.64rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-                    color:#6b7280; border:1px solid #d1d5db; border-radius:3px; padding:1px 5px; margin-right:6px; }
+                    color:var(--inet-tenue); border:1px solid var(--inet-linea); border-radius:3px; padding:1px 5px; margin-right:6px; }
   .linea .h { font-weight:700; white-space:nowrap; }
 
-  .chip { display:inline-block; font-size:.66rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:20px; }
-  .c-fact { background:#d1fae5; color:#065f46; }
-  .c-int  { background:#fef3c7; color:#92400e; }
-  .c-otra { background:#ede9fe; color:#4c1d95; }
-  .c-mio  { background:#fce7f3; color:#9d174d; }
+  .chip { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:4px; }
+  .c-fact { background:var(--inet-ok-fondo); color:var(--inet-ok); border:1px solid #c2e0d1; }
+  .c-int  { background:var(--inet-aviso-fondo); color:var(--inet-aviso); border:1px solid #f3deb9; }
+  .c-otra { background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; }
+  .c-mio  { background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; }
 
-  .btn-aprobar { background:#059669; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.45rem 1.3rem; font-size:.85rem; }
-  .btn-aprobar:hover { background:#047857; color:#fff; }
-  .btn-devolver { background:#fff; color:#92400e; border:1px solid #fde68a; font-weight:600; border-radius:8px; padding:.45rem 1.3rem; font-size:.85rem; }
-  .btn-devolver:hover { background:#fffbeb; color:#92400e; }
+  .btn-aprobar { background:var(--inet-ok); color:#fff; border:1px solid var(--inet-ok); font-weight:600; border-radius:4px; padding:.45rem 1.3rem; font-size:.85rem; }
+  .btn-aprobar:hover { background:#175436; color:#fff; }
+  .btn-devolver { background:#fff; color:var(--inet-alerta); border:1px solid var(--inet-alerta); font-weight:600; border-radius:4px; padding:.45rem 1.3rem; font-size:.85rem; }
+  .btn-devolver:hover { background:var(--inet-alerta-fondo); color:var(--inet-alerta); }
 
-  .nota-admin { background:#fce7f3; border:1px solid #f9a8d4; border-radius:10px; padding:11px 15px; font-size:.84rem; color:#9d174d; margin-bottom:16px; }
-  .vacio { text-align:center; color:#8a8f9c; padding:44px 12px; }
+  .nota-admin { background:var(--inet-info-fondo); border:1px solid #c9d8e2; border-radius:6px; padding:11px 15px; font-size:.84rem; color:var(--inet-info); margin-bottom:16px; }
+  .vacio { text-align:center; color:var(--inet-tenue); padding:44px 12px; }
 </style>
 {% endblock %}
 

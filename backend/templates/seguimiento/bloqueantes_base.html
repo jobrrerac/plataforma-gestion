@@ -4,41 +4,40 @@
 
 {% block extra_head %}
 <style>
-  body { background: #f4f4f8; }
-  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
-  .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
-  .btn-pink:hover { background:#c4117a; color:#fff; }
+  body { background: var(--inet-fondo); }
+  .form-control:focus, .form-select:focus { border-color:var(--inet-pink); box-shadow:0 0 0 .2rem rgba(214,25,127,.12); }
+  .btn-pink { background:var(--inet-pink); color:#fff; border:1px solid var(--inet-pink); font-weight:600; border-radius:4px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:var(--inet-pink-oscuro); border-color:var(--inet-pink-oscuro); color:#fff; }
 
-  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:.92rem; color:var(--inet-dark); text-transform:uppercase; letter-spacing:.05em; }
 
   /* Cada bloqueante es una fila, con el mismo aire que las novedades. */
-  .blk-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+  .blk-row { border:1px solid var(--inet-linea); border-radius:6px; padding:14px 16px; margin-bottom:10px; background:#fff; }
   .blk-row.vencido { border-color:#f0c9c7; background:#fdf8f8; }
-  .blk-row.resuelto { border-color:#d9e8de; background:#fbfdfc; }
-  .blk-row .meta { color:#6b7280; font-size:.84rem; }
-  .blk-row .necesito { font-weight:600; color:#191b2e; }
+  .blk-row.resuelto { border-color:#d2e5dc; background:#fafdfb; }
+  .blk-row .meta { color:var(--inet-tenue); font-size:.84rem; }
+  .blk-row .necesito { font-weight:600; color:var(--inet-dark); }
 
-  .edad { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
-  .edad-espera { background:#eef0f4; color:#4b5563; }
-  .edad-vencida { background:#fee2e2; color:#991b1b; }
-  .edad-ok { background:#d1fae5; color:#065f46; }
+  .edad { font-size:.72rem; font-weight:700; padding:3px 8px; border-radius:4px; white-space:nowrap; text-transform:uppercase; }
+  .edad-espera { background:var(--inet-aviso-fondo); color:var(--inet-aviso); border:1px solid #f3deb9; }
+  .edad-vencida { background:var(--inet-alerta-fondo); color:var(--inet-alerta); border:1px solid #ecc9c7; }
+  .edad-ok { background:var(--inet-ok-fondo); color:var(--inet-ok); border:1px solid #c2e0d1; }
 
-  .rol-chip { font-size:.78rem; font-weight:600; color:#4c1d95; background:#ede9fe; border-radius:6px; padding:2px 8px; }
+  .rol-chip { font-size:.72rem; font-weight:700; color:var(--inet-info); background:var(--inet-info-fondo); border:1px solid #c9d8e2; border-radius:4px; padding:2px 8px; text-transform:uppercase; }
 
   /* Panel de alertas: solo lo ve el Admin. */
-  .alertas { border:1px solid #f0c9c7; border-radius:12px; background:#fff; overflow:hidden; }
-  .alertas-cab { background:#f8ebea; padding:.7rem 1rem; font-weight:700; font-size:.86rem; color:#a52a25; }
+  .alertas { border:1px solid var(--inet-linea); border-radius:6px; background:#fff; overflow:hidden; }
+  .alertas-cab { background:var(--inet-dark-suave); padding:.7rem 1rem; font-weight:700; font-size:.86rem; color:#fff; border-bottom:1px solid var(--inet-linea); }
   .alerta { display:flex; flex-wrap:wrap; gap:.3rem 1rem; align-items:baseline;
-            padding:.75rem 1rem; border-top:1px solid #f5eaea; }
+            padding:.75rem 1rem; border-top:1px solid var(--inet-linea); }
   .alerta .tipo { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-                  color:#a52a25; min-width:6.5rem; }
-  .alerta.media .tipo { color:#97591a; }
-  .alerta .texto { font-size:.88rem; color:#23262f; font-weight:600; flex:1 1 18rem; }
-  .alerta .accion { font-size:.78rem; color:#676d7a; text-align:right; margin-left:auto; }
-  .alerta .detalle { flex-basis:100%; font-size:.78rem; color:#8a8f9c; padding-left:6.5rem; }
+                  color:var(--inet-alerta); min-width:6.5rem; background:var(--inet-alerta-fondo); border:1px solid #ecc9c7; border-radius:3px; padding:1px 5px; }
+  .alerta.media .tipo { color:var(--inet-aviso); background:var(--inet-aviso-fondo); border-color:#f3deb9; }
+  .alerta .texto { font-size:.88rem; color:var(--inet-tinta); font-weight:600; flex:1 1 18rem; }
+  .alerta .accion { font-size:.78rem; color:var(--inet-tenue); text-align:right; margin-left:auto; }
+  .alerta .detalle { flex-basis:100%; font-size:.78rem; color:var(--inet-tenue); padding-left:6.5rem; }
 
-  .vacio { text-align:center; color:#8a8f9c; padding:36px 12px; }
+  .vacio { text-align:center; color:var(--inet-tenue); padding:36px 12px; }
 
   @media (max-width: 576px) {
     .alerta .detalle { padding-left:0; }
