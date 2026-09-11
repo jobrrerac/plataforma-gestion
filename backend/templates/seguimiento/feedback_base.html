@@ -4,40 +4,39 @@
 
 {% block extra_head %}
 <style>
-  body { background: #f4f4f8; }
-  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-control:focus, .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
-  .btn-pink { background:#d6197f; color:#fff; border:none; font-weight:700; border-radius:8px; padding:.55rem 1.8rem; }
-  .btn-pink:hover { background:#c4117a; color:#fff; }
+  body { background: var(--inet-fondo); }
+  .form-control:focus, .form-select:focus { border-color:var(--inet-pink); box-shadow:0 0 0 .2rem rgba(214,25,127,.12); }
+  .btn-pink { background:var(--inet-pink); color:#fff; border:1px solid var(--inet-pink); font-weight:600; border-radius:4px; padding:.55rem 1.8rem; }
+  .btn-pink:hover { background:var(--inet-pink-oscuro); border-color:var(--inet-pink-oscuro); color:#fff; }
 
-  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:.92rem; color:var(--inet-dark); text-transform:uppercase; letter-spacing:.05em; }
 
   /* El aviso de privacidad. Es lo que hace que la gente escriba lo que pasó de
      verdad, así que se ve antes que el formulario, no en letra pequeña. */
   .privado {
-    background:#eaeff4; border-left:3px solid #2b5674; border-radius:8px;
-    padding:.7rem .9rem; font-size:.84rem; color:#2b5674;
+    background:var(--inet-info-fondo); border-left:3px solid var(--inet-info); border-radius:4px;
+    padding:.7rem .9rem; font-size:.84rem; color:var(--inet-info);
   }
 
-  .fb-row { border:1px solid #eee; border-radius:10px; padding:14px 16px; margin-bottom:10px; background:#fff; }
-  .fb-row.sobre-persona { border-left:3px solid #4c1d95; }
-  .fb-row.sobre-proyecto { border-left:3px solid #0d7a72; }
-  .fb-row .meta { color:#6b7280; font-size:.84rem; }
+  .fb-row { border:1px solid var(--inet-linea); border-radius:6px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+  .fb-row.sobre-persona { border-left:3px solid var(--inet-info); }
+  .fb-row.sobre-proyecto { border-left:3px solid var(--inet-ok); }
+  .fb-row .meta { color:var(--inet-tenue); font-size:.84rem; }
   .fb-row .k {
     font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
-    color:#9ca3af; margin-right:.35rem;
+    color:var(--inet-tenue); margin-right:.35rem;
   }
-  .fb-row p { margin:0 0 .2rem; font-size:.88rem; color:#374151; }
+  .fb-row p { margin:0 0 .2rem; font-size:.88rem; color:var(--inet-tinta); }
 
-  .dir-chip { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
-  .d-persona { background:#ede9fe; color:#4c1d95; }
-  .d-proyecto { background:#d8f0ee; color:#0b5f59; }
+  .dir-chip { font-size:.72rem; font-weight:700; padding:3px 8px; border-radius:4px; white-space:nowrap; text-transform:uppercase; }
+  .d-persona { background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; }
+  .d-proyecto { background:var(--inet-ok-fondo); color:var(--inet-ok); border:1px solid #c2e0d1; }
 
-  .chip { font-size:.72rem; font-weight:600; border-radius:6px; padding:2px 8px; background:#f0f1f3; color:#4b5563; }
-  .chip.buena { background:#d1fae5; color:#065f46; }
-  .chip.mejora { background:#fef3c7; color:#92400e; }
+  .chip { font-size:.72rem; font-weight:700; border-radius:4px; padding:2px 8px; background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; text-transform:uppercase; }
+  .chip.buena { background:var(--inet-ok-fondo); color:var(--inet-ok); border:1px solid #c2e0d1; }
+  .chip.mejora { background:var(--inet-aviso-fondo); color:var(--inet-aviso); border:1px solid #f3deb9; }
 
-  .vacio { text-align:center; color:#8a8f9c; padding:36px 12px; }
+  .vacio { text-align:center; color:var(--inet-tenue); padding:36px 12px; }
 </style>
 {% endblock %}
 

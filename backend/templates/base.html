@@ -120,6 +120,163 @@
       opacity: 1;
     }
 
+    /* ─── ESTILOS CORPORATIVOS INETUM (COMPONENTES Y REGLAS) ────── */
+    body {
+      background-color: var(--inet-fondo);
+      color: var(--inet-tinta);
+      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* Tarjetas y Tiles estructurados (remueve flotante artificial "AI demo style") */
+    .card, .tile, .nov-card, .blk-row, .dia-card, .afectada {
+      border: 1px solid var(--inet-linea) !important;
+      border-radius: 6px !important;
+      box-shadow: none !important;
+      background: #fff;
+    }
+
+    .section-title, .seccion {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--inet-dark);
+      margin-bottom: .8rem;
+      border-bottom: 2px solid var(--inet-pink);
+      padding-bottom: 4px;
+      display: inline-block;
+    }
+
+    /* Tablas corporativas */
+    .table.asig-table, table.tabla {
+      font-size: .83rem;
+    }
+    .table.asig-table thead th, table.tabla thead th {
+      background: var(--inet-dark) !important;
+      color: #fff !important;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 700;
+      padding: 10px 12px;
+      border: none;
+    }
+    .table.asig-table tbody tr:hover, table.tabla tbody tr:hover {
+      background: #f8f9fa;
+    }
+
+    /* Badges / Chips / Etiquetas de estado (diseño limpio y profesional) */
+    .estado-badge, .badge-bloq, .edad, .rol-chip, .banda-badge, .tipo-chip, .dir-chip, .chip, .carril {
+      font-family: 'Montserrat', sans-serif;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      padding: 3px 8px;
+      border-radius: 4px !important; /* Remplaza pastillas/pills 20px */
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .estado-APROBADA, .b-ok, .edad-ok, .c-ok, .c-fact, .badge-libre-100 {
+      background: var(--inet-ok-fondo) !important;
+      color: var(--inet-ok) !important;
+      border: 1px solid #c2e0d1 !important;
+    }
+
+    .estado-SOLICITADA, .b-espera, .edad-espera, .c-aviso, .c-int, .badge-libre-75 {
+      background: var(--inet-aviso-fondo) !important;
+      color: var(--inet-aviso) !important;
+      border: 1px solid #f3deb9 !important;
+    }
+
+    .b-vencido, .edad-vencida, .c-mal, .badge-libre-25, .badge-libre-0 {
+      background: var(--inet-alerta-fondo) !important;
+      color: var(--inet-alerta) !important;
+      border: 1px solid #ecc9c7 !important;
+    }
+
+    .rol-chip, .tipo-chip, .banda-badge, .skill-chip, .c-otra, .c-mio, .c-neutro, .d-persona, .d-proyecto {
+      background: var(--inet-info-fondo) !important;
+      color: var(--inet-info) !important;
+      border: 1px solid #c9d8e2 !important;
+    }
+
+    /* Botones corporativos (Inetum solid & outlines con radio sobrio 4px) */
+    .btn, .btn-aprobar, .btn-rechazar, .btn-devolver, .btn-pink, .btn-reabrir, .btn-reabrir-confirmar {
+      border-radius: 4px !important;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      transition: all .15s ease-in-out;
+    }
+
+    .btn-aprobar, .btn-inet-ok {
+      background: var(--inet-ok) !important;
+      color: #fff !important;
+      border: 1px solid var(--inet-ok) !important;
+      padding: .4rem 1.1rem;
+      font-size: .84rem;
+    }
+    .btn-aprobar:hover, .btn-inet-ok:hover {
+      background: #175436 !important;
+      border-color: #175436 !important;
+      color: #fff !important;
+    }
+
+    .btn-rechazar, .btn-devolver, .btn-inet-alerta {
+      background: #fff !important;
+      color: var(--inet-alerta) !important;
+      border: 1px solid var(--inet-alerta) !important;
+      padding: .4rem 1.1rem;
+      font-size: .84rem;
+    }
+    .btn-rechazar:hover, .btn-devolver:hover, .btn-inet-alerta:hover {
+      background: var(--inet-alerta-fondo) !important;
+      color: var(--inet-alerta) !important;
+    }
+
+    .btn-pink {
+      background: var(--inet-pink) !important;
+      color: #fff !important;
+      border: 1px solid var(--inet-pink) !important;
+    }
+    .btn-pink:hover {
+      background: var(--inet-pink-oscuro) !important;
+      border-color: var(--inet-pink-oscuro) !important;
+      color: #fff !important;
+    }
+
+    /* Barras de % ocupación */
+    .pct-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--inet-linea);
+      overflow: hidden;
+    }
+    .pct-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    /* Paneles de alerta */
+    .alertas {
+      border: 1px solid var(--inet-linea) !important;
+      border-radius: 6px !important;
+      background: #fff;
+      overflow: hidden;
+    }
+    .alertas-cab {
+      background: var(--inet-dark-suave) !important;
+      padding: .7rem 1rem;
+      font-weight: 700;
+      font-size: .86rem;
+      color: #fff !important;
+      border-bottom: 1px solid var(--inet-linea);
+    }
+
     /* ─── HEADER ────────────────────────────────────────────────── */
     .inet-header {
       /* Plano. El degradado de tres paradas era lo que mas cantaba. */

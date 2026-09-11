@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <style>
-  body { background: #f4f4f8; }
+  body { background: var(--inet-fondo); }
 
   .hub-grid {
     display: grid;
@@ -17,27 +17,26 @@
      de dos palabras. */
   .hub-item {
     display: flex; gap: 14px; align-items: flex-start;
-    background: #fff; border: 1px solid #eee; border-radius: 12px;
+    background: #fff; border: 1px solid var(--inet-linea); border-radius: 6px;
     padding: 18px 20px; text-decoration: none; color: inherit;
-    box-shadow: 0 1px 6px rgba(0,0,0,.06);
     transition: border-color .12s, box-shadow .12s, transform .12s;
   }
   .hub-item:hover {
-    border-color: #d6197f; box-shadow: 0 4px 14px rgba(214,25,127,.12);
+    border-color: var(--inet-pink); box-shadow: 0 2px 8px rgba(214,25,127,.12);
     transform: translateY(-1px); color: inherit;
   }
-  .hub-item:focus-visible { outline: 2px solid #d6197f; outline-offset: 2px; }
+  .hub-item:focus-visible { outline: 2px solid var(--inet-pink); outline-offset: 2px; }
 
   .hub-icono {
-    flex: none; width: 40px; height: 40px; border-radius: 10px;
-    background: #f7f0f7; color: #d6197f;
+    flex: none; width: 40px; height: 40px; border-radius: 4px;
+    background: #f7f0f7; color: var(--inet-pink);
     display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
   }
   .hub-item h2 {
     font-family: 'Montserrat', sans-serif; font-weight: 700;
-    font-size: .95rem; color: #191b2e; margin: 0 0 .2rem;
+    font-size: .95rem; color: var(--inet-dark); margin: 0 0 .2rem;
   }
-  .hub-item p { margin: 0; font-size: .84rem; color: #676d7a; }
+  .hub-item p { margin: 0; font-size: .84rem; color: var(--inet-tenue); }
 
   .hub-vacio {
     background: #fff; border: 1px dashed #d8dae2; border-radius: 12px;

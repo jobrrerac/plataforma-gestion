@@ -4,51 +4,51 @@
 
 {% block extra_head %}
 <style>
-  body { background: #f4f4f8; }
-
+  body { background: var(--inet-fondo); }
 
   .banda-badge {
     font-size: .7rem; font-weight: 700; letter-spacing: .04em;
-    text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
-    background: #ede8f5; color: #4a1f7a;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+    background: var(--inet-info-fondo); color: var(--inet-info);
+    border: 1px solid #c9d8e2;
   }
 
   .skill-chip {
     display: inline-flex; align-items: center; gap: 5px;
-    background: #f4f0fd; border: 1px solid #ddd4f5;
-    border-radius: 20px; padding: 3px 10px;
-    font-size: .75rem; color: #1a1033;
+    background: #fff; border: 1px solid var(--inet-linea);
+    border-radius: 4px; padding: 3px 10px;
+    font-size: .75rem; color: var(--inet-dark);
   }
-  .skill-chip .stars { color: #d6197f; font-size: .8rem; letter-spacing: 1px; }
+  .skill-chip .stars { color: var(--inet-pink); font-size: .8rem; letter-spacing: 1px; }
 
   .section-title {
     font-family: 'Montserrat', sans-serif;
-    font-size: .8rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: #191b2e;
-    border-left: 3px solid #d6197f; padding-left: 8px;
+    font-size: .85rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--inet-dark);
+    border-left: 3px solid var(--inet-pink); padding-left: 8px;
   }
 
   .asig-table { font-size: .83rem; }
   .asig-table thead th {
-    background: #1a1033; color: #fff;
+    background: var(--inet-dark); color: #fff;
     font-size: .72rem; text-transform: uppercase;
-    letter-spacing: .05em; font-weight: 600; padding: 8px 12px;
+    letter-spacing: .05em; font-weight: 700; padding: 10px 12px;
   }
-  .asig-table tbody tr:hover { background: #faf8ff; }
+  .asig-table tbody tr:hover { background: #f8f9fa; }
   .asig-table td { padding: 9px 12px; vertical-align: middle; }
 
   .pct-bar-wrap { min-width: 80px; }
-  .pct-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; }
-  .pct-bar-fill { height: 100%; border-radius: 4px; }
+  .pct-bar { height: 6px; border-radius: 3px; background: #e2e4ea; overflow: hidden; }
+  .pct-bar-fill { height: 100%; border-radius: 3px; }
 
   .estado-badge {
-    font-size: .65rem; font-weight: 700; letter-spacing: .04em;
-    text-transform: uppercase; padding: 2px 8px; border-radius: 10px;
+    font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
   }
-  .estado-APROBADA   { background: #d1fae5; color: #065f46; }
-  .estado-SOLICITADA { background: #fef9c3; color: #713f12; }
+  .estado-APROBADA   { background: var(--inet-ok-fondo); color: var(--inet-ok); border: 1px solid #c2e0d1; }
+  .estado-SOLICITADA { background: var(--inet-aviso-fondo); color: var(--inet-aviso); border: 1px solid #f3deb9; }
 
-  .empty-state { color: #8a8f9c; font-size: .85rem; padding: 18px 0; }
+  .empty-state { color: var(--inet-tenue); font-size: .85rem; padding: 18px 0; }
 </style>
 {% endblock %}
 
@@ -107,7 +107,7 @@
   <div class="mb-4">
     <p class="section-title mb-3">Asignaciones en curso</p>
     {% if en_curso %}
-    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+    <div class="card" style="overflow:hidden">
       <table class="table asig-table mb-0">
         <thead>
           <tr>
@@ -123,11 +123,11 @@
           {% for a in en_curso %}
           <tr>
             <td>
-              <div class="fw-semibold" style="color:#1a1033">{{ a.proyecto.codigo }}</div>
+              <div class="fw-semibold" style="color:var(--inet-dark)">{{ a.proyecto.codigo }}</div>
               <div class="text-muted" style="font-size:.76rem">{{ a.proyecto.nombre }}</div>
               {% if a.proyecto.grafo %}<div class="text-muted" style="font-size:.7rem">Grafo {{ a.proyecto.grafo }}</div>{% endif %}
             </td>
-            <td style="color:#4a1f7a;font-size:.8rem">{{ a.proyecto.cliente }}</td>
+            <td style="color:var(--inet-info);font-size:.8rem">{{ a.proyecto.cliente }}</td>
             <td style="white-space:nowrap;font-size:.8rem">
               {{ a.fecha_inicio }} → {{ a.fecha_fin|default:"—" }}
             </td>
@@ -136,10 +136,10 @@
               {% if a.jornada_completa %}
               <div class="pct-bar-wrap">
                 <div class="d-flex justify-content-between mb-1">
-                  <span style="font-size:.72rem;font-weight:600;color:#065f46">100% — Jornada completa</span>
+                  <span style="font-size:.72rem;font-weight:600;color:var(--inet-ok)">100% — Jornada completa</span>
                 </div>
                 <div class="pct-bar">
-                  <div class="pct-bar-fill" style="width:100%;background:#10b981"></div>
+                  <div class="pct-bar-fill" style="width:100%;background:var(--inet-ok)"></div>
                 </div>
               </div>
               {% else %}
@@ -171,7 +171,7 @@
   <div class="mb-4">
     <p class="section-title mb-3">Próximas asignaciones</p>
     {% if proximas %}
-    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+    <div class="card" style="overflow:hidden">
       <table class="table asig-table mb-0">
         <thead>
           <tr>
@@ -187,11 +187,11 @@
           {% for a in proximas %}
           <tr>
             <td>
-              <div class="fw-semibold" style="color:#1a1033">{{ a.proyecto.codigo }}</div>
+              <div class="fw-semibold" style="color:var(--inet-dark)">{{ a.proyecto.codigo }}</div>
               <div class="text-muted" style="font-size:.76rem">{{ a.proyecto.nombre }}</div>
               {% if a.proyecto.grafo %}<div class="text-muted" style="font-size:.7rem">Grafo {{ a.proyecto.grafo }}</div>{% endif %}
             </td>
-            <td style="color:#4a1f7a;font-size:.8rem">{{ a.proyecto.cliente }}</td>
+            <td style="color:var(--inet-info);font-size:.8rem">{{ a.proyecto.cliente }}</td>
             <td style="white-space:nowrap;font-size:.8rem">
               {{ a.fecha_inicio }} → {{ a.fecha_fin|default:"—" }}
             </td>
@@ -200,10 +200,10 @@
               {% if a.jornada_completa %}
               <div class="pct-bar-wrap">
                 <div class="d-flex justify-content-between mb-1">
-                  <span style="font-size:.72rem;font-weight:600;color:#065f46">100% — Jornada completa</span>
+                  <span style="font-size:.72rem;font-weight:600;color:var(--inet-ok)">100% — Jornada completa</span>
                 </div>
                 <div class="pct-bar">
-                  <div class="pct-bar-fill" style="width:100%;background:#10b981"></div>
+                  <div class="pct-bar-fill" style="width:100%;background:var(--inet-ok)"></div>
                 </div>
               </div>
               {% else %}
@@ -242,7 +242,7 @@
   <div class="mb-4">
     <p class="section-title mb-3">Próximas ausencias</p>
     {% if ausencias %}
-    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+    <div class="card" style="overflow:hidden">
       <table class="table asig-table mb-0">
         <thead><tr><th>Tipo</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
         <tbody>
@@ -270,7 +270,7 @@
   <div class="mb-4">
     <p class="section-title mb-3">Bloqueantes</p>
     {% if bloqueantes_abiertos or bloqueantes_resueltos %}
-    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+    <div class="card" style="overflow:hidden">
       <table class="table asig-table mb-0">
         <thead>
           <tr><th>Qué lo bloquea</th><th>Espera a</th><th>Desde</th><th class="text-end">Tiempo</th></tr>
@@ -316,41 +316,25 @@
     {% endif %}
   </div>
 
-  <style>
-    .badge-bloq { font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
-    .b-espera { background:#eef0f4; color:#4b5563; }
-    .b-vencido { background:#fee2e2; color:#991b1b; }
-    .b-ok { background:#d1fae5; color:#065f46; }
-  </style>
-
-  <style>
-    .btn-reabrir { background:#fff; color:#92400e; border:1px solid #fde68a; font-weight:600;
-                   border-radius:8px; padding:.25rem .7rem; font-size:.75rem; }
-    .btn-reabrir:hover { background:#fffbeb; }
-    .btn-reabrir-confirmar { background:#97591a; color:#fff; border:none; font-weight:700;
-                             border-radius:8px; padding:.3rem 1rem; font-size:.78rem; white-space:nowrap; }
-    .btn-reabrir-confirmar:hover { background:#7d4915; color:#fff; }
-  </style>
-
   <!-- Horas aprobadas -->
   <div class="mb-4">
     <p class="section-title mb-3">Horas aprobadas</p>
     {% if horas_aprobadas %}
     <div class="d-flex gap-3 flex-wrap mb-3">
-      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
-        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">Total</div>
-        <div class="fw-bold" style="font-size:1.15rem">{{ total_aprobadas }} h</div>
+      <div class="tile px-3 py-2">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Total</div>
+        <div class="fw-bold" style="font-size:1.2rem;color:var(--inet-dark)">{{ total_aprobadas }} h</div>
       </div>
-      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
-        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">Facturables</div>
-        <div class="fw-bold" style="font-size:1.15rem;color:var(--inet-ok)">{{ facturables_aprobadas }} h</div>
+      <div class="tile px-3 py-2">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Facturables</div>
+        <div class="fw-bold" style="font-size:1.2rem;color:var(--inet-ok)">{{ facturables_aprobadas }} h</div>
       </div>
-      <div class="card border-0 shadow-sm px-3 py-2" style="border-radius:10px">
-        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em">No facturables</div>
-        <div class="fw-bold" style="font-size:1.15rem;color:var(--inet-tenue)">{{ no_facturables_aprobadas }} h</div>
+      <div class="tile px-3 py-2">
+        <div style="font-size:.72rem;color:var(--inet-tenue);text-transform:uppercase;letter-spacing:.06em;font-weight:700">No facturables</div>
+        <div class="fw-bold" style="font-size:1.2rem;color:var(--inet-tenue)">{{ no_facturables_aprobadas }} h</div>
       </div>
     </div>
-    <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden">
+    <div class="card" style="overflow:hidden">
       <table class="table asig-table mb-0">
         <thead>
           <tr><th>Día</th><th>Actividad</th><th>Qué hizo</th><th class="text-end">Horas</th><th>Aprobó</th>{% if puede_reabrir %}<th></th>{% endif %}</tr>

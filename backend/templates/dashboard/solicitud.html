@@ -18,24 +18,24 @@
        mismo criterio: verde=poco ocupado, amarillo=moderado, naranja=alto, rojo=lleno */
     .avail-bar-wrap { min-width: 140px; }
     /* >75% libre  = <25% ocupado  → verde  (como cell-low  #d1fae5) */
-    .libre-100 { background: #1f6b45; }
+    .libre-100 { background: var(--inet-ok); }
     /* 50-75% libre = 25-50% ocupado → ámbar  (como cell-mid  #fef08a) */
     .libre-75  { background: #d97706; }
     /* 25-50% libre = 50-75% ocupado → naranja (como cell-high #fdba74) */
     .libre-50  { background: #ea580c; }
     /* <25% libre  = >75% ocupado   → rojo   (como cell-full #f87171) */
-    .libre-25  { background: #a52a25; }
+    .libre-25  { background: var(--inet-alerta); }
     /* 0% libre    = 100% ocupado   → rojo intenso */
     .libre-0   { background: #9f1239; }
-    .badge-libre-100 { background: #d1fae5; color: #14532d; }
-    .badge-libre-75  { background: #fef9c3; color: #713f12; }
-    .badge-libre-50  { background: #ffedd5; color: #7c2d12; }
-    .badge-libre-25  { background: #fee2e2; color: #7f1d1d; }
-    .badge-libre-0   { background: #fce7f3; color: #831843; }
+    .badge-libre-100 { background: var(--inet-ok-fondo); color: var(--inet-ok); border: 1px solid #c2e0d1; border-radius: 4px; font-weight: 700; }
+    .badge-libre-75  { background: var(--inet-aviso-fondo); color: var(--inet-aviso); border: 1px solid #f3deb9; border-radius: 4px; font-weight: 700; }
+    .badge-libre-50  { background: var(--inet-aviso-fondo); color: var(--inet-aviso); border: 1px solid #f3deb9; border-radius: 4px; font-weight: 700; }
+    .badge-libre-25  { background: var(--inet-alerta-fondo); color: var(--inet-alerta); border: 1px solid #ecc9c7; border-radius: 4px; font-weight: 700; }
+    .badge-libre-0   { background: var(--inet-alerta-fondo); color: var(--inet-alerta); border: 1px solid #ecc9c7; border-radius: 4px; font-weight: 700; }
     tr.sin-cupo { opacity: .55; }
     .btn-solicitar { font-size: .8rem; padding: 3px 12px; }
-    .skill-pop-trigger { background:#ede8f5; color:#4a1f7a; border:none; border-radius:5px; padding:2px 10px; font-size:.78rem; cursor:pointer; font-weight:600; white-space:nowrap; }
-    .badge-banda { font-size:.75rem; padding:3px 8px; border-radius:6px; }
+    .skill-pop-trigger { background: var(--inet-info-fondo); color: var(--inet-info); border: 1px solid #c9d8e2; border-radius: 4px; padding: 2px 10px; font-size: .78rem; cursor: pointer; font-weight: 600; white-space: nowrap; }
+    .badge-banda { font-size: .75rem; padding: 3px 8px; border-radius: 4px; font-weight: 700; }
     .avail-bar.pop-trigger { cursor: pointer; }
     .popover-dias { max-width: 320px; }
 
@@ -44,14 +44,13 @@
     /* Filter card */
     .filter-card {
       background: #fff;
-      border: none;
-      border-radius: 12px;
-      box-shadow: 0 1px 6px rgba(0,0,0,.07);
+      border: 1px solid var(--inet-linea);
+      border-radius: 6px;
     }
     .filter-card .card-header {
-      background: #191b2e;
+      background: var(--inet-dark);
       color: #fff;
-      border-radius: 12px 12px 0 0 !important;
+      border-radius: 6px 6px 0 0 !important;
       font-family: 'Montserrat', sans-serif;
       font-size: .75rem;
       font-weight: 700;
@@ -59,7 +58,7 @@
       letter-spacing: .1em;
       padding: 10px 16px;
     }
-    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.07); }
+    .card { border: 1px solid var(--inet-linea); border-radius: 6px; box-shadow: none; background: #fff; }
 
     /* Botones de rango rápido */
     .rango-btn { font-size:.71rem; min-width:44px; text-align:center; height:30px; padding:0 5px; line-height:1; border-color:#ced4da; }

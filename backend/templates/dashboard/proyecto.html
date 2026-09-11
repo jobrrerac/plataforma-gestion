@@ -5,42 +5,40 @@
 
 {% block extra_head %}
 <style>
-  body { background: #f4f4f8; }
-  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
-  .form-select:focus { border-color:#d6197f; box-shadow:0 0 0 .2rem rgba(224,23,138,.12); }
-  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:1rem; color:#191b2e; }
+  body { background: var(--inet-fondo); }
+  .seccion { font-family:'Montserrat',sans-serif; font-weight:700; font-size:.92rem; color:var(--inet-dark); text-transform:uppercase; letter-spacing:.05em; }
 
   /* Cifras de cabecera. Solo las cuatro que se miran de un vistazo en una
      reunión de seguimiento; el resto vive en las tablas de abajo. */
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
-  .tile { background:#fff; border:1px solid #eee; border-radius:12px; padding:14px 16px; }
-  .tile .n { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.6rem; line-height:1.1; color:#191b2e; }
-  .tile .l { font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:#8a8f9c; font-weight:600; }
-  .tile .sub { font-size:.76rem; color:#676d7a; margin-top:.15rem; }
+  .tile { background:#fff; border:1px solid var(--inet-linea); border-radius:6px; padding:14px 16px; }
+  .tile .n { font-family:'Montserrat',sans-serif; font-weight:800; font-size:1.6rem; line-height:1.1; color:var(--inet-dark); }
+  .tile .l { font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--inet-tenue); font-weight:700; }
+  .tile .sub { font-size:.76rem; color:var(--inet-tenue); margin-top:.15rem; }
   .tile.alerta { border-color:#f0c9c7; background:#fdf8f8; }
-  .tile.alerta .n { color:#a52a25; }
+  .tile.alerta .n { color:var(--inet-alerta); }
 
   .ficha { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px 22px; }
-  .ficha .k { font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:#8a8f9c; font-weight:600; }
-  .ficha .v { font-size:.9rem; color:#23262f; }
+  .ficha .k { font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--inet-tenue); font-weight:700; }
+  .ficha .v { font-size:.9rem; color:var(--inet-tinta); }
 
   table.tabla { width:100%; font-size:.86rem; }
   table.tabla thead th {
-    font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:#8a8f9c;
-    font-weight:700; padding:10px 12px; background:#f7f7fa; border-bottom:1px solid #e8e8ee;
+    font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:#fff;
+    font-weight:700; padding:10px 12px; background:var(--inet-dark); border-bottom:0;
     white-space:nowrap; text-align:left;
   }
-  table.tabla tbody td { padding:10px 12px; border-bottom:1px solid #f2f2f6; vertical-align:top; }
+  table.tabla tbody td { padding:10px 12px; border-bottom:1px solid var(--inet-linea); vertical-align:top; }
   table.tabla tbody tr:last-child td { border-bottom:0; }
   .num { font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
 
-  .chip { font-size:.7rem; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
-  .c-ok { background:#d1fae5; color:#065f46; }
-  .c-mal { background:#fee2e2; color:#991b1b; }
-  .c-aviso { background:#fef3c7; color:#92400e; }
-  .c-neutro { background:#eef0f4; color:#4b5563; }
+  .chip { font-size:.7rem; font-weight:700; padding:3px 8px; border-radius:4px; white-space:nowrap; text-transform:uppercase; }
+  .c-ok { background:var(--inet-ok-fondo); color:var(--inet-ok); border:1px solid #c2e0d1; }
+  .c-mal { background:var(--inet-alerta-fondo); color:var(--inet-alerta); border:1px solid #ecc9c7; }
+  .c-aviso { background:var(--inet-aviso-fondo); color:var(--inet-aviso); border:1px solid #f3deb9; }
+  .c-neutro { background:var(--inet-info-fondo); color:var(--inet-info); border:1px solid #c9d8e2; }
 
-  .vacio { text-align:center; color:#8a8f9c; padding:34px 12px; }
+  .vacio { text-align:center; color:var(--inet-tenue); padding:34px 12px; }
   .tabla-wrap { overflow-x:auto; }
 </style>
 {% endblock %}
